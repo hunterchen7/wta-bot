@@ -6,6 +6,10 @@
   "compatibility_date": "2026-06-01",
   "observability": { "enabled": true },
 
+  // Workers Builds invokes `wrangler deploy` directly in a clean checkout.
+  // Generate the Vite assets before Wrangler validates `assets.directory`.
+  "build": { "command": "npm run build:web" },
+
   // React/Vite dashboard. Existing Worker routes run first; everything else
   // can fall through to the SPA shell for client-side routing.
   "assets": {
