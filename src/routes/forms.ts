@@ -82,7 +82,7 @@ forms.post('/api/forms/:token', async (c) => {
     const internal = parsed.origin === new URL(c.req.url).origin && /^\/api\/recordings\/(\d+)$/.exec(parsed.pathname);
     if (internal) {
       const owned = await c.env.DB.prepare(
-        "SELECT id FROM recording_assets WHERE id = ?1 AND form_instance_id = ?2 AND status = 'uploaded'",
+        "SELECT id FROM recording_assets WHERE id = ?1 AND form_instance_id = ?2 AND status = 'uploaded' AND cleanup_started_at IS NULL",
       ).bind(Number(internal[1]), instance.id).first<{ id: number }>();
       if (!owned) return c.json({
         error: 'invalid_report', message: 'Check the highlighted fields.',
@@ -182,7 +182,7 @@ forms.get('/api/recordings/:id', async (c) => {
   const session = await sessionFrom(c);
   if (!session?.organizer) return c.json({ error: 'forbidden' }, session ? 403 : 401);
   const asset = await c.env.DB.prepare(
-    "SELECT object_key FROM recording_assets WHERE id = ?1 AND status = 'uploaded'",
+    "SELECT object_key FROM recording_assets WHERE id = ?1 AND status = 'uploaded' AND cleanup_started_at IS NULL",
   ).bind(Number(c.req.param('id'))).first<{ object_key: string }>();
   if (!asset) return c.json({ error: 'not_found' }, 404);
   const requestedRange = Boolean(c.req.header('range'));
