@@ -409,7 +409,7 @@ web.get('/dashboard/p/:id', async (c) => {
         if (ir) bits.push('own report ✅');
       } else {
         if (ie?.video_url) bits.push(`<a href="${esc(ie.video_url)}" rel="noreferrer">▶ recording</a>`);
-        if (ie?.code) bits.push(`<details style="display:inline"><summary>code</summary><pre style="white-space:pre-wrap">${esc(ie.code.slice(0, 4000))}</pre></details>`);
+        if (ie?.code) bits.push(`<details style="display:inline"><summary>code</summary><pre class="code">${esc(ie.code.slice(0, 4000))}</pre></details>`);
         if (ir) bits.push(`verdict: <b>${esc(ir.verdict ?? '?')}</b> (${esc(ir.hints ?? '?')} hints, ps ${ir.rating_problem_solving ?? '?'}/5)`);
       }
       return `<tr>

@@ -28,7 +28,20 @@ export function page(title: string, body: string, opts: { wide?: boolean } = {})
     width: 100%; padding: .55rem .7rem; border: 1px solid var(--line); border-radius: 9px;
     background: transparent; color: inherit; font: inherit;
   }
-  textarea { min-height: 6.5rem; } textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; min-height: 11rem; }
+  textarea { min-height: 6.5rem; }
+  textarea.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85rem; line-height: 1.55; min-height: 13rem;
+    background: color-mix(in srgb, currentColor 7%, transparent);
+    border-color: color-mix(in srgb, currentColor 22%, transparent);
+    white-space: pre; overflow-x: auto; tab-size: 2; resize: vertical;
+  }
+  pre.code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: .85rem; background: color-mix(in srgb, currentColor 7%, transparent);
+    border: 1px solid var(--line); border-radius: 10px; padding: .7rem .9rem;
+    overflow-x: auto; tab-size: 2;
+  }
   .opts { display: flex; flex-wrap: wrap; gap: .4rem .9rem; } .opts label { font-weight: 400; }
   .scale { display: flex; gap: 1rem; } .scale label { display: flex; flex-direction: column; align-items: center; font-size: .85rem; }
   button, .btn { background: var(--accent); border: 0; color: #fff; padding: .65rem 1.4rem; border-radius: 10px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-block; }
@@ -42,7 +55,20 @@ export function page(title: string, body: string, opts: { wide?: boolean } = {})
   code { font-family: ui-monospace, Menlo, monospace; font-size: .9em; }
 </style>
 </head>
-<body>${body}</body>
+<body>${body}
+<script>
+// Code boxes: Tab inserts spaces instead of moving focus.
+document.addEventListener('keydown', (e) => {
+  const t = e.target;
+  if (e.key === 'Tab' && t instanceof HTMLTextAreaElement && t.classList.contains('mono')) {
+    e.preventDefault();
+    const s = t.selectionStart, en = t.selectionEnd;
+    t.value = t.value.slice(0, s) + '  ' + t.value.slice(en);
+    t.selectionStart = t.selectionEnd = s + 2;
+  }
+});
+</script>
+</body>
 </html>`;
 }
 
@@ -54,8 +80,12 @@ export function renderField(f: Field, value?: string): string {
     case 'text':
     case 'url':
       return `${head}<input type="${f.type}" id="${f.id}" name="${f.id}" value="${esc(value ?? '')}" ${f.required ? 'required' : ''}>`;
-    case 'textarea':
-      return `${head}<textarea id="${f.id}" name="${f.id}" ${f.required ? 'required' : ''} class="${f.mono ? 'mono' : ''}">${esc(value ?? '')}</textarea>`;
+    case 'textarea': {
+      const codeAttrs = f.mono
+        ? ' class="mono" spellcheck="false" autocapitalize="off" autocorrect="off" wrap="off" placeholder="// paste your solution as-is — formatting is preserved"'
+        : '';
+      return `${head}<textarea id="${f.id}" name="${f.id}" ${f.required ? 'required' : ''}${codeAttrs}>${esc(value ?? '')}</textarea>`;
+    }
     case 'select':
       return `${head}<select id="${f.id}" name="${f.id}" ${f.required ? 'required' : ''}>
         <option value="">— pick one —</option>
