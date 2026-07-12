@@ -14,13 +14,23 @@ type CommandOption = {
   options?: CommandOption[];
 };
 
-type Command = { name: string; description: string; options?: CommandOption[] };
+type Command = {
+  name: string;
+  description: string;
+  options?: CommandOption[];
+  default_member_permissions?: string;
+};
 
 const commands: Command[] = [
   { name: 'join', description: 'Enroll in the WTA mock-interview program (or edit your info)' },
   { name: 'status', description: 'Your progress, sessions, owed forms, and standing' },
   { name: 'optout', description: 'Sit out this week (no penalty — catch up later)' },
   { name: 'cancel', description: 'Cancel one of your sessions so your partner is freed ASAP' },
+  {
+    name: 'export',
+    description: 'Organizers: download the roster as CSV',
+    default_member_permissions: '32', // MANAGE_GUILD — hidden from regular members
+  },
   {
     name: 'report',
     description: 'Report a session problem to the organizers',

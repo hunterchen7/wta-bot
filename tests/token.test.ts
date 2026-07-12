@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { signFormToken, verifyFormToken } from '../src/forms/token';
+import { signFormToken, signToken, verifyFormToken, verifyToken } from '../src/forms/token';
 
 const SECRET = 'test-signing-secret';
 const future = new Date(Date.now() + 60_000);
@@ -37,5 +37,16 @@ describe('form tokens', () => {
     expect(await verifyFormToken(SECRET, 'not-a-token')).toBeNull();
     expect(await verifyFormToken(SECRET, 'a.b.c')).toBeNull();
     expect(await verifyFormToken(SECRET, '')).toBeNull();
+  });
+
+  it('supports namespaced subjects and enforces the no-dots rule', async () => {
+    const token = await signToken(SECRET, 'export:participants', future);
+    expect(await verifyToken(SECRET, token)).toEqual({ subject: 'export:participants' });
+    await expect(signToken(SECRET, 'bad.subject', future)).rejects.toThrow();
+  });
+
+  it('form tokens do not verify as other subjects', async () => {
+    const token = await signToken(SECRET, 'p:55', future);
+    expect(await verifyFormToken(SECRET, token)).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import type { Env } from './env';
 import { handleInteraction } from './discord/interactions';
 import { forms } from './routes/forms';
+import { exportRoutes } from './routes/export';
 import { tick } from './cron';
 
 export const app = new Hono<{ Bindings: Env }>();
@@ -15,6 +16,7 @@ app.get('/health', async (c) => {
 
 app.post('/discord', handleInteraction);
 app.route('/', forms);
+app.route('/', exportRoutes);
 
 export default {
   fetch: app.fetch,

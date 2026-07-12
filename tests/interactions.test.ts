@@ -1,86 +1,70 @@
 import { env } from 'cloudflare:workers';
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { app } from '../src/index';
+import { asUser, makeSigner, sendInteraction, type Signer } from './helpers';
 
-function bytesToHex(buf: ArrayBuffer): string {
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function makeSigner() {
-  const keys = (await crypto.subtle.generateKey({ name: 'Ed25519' }, true, [
-    'sign',
-    'verify',
-  ])) as CryptoKeyPair;
-  const publicKeyHex = bytesToHex(
-    (await crypto.subtle.exportKey('raw', keys.publicKey)) as ArrayBuffer,
-  );
-  const sign = async (timestamp: string, body: string) =>
-    bytesToHex(
-      await crypto.subtle.sign('Ed25519', keys.privateKey, new TextEncoder().encode(timestamp + body)),
-    );
-  return { publicKeyHex, sign };
-}
-
-function post(body: string, headers: Record<string, string>, publicKey?: string) {
-  return app.request(
-    '/discord',
-    { method: 'POST', headers, body },
-    { ...env, DISCORD_PUBLIC_KEY: publicKey },
-  );
-}
+let signer: Signer;
+beforeAll(async () => {
+  signer = await makeSigner();
+});
 
 describe('POST /discord', () => {
   it('503s when the public key is not configured', async () => {
-    const res = await post(JSON.stringify({ type: 1 }), {});
+    const res = await app.request(
+      '/discord',
+      { method: 'POST', body: JSON.stringify({ type: 1 }) },
+      { ...env, DISCORD_PUBLIC_KEY: undefined },
+    );
     expect(res.status).toBe(503);
   });
 
   it('401s on a missing signature', async () => {
-    const { publicKeyHex } = await makeSigner();
-    const res = await post(JSON.stringify({ type: 1 }), {}, publicKeyHex);
+    const res = await app.request(
+      '/discord',
+      { method: 'POST', body: JSON.stringify({ type: 1 }) },
+      { ...env, DISCORD_PUBLIC_KEY: signer.publicKeyHex },
+    );
     expect(res.status).toBe(401);
   });
 
-  it('401s on a bad signature', async () => {
-    const { publicKeyHex } = await makeSigner();
-    const other = await makeSigner(); // signs with a different key
+  it('401s on a signature from the wrong key', async () => {
+    const other = await makeSigner();
     const body = JSON.stringify({ type: 1 });
     const ts = '1720000000';
-    const res = await post(
-      body,
-      { 'x-signature-ed25519': await other.sign(ts, body), 'x-signature-timestamp': ts },
-      publicKeyHex,
+    const res = await app.request(
+      '/discord',
+      {
+        method: 'POST',
+        headers: {
+          'x-signature-ed25519': await other.sign(ts, body),
+          'x-signature-timestamp': ts,
+        },
+        body,
+      },
+      { ...env, DISCORD_PUBLIC_KEY: signer.publicKeyHex },
     );
     expect(res.status).toBe(401);
   });
 
   it('answers a valid PING with PONG', async () => {
-    const { publicKeyHex, sign } = await makeSigner();
-    const body = JSON.stringify({ type: 1 });
-    const ts = '1720000000';
-    const res = await post(
-      body,
-      { 'x-signature-ed25519': await sign(ts, body), 'x-signature-timestamp': ts },
-      publicKeyHex,
-    );
+    const res = await sendInteraction(signer, { type: 1 });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ type: 1 });
   });
 
-  it('answers a slash command with the ephemeral M0 stub', async () => {
-    const { publicKeyHex, sign } = await makeSigner();
-    const body = JSON.stringify({ type: 2, data: { name: 'status' } });
-    const ts = '1720000000';
-    const res = await post(
-      body,
-      { 'x-signature-ed25519': await sign(ts, body), 'x-signature-timestamp': ts },
-      publicKeyHex,
-    );
+  it('answers unbuilt commands with the milestone stub', async () => {
+    const res = await sendInteraction(signer, {
+      type: 2,
+      id: '1',
+      token: 't',
+      data: { name: 'report' },
+      ...asUser('42'),
+    });
     expect(res.status).toBe(200);
     const json = (await res.json()) as { type: number; data: { content: string; flags: number } };
     expect(json.type).toBe(4);
     expect(json.data.flags).toBe(64);
-    expect(json.data.content).toContain('/status');
+    expect(json.data.content).toContain('/report');
   });
 });
 
