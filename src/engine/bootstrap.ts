@@ -2,7 +2,17 @@ import { getSettings, setSetting } from '../config';
 import { buttonRow } from '../discord/components';
 import { DiscordRest } from '../discord/rest';
 import type { Env } from '../env';
-import { enqueue } from './outbox';
+
+/** Edits the deferred "thinking…" response immediately (no cron round-trip). */
+async function editOriginal(env: Env, interactionToken: string, content: string): Promise<void> {
+  const appId = env.DISCORD_APP_ID;
+  if (!appId) return;
+  await fetch(`https://discord.com/api/v10/webhooks/${appId}/${interactionToken}/messages/@original`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content }),
+  }).catch((err) => console.error('followup edit failed:', err));
+}
 
 // Annual server bootstrap (/admin setup bootstrap year:N):
 //   creates the "WTA {year}" category + five program channels PRIVATE-FIRST
@@ -105,8 +115,7 @@ export async function bootstrapGuild(
   if (!token) throw new Error('DISCORD_TOKEN not configured');
   const rest = new DiscordRest(token);
   const { guildId, year } = payload;
-  const report = (content: string) =>
-    enqueue(env, 'followup', { interactionToken: payload.interactionToken, message: { content } });
+  const report = (content: string) => editOriginal(env, payload.interactionToken, content);
 
   try {
     const roles = await loadRoles(env, rest, guildId, true);
@@ -131,13 +140,10 @@ export async function bootstrapGuild(
     }
 
     const cfg = await getSettings(env, ['start_here_channel_id']);
-    await enqueue(env, 'channel_msg', {
-      channelId: cfg.start_here_channel_id!,
-      message: {
-        content:
-          '**Welcome to Western Tech Alumni!** 👋\nTo keep bots out, click below and tell us who you are — takes 20 seconds and unlocks the server.',
-        components: [buttonRow([{ id: 'verify:start', label: "Verify — I'm a real person", style: 3, emoji: '✅' }])],
-      },
+    await rest.send(cfg.start_here_channel_id!, {
+      content:
+        '**Welcome to Western Tech Alumni!** 👋\nTo keep bots out, click below and tell us who you are — takes 20 seconds and unlocks the server.',
+      components: [buttonRow([{ id: 'verify:start', label: "Verify — I'm a real person", style: 3, emoji: '✅' }])],
     });
 
     await report(
@@ -161,8 +167,7 @@ export async function publishGuild(env: Env, payload: { guildId: string; interac
   const token = env.DISCORD_TOKEN;
   if (!token) throw new Error('DISCORD_TOKEN not configured');
   const rest = new DiscordRest(token);
-  const report = (content: string) =>
-    enqueue(env, 'followup', { interactionToken: payload.interactionToken, message: { content } });
+  const report = (content: string) => editOriginal(env, payload.interactionToken, content);
 
   try {
     const roles = await loadRoles(env, rest, payload.guildId, false);

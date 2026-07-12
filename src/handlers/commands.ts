@@ -432,19 +432,21 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
     case 'bootstrap': {
       if (!interaction.guild_id) return c.json(ephemeral('Run this in the server.'));
       const year = Number(optVal(s.options, 'year') ?? new Date().getFullYear());
-      await enqueue(c.env, 'guild_setup', {
+      const { bootstrapGuild } = await import('../engine/bootstrap');
+      runInBackground(c, bootstrapGuild(c.env, {
         guildId: interaction.guild_id,
         year,
         interactionToken: interaction.token,
-      });
+      }));
       return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
     }
     case 'publish': {
       if (!interaction.guild_id) return c.json(ephemeral('Run this in the server.'));
-      await enqueue(c.env, 'guild_publish', {
+      const { publishGuild } = await import('../engine/bootstrap');
+      runInBackground(c, publishGuild(c.env, {
         guildId: interaction.guild_id,
         interactionToken: interaction.token,
-      });
+      }));
       return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
     }
     default:
@@ -493,6 +495,16 @@ async function excuseCommand(c: Ctx, interaction: Interaction, opts: Opt[] | und
   if (!latest) return c.json(ephemeral('No open/confirmed incidents to excuse.'));
   const message = await resolveCase(c.env, p.id, 'excuse', latest.id);
   return c.json(ephemeral(message));
+}
+
+/** Schedule slow work to continue after the deferred response is sent. */
+function runInBackground(c: Ctx, work: Promise<unknown>) {
+  const p = work.catch((err) => console.error('background command failed:', err));
+  try {
+    c.executionCtx.waitUntil(p);
+  } catch {
+    // no execution context (tests) — the promise still runs
+  }
 }
 
 /** The round that's currently in play (or the nearest one). */
