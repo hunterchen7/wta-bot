@@ -332,4 +332,51 @@ describe('full weekly cycle', () => {
     );
     expect(((await denied.json()) as any).data.content).toContain('Organizers only');
   });
+
+  it('/leave withdraws permanently: cancels open sessions, repairs partners, blocks re-join', async () => {
+    const ask = await sendInteraction(
+      signer,
+      { type: 2, id: '1', token: 't', guild_id: GUILD, data: { name: 'leave' }, ...asUser('104') },
+      OVERRIDES,
+    );
+    const askJson = (await ask.json()) as any;
+    expect(askJson.data.content).toContain('Leave WTA for good?');
+
+    const before = await env.DB.prepare(
+      `SELECT count(*) AS n FROM sessions
+       WHERE state IN ('pending_schedule','scheduled')
+         AND (interviewer_id = (SELECT id FROM participants WHERE discord_id='104')
+           OR interviewee_id = (SELECT id FROM participants WHERE discord_id='104'))`,
+    ).first<any>();
+
+    const confirm = await sendInteraction(signer, button('leave:confirm', '104'), OVERRIDES);
+    const confirmJson = (await confirm.json()) as any;
+    expect(confirmJson.data.content).toContain("You've left the program");
+
+    const p = await env.DB.prepare(
+      "SELECT status, removed_reason FROM participants WHERE discord_id = '104'",
+    ).first<any>();
+    expect(p).toMatchObject({ status: 'removed', removed_reason: 'withdrew' });
+
+    const after = await env.DB.prepare(
+      `SELECT count(*) AS n FROM sessions
+       WHERE state IN ('pending_schedule','scheduled')
+         AND (interviewer_id = (SELECT id FROM participants WHERE discord_id='104')
+           OR interviewee_id = (SELECT id FROM participants WHERE discord_id='104'))`,
+    ).first<any>();
+    expect(after.n).toBe(0);
+    if (before.n > 0) {
+      const repairs = await env.DB.prepare(
+        "SELECT count(*) AS n FROM repair_queue WHERE state = 'open'",
+      ).first<any>();
+      expect(repairs.n).toBeGreaterThan(0);
+    }
+
+    const rejoin = await sendInteraction(
+      signer,
+      { type: 2, id: '1', token: 't', guild_id: GUILD, data: { name: 'join' }, ...asUser('104') },
+      OVERRIDES,
+    );
+    expect(((await rejoin.json()) as any).data.content).toContain('reinstate');
+  });
 });

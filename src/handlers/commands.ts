@@ -34,6 +34,7 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
         '`/join` — enroll in the program, or edit your profile once enrolled',
         '`/status` — your progress (3+3), sessions, owed report forms, strikes',
         '`/optout` — sit out the current round (no penalty; catch up later with a double)',
+        '`/leave` — leave the program entirely (confirmable; partners get re-paired)',
         '`/cancel` — cancel one of your sessions with notice, so your partner gets re-paired',
         '`/report no-show` / `/report unresponsive` — your partner ghosted or won\'t schedule',
         '`/report issue <details>` — anything else, privately to the organizers',
@@ -59,6 +60,15 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
 
     case 'join': {
       const existing = await getParticipant(c.env, user.id);
+      if (existing?.status === 'removed') {
+        return c.json(
+          ephemeral(
+            (existing as any).removed_reason === 'withdrew'
+              ? 'You left the program — an organizer can reinstate you with `/participant release`. Ping one if you want back in!'
+              : 'You were removed from this cohort. Talk to an organizer if you think that\'s a mistake.',
+          ),
+        );
+      }
       // Resume where they left off; enrolled users get the edit menu.
       if (!existing || !existing.name) return c.json(intake.modal1(existing));
       if (existing.year === null) return c.json(intake.modal2(existing));
@@ -71,6 +81,24 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
 
     case 'optout':
       return optoutCommand(c, interaction);
+
+    case 'leave': {
+      const p = await getParticipant(c.env, user.id);
+      if (!p || p.topics === null) return c.json(ephemeral("You're not enrolled, so nothing to leave."));
+      if (p.status === 'removed') return c.json(ephemeral("You've already left the program."));
+      const { buttonRow } = await import('../discord/components');
+      return c.json(
+        ephemeral(
+          '⚠️ **Leave WTA for good?** Your open sessions get cancelled (partners are automatically re-paired), you won\'t be matched again, and re-entry needs an organizer. Completed history is kept. If you just need a break, `/optout` skips one round instead.',
+          [
+            buttonRow([
+              { id: 'leave:confirm', label: 'Yes — leave the program', style: 4 },
+              { id: 'leave:cancel', label: 'Never mind', style: 2 },
+            ]),
+          ],
+        ),
+      );
+    }
 
     case 'cancel':
     case 'report':

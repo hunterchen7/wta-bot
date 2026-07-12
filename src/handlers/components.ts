@@ -82,6 +82,26 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
     return c.json(ephemeral(message));
   }
 
+  // ---- permanent withdrawal -------------------------------------------------
+  if (id === 'leave:cancel') {
+    return c.json({
+      type: ResponseType.UPDATE_MESSAGE,
+      data: { content: '👍 Staying in — see you at the next opt-in.', components: [] },
+    });
+  }
+  if (id === 'leave:confirm') {
+    const p = await getParticipant(c.env, user.id);
+    if (!p) return c.json(ephemeral('Not enrolled.'));
+    const summary = await withdrawParticipant(c.env, p.id, user.id);
+    return c.json({
+      type: ResponseType.UPDATE_MESSAGE,
+      data: {
+        content: `✅ You've left the program. ${summary} Your history is kept, and organizers can reinstate you anytime — thanks for being part of WTA. 👋`,
+        components: [],
+      },
+    });
+  }
+
   const swap = /^swap:(\d+)$/.exec(id);
   if (swap) {
     const { swapProblem } = await import('../engine/problems');
@@ -263,6 +283,56 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
   });
 }
 
+/** Self-serve program withdrawal: cancel open sessions, repair-queue the
+ *  partners, clear future opt-ins, note to organizers. History stays. */
+async function withdrawParticipant(env: Env, participantId: number, discordId: string): Promise<string> {
+  const { enqueueRepair } = await import('../engine/repair');
+  const nowIso = new Date().toISOString();
+
+  const { results: open } = await env.DB.prepare(
+    `SELECT id, week_id, interviewer_id, interviewee_id, thread_id FROM sessions
+     WHERE state IN ('pending_schedule', 'scheduled') AND (interviewer_id = ?1 OR interviewee_id = ?1)`,
+  )
+    .bind(participantId)
+    .all<any>();
+
+  for (const s of open) {
+    await env.DB.prepare("UPDATE sessions SET state = 'cancelled' WHERE id = ?1").bind(s.id).run();
+    const partnerId = s.interviewer_id === participantId ? s.interviewee_id : s.interviewer_id;
+    // The partner needs a replacement for the role the withdrawer played.
+    const need = s.interviewer_id === participantId ? 'interviewer' : 'interviewee';
+    await enqueueRepair(env, s.week_id, partnerId, need);
+    if (s.thread_id) {
+      await enqueue(env, 'channel_msg', {
+        channelId: s.thread_id,
+        message: { content: '📕 This session was cancelled — one participant left the program. The other has been queued for a repair pairing.' },
+      });
+    }
+  }
+
+  await env.DB.prepare(
+    `DELETE FROM optins WHERE participant_id = ?1
+       AND week_id IN (SELECT id FROM weeks WHERE match_at > ?2)`,
+  )
+    .bind(participantId, nowIso)
+    .run();
+  await env.DB.prepare(
+    "UPDATE participants SET status = 'removed', removed_reason = 'withdrew' WHERE id = ?1",
+  )
+    .bind(participantId)
+    .run();
+
+  const cfg = await getSettings(env, ['organizer_channel_id']);
+  if (cfg.organizer_channel_id) {
+    await enqueue(env, 'channel_msg', {
+      channelId: cfg.organizer_channel_id,
+      message: { content: `📕 <@${discordId}> **withdrew from the program** (self-serve). ${open.length} open session(s) cancelled, partners re-queued.` },
+    });
+  }
+  return open.length
+    ? `${open.length} open session(s) were cancelled and your partners are being re-paired.`
+    : 'You had no open sessions to clean up.';
+}
 /** Confirms the email channel works the moment someone opts in (also catches
  *  typo'd addresses on day one instead of at the first missed reminder). */
 async function sendOptInConfirm(env: Env, to: string, name: string | null) {

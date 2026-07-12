@@ -29,7 +29,8 @@ export const COMMANDS: Command[] = [
   { name: 'help', description: 'What can this bot do? All commands explained' },
   { name: 'join', description: 'Enroll in the WTA mock-interview program (or edit your info)' },
   { name: 'status', description: 'Your progress, sessions, owed forms, and standing' },
-  { name: 'optout', description: 'Sit out this week (no penalty — catch up later)' },
+  { name: 'optout', description: 'Sit out the current round (no penalty — catch up later)' },
+  { name: 'leave', description: 'Leave the program entirely — partners get re-paired' },
   { name: 'cancel', description: 'Cancel one of your sessions so your partner is freed ASAP' },
   {
     name: 'export',
