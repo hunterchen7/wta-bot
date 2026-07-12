@@ -61,12 +61,17 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
     case 'join': {
       const existing = await getParticipant(c.env, user.id);
       if (existing?.status === 'removed') {
+        if ((existing as any).removed_reason === 'withdrew') {
+          const { buttonRow } = await import('../discord/components');
+          return c.json(
+            ephemeral(
+              '👋 **Welcome back?** You left the program earlier — rejoining restores everything as it was: your profile, your completed interviews, your history. If you\'re behind pace, the next opt-in will offer you a catch-up double.',
+              [buttonRow([{ id: 'rejoin:confirm', label: 'Rejoin the program', style: 3 }])],
+            ),
+          );
+        }
         return c.json(
-          ephemeral(
-            (existing as any).removed_reason === 'withdrew'
-              ? 'You left the program — an organizer can reinstate you with `/participant release`. Ping one if you want back in!'
-              : 'You were removed from this cohort. Talk to an organizer if you think that\'s a mistake.',
-          ),
+          ephemeral('You were removed from this cohort. Talk to an organizer if you think that\'s a mistake.'),
         );
       }
       // Resume where they left off; enrolled users get the edit menu.

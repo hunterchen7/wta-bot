@@ -378,11 +378,21 @@ describe('full weekly cycle', () => {
       expect(repairs.n).toBeGreaterThan(0);
     }
 
+    // self-serve rejoin: /join offers the button, clicking restores status + history
     const rejoin = await sendInteraction(
       signer,
       { type: 2, id: '1', token: 't', guild_id: GUILD, data: { name: 'join' }, ...asUser('104') },
       OVERRIDES,
     );
-    expect(((await rejoin.json()) as any).data.content).toContain('reinstate');
+    const rejoinJson = (await rejoin.json()) as any;
+    expect(rejoinJson.data.content).toContain('Welcome back');
+    expect(rejoinJson.data.components[0].components[0].custom_id).toBe('rejoin:confirm');
+
+    const confirm2 = await sendInteraction(signer, button('rejoin:confirm', '104'), OVERRIDES);
+    expect(((await confirm2.json()) as any).data.content).toContain("You're back in");
+    const restored = await env.DB.prepare(
+      "SELECT status, removed_reason FROM participants WHERE discord_id = '104'",
+    ).first<any>();
+    expect(restored).toMatchObject({ status: 'active', removed_reason: null });
   });
 });

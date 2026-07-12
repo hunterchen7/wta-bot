@@ -82,6 +82,35 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
     return c.json(ephemeral(message));
   }
 
+  // ---- rejoin after self-withdrawal ------------------------------------------
+  if (id === 'rejoin:confirm') {
+    const p = await c.env.DB.prepare(
+      "SELECT id, name FROM participants WHERE discord_id = ?1 AND status = 'removed' AND removed_reason = 'withdrew'",
+    )
+      .bind(user.id)
+      .first<{ id: number; name: string | null }>();
+    if (!p) return c.json(ephemeral('Nothing to rejoin — run `/join` normally.'));
+    await c.env.DB.prepare(
+      "UPDATE participants SET status = 'active', removed_reason = NULL WHERE id = ?1",
+    )
+      .bind(p.id)
+      .run();
+    const cfg = await getSettings(c.env, ['organizer_channel_id']);
+    if (cfg.organizer_channel_id) {
+      await enqueue(c.env, 'channel_msg', {
+        channelId: cfg.organizer_channel_id,
+        message: { content: `🔄 **${p.name ?? user.id}** (<@${user.id}>) rejoined the program — history intact, deficits will surface at the next opt-in.` },
+      });
+    }
+    return c.json({
+      type: ResponseType.UPDATE_MESSAGE,
+      data: {
+        content: '🎉 **You\'re back in!** Everything picked up where you left off. Watch for the next round\'s opt-in — if you\'re behind pace, grab the **catch-up double** button to make up missed interviews.',
+        components: [],
+      },
+    });
+  }
+
   // ---- permanent withdrawal -------------------------------------------------
   if (id === 'leave:cancel') {
     return c.json({
@@ -96,7 +125,7 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
     return c.json({
       type: ResponseType.UPDATE_MESSAGE,
       data: {
-        content: `✅ You've left the program. ${summary} Your history is kept, and organizers can reinstate you anytime — thanks for being part of WTA. 👋`,
+        content: `✅ You've left the program. ${summary} Your history is kept — if you change your mind, just run \`/join\` and hit Rejoin. 👋`,
         components: [],
       },
     });
