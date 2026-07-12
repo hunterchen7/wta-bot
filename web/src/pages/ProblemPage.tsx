@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { publicRequest } from '../api';
-import { MarkdownContent } from '../components/MarkdownContent';
+import { ProblemContentSection } from '../components/ProblemContentSection';
 import { PublicIntro, PublicShell } from '../components/PublicShell';
 
 type ProblemData = { mode: 'packet' | 'solution'; round: number; scheduledAt: string | null; intervieweeName: string | null; problem: { number: number | null; title: string; url: string | null; difficulty: string; statement: string | null; hints: string | null; solution: string | null } };
@@ -19,11 +19,10 @@ export function ProblemPage({ preview = false }: { preview?: boolean }) {
     {preview ? <Notice tone="western">Preview mode. Live packets are private, signed, and expire automatically.</Notice> : null}
     {data.mode === 'packet' ? <Notice tone="amber">For your eyes only. Do not share this page with the interviewee before the session.</Notice> : null}
     {problem.url ? <div className="mb-6 text-sm text-muted-foreground"><a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a></div> : null}
-    <div className="space-y-5">{problem.statement ? <Content title="Statement" value={problem.statement} /> : null}{problem.hints ? <Content title="Hint ladder" value={problem.hints} /> : null}<Content title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} /></div>
+    <div className="space-y-5">{problem.statement ? <ProblemContentSection title="Statement" value={problem.statement} /> : null}{problem.hints ? <ProblemContentSection title="Hint ladder" value={problem.hints} /> : null}<ProblemContentSection title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} /></div>
   </PublicShell>;
 }
 
-function Content({ title, value }: { title: string; value: string }) { return <section className="overflow-hidden rounded-2xl border border-border bg-card"><h2 className="border-b border-border px-5 py-4 text-sm font-black text-foreground">{title}</h2><MarkdownContent className="p-5 sm:p-6">{value}</MarkdownContent></section>; }
 function Notice({ children, tone }: { children: React.ReactNode; tone: 'amber' | 'western' }) { return <div className={`mb-6 rounded-2xl border p-4 text-sm font-semibold ${tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-western-200 bg-western-50 text-western-900'}`}>{children}</div>; }
 const previewPacket: ProblemData = { mode: 'packet', round: 2, scheduledAt: '2026-08-12T23:30:00.000Z', intervieweeName: 'Jordan Example', problem: { number: 56, title: 'Merge Intervals', url: 'https://leetcode.com/problems/merge-intervals/', difficulty: 'medium', statement: `You are given a collection of closed intervals, where each interval is represented as \`[start, end]\`. Combine every group of intervals that overlap and return the non-overlapping intervals that cover the same ranges.
 

@@ -9,6 +9,7 @@ import { Checkbox } from '../../components/ui/checkbox';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
 import { SelectControl } from '../../components/SelectControl';
+import { ProblemContentSection } from '../../components/ProblemContentSection';
 
 const QUESTION_TEMPLATE = `## Statement
 
@@ -34,6 +35,7 @@ export function ProblemsPage() {
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState('all');
   const [editor, setEditor] = useState<ProblemRow | typeof blankProblem | null>(null);
+  const [preview, setPreview] = useState<ProblemRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const rows = useMemo(() => (data?.problems ?? []).filter((problem) =>
@@ -92,12 +94,31 @@ export function ProblemsPage() {
             <td className={tdClass}><Badge value={problem.difficulty} />{problem.difficulty_rank != null ? <span className="ml-2 text-xs font-bold tabular-nums text-slate-400">{problem.difficulty_rank}</span> : null}</td>
             <td className={tdClass}><span className="font-bold tabular-nums text-slate-800">{problem.uses}</span><span className="ml-1 text-xs">sessions</span></td>
             <td className={tdClass}><Badge value={problem.active ? 'active' : 'inactive'} /></td>
-            <td className={`${tdClass} text-right`}><button className="cursor-pointer text-sm font-bold text-western-700 hover:text-western-800" onClick={() => setEditor(problem)}>Edit</button></td>
+            <td className={`${tdClass} text-right`}><div className="flex items-center justify-end gap-3"><button className="cursor-pointer text-sm font-bold text-slate-600 transition hover:text-slate-950 dark:text-slate-300 dark:hover:text-white" onClick={() => setPreview(problem)}>Preview</button><button className="cursor-pointer text-sm font-bold text-western-700 transition hover:text-western-800 dark:text-western-300 dark:hover:text-western-200" onClick={() => setEditor(problem)}>Edit</button></div></td>
           </tr>)}</tbody>
         </table></div> : <EmptyState title="No questions match" description="Change the filters or add a question." />}
       </Panel>}
     {editor ? <QuestionEditor value={editor} weeks={data.weeks.map((week) => week.idx)} busy={busy} onClose={() => setEditor(null)} onSave={save} /> : null}
+    {preview ? <QuestionPreview problem={preview} onClose={() => setPreview(null)} /> : null}
   </div>;
+}
+
+function QuestionPreview({ problem, onClose }: { problem: ProblemRow; onClose: () => void }) {
+  return <Dialog
+    wide
+    title={`${problem.number ? `#${problem.number} · ` : ''}${problem.title}`}
+    description="Participant-facing interviewer packet preview"
+    onClose={onClose}
+    actions={<DialogClose><Button variant="secondary">Close preview</Button></DialogClose>}
+  >
+    <div className="mb-5 flex flex-wrap items-center gap-2"><Badge value={problem.difficulty} /><WeekTags weeks={problem.available_weeks} />{problem.active ? null : <Badge value="inactive" />}</div>
+    {problem.url ? <div className="mb-6 text-sm"><a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a></div> : null}
+    <div className="space-y-5">
+      <ProblemContentSection title="Statement" value={problem.statement_md?.trim() || 'No statement has been added yet.'} />
+      <ProblemContentSection title="Hint ladder" value={problem.hints_md?.trim() || 'No hints have been added yet.'} />
+      <ProblemContentSection title="Solution" value={problem.solution_md?.trim() || 'No solution notes have been added yet.'} />
+    </div>
+  </Dialog>;
 }
 
 function RoundSets({ data, reload, onNotice }: { data: ProblemsData; reload: () => Promise<void>; onNotice: (notice: string) => void }) {
