@@ -6,15 +6,15 @@ Items marked **[OPEN]** are defaults awaiting Hunter's confirmation. Everything 
 
 ## 1. Program model
 
-- A **cohort** runs 3 weeks. Each **participant** targets 6 sessions: 3 as interviewer + 3 as interviewee, normally one of each per week.
+- A **cohort** runs 3 **rounds of 14 days each** (2026: R1 Jul 26–Aug 8, R2 Aug 9–22, R3 Aug 23–Sep 5 — rounds start Sundays; applications close Jul 23). Each **participant** targets 6 sessions: 3 as interviewer + 3 as interviewee, one of each per round. Rows in the `weeks` table are rounds; `idx` = round number.
 - A **session** is one directed interview: `interviewer → interviewee`. Weekly matching gives every active participant two *different* partners (one per role). Your interviewer and your interviewee in the same week are never the same person, and you never meet the same counterpart twice in a cohort (either direction, repairs included).
 - Missed weeks are made up by **doubling**: per-role deficits are tracked, and weekly demand per role is `min(1 + deficit, 2)`.
 - **Alumni-round eligibility** = 6/6 sessions completed **and the week-3 interview passed**, where "passed" has two parts: (a) the week-3 interviewer's report marks an explicit **pass verdict**, and (b) organizers verify the session recording. v1 automates the workflow around (b) — a review queue with video links and one-click verify/flag — while the watching stays human; §13 sketches the AI-assisted triage that replaces most watching later (deliberately low priority). Scheduling with actual alumni stays manual in v1. **[OPEN — confirm scope]**
 - Roles: **Member** (verified human — see §14), **Participant** (enrolled student), **Organizer** (Discord role, gets admin commands + digest channel). Alumni-facing features are v2.
 
-## 2. Weekly lifecycle
+## 2. Round lifecycle (14 days)
 
-All times America/Toronto. Default schedule **[OPEN — align to your real cadence]**:
+All times America/Toronto, anchored to the round's start day D (any weekday — 2026 uses Sundays). Two mid-round nudges (D+3, D+10); reports due D+13 23:59; digest D+14; final round +4d grace. Recording reviews happen after every round (dashboard → Reviews); the eligibility gate remains the final round. Legacy weekly table below kept for anchor-hour reference:
 
 | When | What |
 |---|---|

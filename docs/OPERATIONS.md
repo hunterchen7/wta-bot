@@ -66,15 +66,17 @@ interaction — no deploy.
    (needs Server Members intent toggled on); then lock `@everyone` to #start-here.
 4. Load the bank: `/problems add` per problem (statement/hints/solution get
    pasted in the dashboard → Problems), then `/problems setweek 1..3`.
-5. `/setup cohort start_monday:YYYY-MM-DD name:"Fall 2026"` — **that's the last
-   manual step.** The cron runs everything else.
+5. `/setup cohort start_date:YYYY-MM-DD name:"Summer 2026"` — round 1's first
+   day, any weekday (2026: `2026-07-26`). **That's the last manual step.** The
+   cron runs everything else.
 
-**The automated week (all Toronto time):** Fri 16:00 opt-in opens (announce
-post + DMs) → Sat 18:00 reminder to non-responders → Sun 18:00 close, 18:15
-match (threads, pairing DMs/emails, residuals → repair queue) → Wed 18:00
-unscheduled-session nudge → packets to interviewers 24h before each session →
-report forms at session time → T-24h form nudges, overdue sweeps → Mon 09:00
-organizer digest. Final week gets a +4-day repair/report grace window.
+**The automated round (14 days, all Toronto time, D = round start):** D-3
+16:00 opt-in opens (announce post + DMs) → D-2 18:00 reminder to
+non-responders → D-1 18:00 close, 18:15 match (threads, pairing DMs/emails,
+residuals → repair queue) → D+3 and D+10 18:00 unscheduled-session nudges →
+packets to interviewers 24h before each session → report forms at session
+time → T-24h form nudges, overdue sweeps → D+14 09:00 organizer digest. The
+final round gets a +4-day repair/report grace window.
 Mid-week no-shows: victims are re-paired automatically (complementary victims,
 then standby volunteers); anything unrepaired simply becomes next week's
 deficit and the demand math offers a catch-up double.
