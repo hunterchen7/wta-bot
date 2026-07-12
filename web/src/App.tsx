@@ -5,6 +5,7 @@ import { AppSidebar } from './components/AppSidebar';
 import { Icon } from './components/Icon';
 import { ThemeToggle } from './components/ThemeToggle';
 import { DashboardContext } from './dashboard-context';
+import { preloadAdminRoute, preloadAllAdminModules } from './admin-routes';
 
 export function AppLayout() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -23,6 +24,12 @@ export function AppLayout() {
   }, []);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { preloadAdminRoute(location.pathname); }, [location.pathname]);
+  useEffect(() => {
+    if (!data?.viewer.organizer) return;
+    const timer = window.setTimeout(preloadAllAdminModules, 1_000);
+    return () => window.clearTimeout(timer);
+  }, [data?.viewer.organizer]);
 
   if (error) {
     return <main className="grid min-h-screen place-items-center p-6"><div className="max-w-md rounded-3xl border border-rose-200 bg-white p-8 text-center shadow-sm"><p className="text-lg font-semibold text-rose-700">{error}</p><button className="mt-5 rounded-xl bg-slate-900 px-5 py-2.5 font-semibold text-white" onClick={() => void refresh()}>Try again</button></div></main>;

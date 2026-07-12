@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { creditsOf, strikesOf } from '../engine/progress';
 import type { Env } from '../env';
 import { EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
 import { signToken } from '../forms/token';
@@ -14,11 +13,15 @@ api.get('/api/dashboard', async (c) => {
   const secret = c.env.FORM_SIGNING_SECRET;
   if (!secret) return c.json({ error: 'not_configured' }, 503);
 
-  const participantPromise = c.env.DB.prepare('SELECT * FROM participants WHERE id = ?1')
+  const participantPromise = c.env.DB.prepare(
+    `SELECT p.*,
+            (SELECT count(*) FROM sessions s WHERE s.interviewer_id = p.id AND s.interviewer_credited = 1) AS interviewer_credits,
+            (SELECT count(*) FROM sessions s WHERE s.interviewee_id = p.id AND s.interviewee_credited = 1) AS interviewee_credits,
+            (SELECT count(*) FROM incidents i WHERE i.accused_id = p.id AND i.state = 'confirmed' AND i.kind IN ('ghost', 'unresponsive')) AS strikes
+     FROM participants p WHERE p.id = ?1`,
+  )
     .bind(session.participantId)
     .first<any>();
-  const creditsPromise = creditsOf(c.env, session.participantId);
-  const strikesPromise = strikesOf(c.env, session.participantId);
   const sessionsPromise = c.env.DB.prepare(
     `SELECT s.id, s.state, s.scheduled_at, s.interviewer_id, s.interviewee_id,
             w.idx, pi.name AS interviewer_name, pe.name AS interviewee_name
@@ -37,10 +40,8 @@ api.get('/api/dashboard', async (c) => {
     .bind(session.participantId)
     .all<any>();
 
-  const [participant, credits, strikes, sessionsResult, owedResult] = await Promise.all([
+  const [participant, sessionsResult, owedResult] = await Promise.all([
     participantPromise,
-    creditsPromise,
-    strikesPromise,
     sessionsPromise,
     owedPromise,
   ]);
@@ -84,7 +85,11 @@ api.get('/api/dashboard', async (c) => {
       emailOk: participant.email_ok === 1,
       status: participant.status,
     },
-    progress: { ...credits, strikes },
+    progress: {
+      interviewer: Number(participant.interviewer_credits ?? 0),
+      interviewee: Number(participant.interviewee_credits ?? 0),
+      strikes: Number(participant.strikes ?? 0),
+    },
     sessions: sessionsResult.results.map((row) => {
       const isInterviewer = row.interviewer_id === session.participantId;
       return {

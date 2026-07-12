@@ -2,40 +2,42 @@ import { lazy, StrictMode, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { AppLayout } from './App';
+import { adminRouteModules } from './admin-routes';
 import { ProgressPage } from './pages/ProgressPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { LoginPage } from './pages/LoginPage';
-import { ReportPage } from './pages/ReportPage';
-import { ProblemPage } from './pages/ProblemPage';
-import { BankPage } from './pages/BankPage';
-import { PreviewPage } from './pages/PreviewPage';
-import { EnrollmentPage } from './pages/EnrollmentPage';
 import './styles.css';
 
-const OperationsPage = lazy(() => import('./pages/admin/OperationsPage').then((module) => ({ default: module.OperationsPage })));
-const FormsPage = lazy(() => import('./pages/admin/FormsPage').then((module) => ({ default: module.FormsPage })));
-const ProblemsPage = lazy(() => import('./pages/admin/ProblemsPage').then((module) => ({ default: module.ProblemsPage })));
-const ParticipantsPage = lazy(() => import('./pages/admin/ParticipantsPage').then((module) => ({ default: module.ParticipantsPage })));
-const OverviewPage = lazy(() => import('./pages/admin/OverviewPage').then((module) => ({ default: module.OverviewPage })));
-const RoundsPage = lazy(() => import('./pages/admin/RoundsPage').then((module) => ({ default: module.RoundsPage })));
-const ReviewsPage = lazy(() => import('./pages/admin/ReviewsPage').then((module) => ({ default: module.ReviewsPage })));
-const AnalyticsPage = lazy(() => import('./pages/admin/AnalyticsPage').then((module) => ({ default: module.AnalyticsPage })));
-const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })));
+const OperationsPage = lazy(adminRouteModules.operations);
+const FormsPage = lazy(adminRouteModules.forms);
+const ProblemsPage = lazy(adminRouteModules.problems);
+const ParticipantsPage = lazy(adminRouteModules.participants);
+const OverviewPage = lazy(adminRouteModules.overview);
+const RoundsPage = lazy(adminRouteModules.rounds);
+const ReviewsPage = lazy(adminRouteModules.reviews);
+const AnalyticsPage = lazy(adminRouteModules.analytics);
+const AdminSettingsPage = lazy(adminRouteModules.settings);
+const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })));
+const ReportPage = lazy(() => import('./pages/ReportPage').then((module) => ({ default: module.ReportPage })));
+const ProblemPage = lazy(() => import('./pages/ProblemPage').then((module) => ({ default: module.ProblemPage })));
+const BankPage = lazy(() => import('./pages/BankPage').then((module) => ({ default: module.BankPage })));
+const PreviewPage = lazy(() => import('./pages/PreviewPage').then((module) => ({ default: module.PreviewPage })));
+const EnrollmentPage = lazy(() => import('./pages/EnrollmentPage').then((module) => ({ default: module.EnrollmentPage })));
 const deferred = (page: ReactNode) => <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl bg-slate-200/70" />}>{page}</Suspense>;
+const publicDeferred = (page: ReactNode) => <Suspense fallback={<div className="min-h-screen animate-pulse bg-stone-50 p-6"><div className="mx-auto h-96 max-w-3xl rounded-3xl bg-slate-200/70" /></div>}>{page}</Suspense>;
 
 const router = createBrowserRouter(
   [
     { path: '/', element: <Navigate to="/login" replace /> },
-    { path: '/login', element: <LoginPage /> },
-    { path: '/bank', element: <BankPage /> },
-    { path: '/preview', element: <PreviewPage /> },
-    { path: '/preview/form/interviewee_report', element: <ReportPage previewKind="interviewee_report" /> },
-    { path: '/preview/form/interviewer_report', element: <ReportPage previewKind="interviewer_report" /> },
-    { path: '/preview/packet', element: <ProblemPage preview /> },
-    { path: '/preview/enrollment', element: <EnrollmentPage preview /> },
-    { path: '/f/:token', element: <ReportPage /> },
-    { path: '/p/:token', element: <ProblemPage /> },
-    { path: '/enroll/:token', element: <EnrollmentPage /> },
+    { path: '/login', element: publicDeferred(<LoginPage />) },
+    { path: '/bank', element: publicDeferred(<BankPage />) },
+    { path: '/preview', element: publicDeferred(<PreviewPage />) },
+    { path: '/preview/form/interviewee_report', element: publicDeferred(<ReportPage previewKind="interviewee_report" />) },
+    { path: '/preview/form/interviewer_report', element: publicDeferred(<ReportPage previewKind="interviewer_report" />) },
+    { path: '/preview/packet', element: publicDeferred(<ProblemPage preview />) },
+    { path: '/preview/enrollment', element: publicDeferred(<EnrollmentPage preview />) },
+    { path: '/f/:token', element: publicDeferred(<ReportPage />) },
+    { path: '/p/:token', element: publicDeferred(<ProblemPage />) },
+    { path: '/enroll/:token', element: publicDeferred(<EnrollmentPage />) },
     {
       path: '/app',
       element: <AppLayout />,

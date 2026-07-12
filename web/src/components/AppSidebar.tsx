@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import type { DashboardData } from '../api';
 import { Icon, type IconName } from './Icon';
+import { preloadAdminRoute } from '../admin-routes';
 
 type SidebarProps = {
   data: DashboardData;
@@ -96,7 +97,8 @@ function NavGroup({ label, items, collapsed, onNavigate, className = '' }: { lab
 function SidebarLink({ item, collapsed, onNavigate }: { item: NavEntry; collapsed: boolean; onNavigate: () => void }) {
   const location = useLocation();
   const active = item.end ? location.pathname === item.to : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
-  return <Link to={item.to} aria-current={active ? 'page' : undefined} title={collapsed ? item.label : undefined} onClick={onNavigate} className={`mb-1 flex h-11 items-center rounded-xl text-sm font-semibold transition ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${active ? 'bg-emerald-400/15 text-emerald-300' : 'text-slate-400 hover:bg-white/7 hover:text-white'}`}><Icon name={item.icon} className="size-5 shrink-0" />{!collapsed ? <span className="truncate">{item.label}</span> : null}</Link>;
+  const preload = () => preloadAdminRoute(item.to);
+  return <Link to={item.to} aria-current={active ? 'page' : undefined} title={collapsed ? item.label : undefined} onPointerEnter={preload} onPointerDown={preload} onFocus={preload} onClick={onNavigate} className={`mb-1 flex h-11 items-center rounded-xl text-sm font-semibold transition ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${active ? 'bg-emerald-400/15 text-emerald-300' : 'text-slate-400 hover:bg-white/7 hover:text-white'}`}><Icon name={item.icon} className="size-5 shrink-0" />{!collapsed ? <span className="truncate">{item.label}</span> : null}</Link>;
 }
 
 function Avatar({ name }: { name: string }) {
