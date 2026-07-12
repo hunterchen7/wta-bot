@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from 'react';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 
 export function PageIntro({ eyebrow = 'Admin', title, description, actions }: { eyebrow?: string; title: string; description: string; actions?: ReactNode }) {
   return <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -53,25 +54,45 @@ export function Tabs({ items, value, onChange }: { items: Array<{ value: string;
 }
 
 export function Dialog({ title, description, children, onClose, actions, wide = false }: { title: string; description?: string; children: ReactNode; onClose: () => void; actions?: ReactNode; wide?: boolean }) {
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.body.style.overflow = 'hidden';
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [onClose]);
+  const [open, setOpen] = useState(true);
+  const onCloseRef = useRef(onClose);
+  const fallbackTimer = useRef<number | null>(null);
+  const returnFocusRef = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  onCloseRef.current = onClose;
 
-  return <div className="fixed inset-0 z-[70] grid place-items-center overflow-y-auto bg-slate-950/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="dialog-title" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-    <div className={`max-h-[min(52rem,calc(100vh-2rem))] w-full overflow-y-auto rounded-2xl bg-white shadow-2xl ${wide ? 'max-w-4xl' : 'max-w-lg'}`}>
-      <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur"><div><h2 id="dialog-title" className="text-lg font-black text-slate-950">{title}</h2>{description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}</div><button aria-label="Close dialog" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700">×</button></div>
-      <div className="p-5">{children}</div>{actions ? <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-white/95 px-5 py-4 backdrop-blur">{actions}</div> : null}
-    </div>
-  </div>;
+  const finishClose = useCallback(() => {
+    if (fallbackTimer.current !== null) window.clearTimeout(fallbackTimer.current);
+    fallbackTimer.current = null;
+    onCloseRef.current();
+  }, []);
+  const requestClose = useCallback(() => {
+    setOpen(false);
+    if (fallbackTimer.current === null) fallbackTimer.current = window.setTimeout(finishClose, 250);
+  }, [finishClose]);
+  useEffect(() => () => {
+    if (fallbackTimer.current !== null) window.clearTimeout(fallbackTimer.current);
+  }, []);
+
+  return <DialogPrimitive.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose(); }}>
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Overlay className="dialog-overlay fixed inset-0 z-[70] bg-slate-950/50 backdrop-blur-[2px]" />
+      <DialogPrimitive.Content onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }} onAnimationEnd={(event) => { if (!open && event.target === event.currentTarget) finishClose(); }} className={`dialog-content fixed left-1/2 top-1/2 z-[71] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-[0_24px_80px_rgba(15,23,42,.3)] focus:outline-none ${wide ? 'max-w-4xl' : 'max-w-lg'}`}>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-xl">
+          <div>
+            <DialogPrimitive.Title className="text-lg font-black text-slate-950">{title}</DialogPrimitive.Title>
+            {description ? <DialogPrimitive.Description className="mt-1 text-sm leading-5 text-slate-500">{description}</DialogPrimitive.Description> : null}
+          </div>
+          <DialogPrimitive.Close aria-label="Close dialog" className="grid size-9 shrink-0 place-items-center rounded-lg text-xl leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">×</DialogPrimitive.Close>
+        </div>
+        <div className="p-5">{children}</div>
+        {actions ? <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-xl">{actions}</div> : null}
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  </DialogPrimitive.Root>;
+}
+
+export function DialogClose({ children }: { children: ReactNode }) {
+  return <DialogPrimitive.Close asChild>{children}</DialogPrimitive.Close>;
 }
 
 export const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15';
