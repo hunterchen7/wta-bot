@@ -1,5 +1,6 @@
 export type Env = {
   DB: D1Database;
+  ASSETS?: Fetcher;
   // Secrets — optional so the Worker boots before configuration; handlers guard.
   DISCORD_APP_ID?: string;
   DISCORD_PUBLIC_KEY?: string;

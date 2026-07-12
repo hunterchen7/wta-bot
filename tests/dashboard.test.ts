@@ -135,10 +135,30 @@ describe('views + authorization', () => {
     expect(html).toContain('Stu Dent');
     expect(html).toContain('Interviewer');
     expect(html).toContain('href="/dashboard/settings"');
+    expect(html).toContain('href="/app/"');
     expect(html).not.toContain('href="/dashboard/roster"');
 
     const roster = await get('/dashboard/roster', cookie);
     expect(roster.status).toBe(403);
+  });
+
+  it('serves authenticated dashboard data through the JSON API', async () => {
+    const denied = await app.request('/api/dashboard', {}, env);
+    expect(denied.status).toBe(401);
+
+    const response = await app.request(
+      '/api/dashboard',
+      { headers: { Cookie: await cookieFor(1, false) } },
+      env,
+    );
+    expect(response.status).toBe(200);
+    const payload = await response.json<any>();
+    expect(payload.viewer).toEqual({ participantId: 1, organizer: false });
+    expect(payload.participant).toMatchObject({ name: 'Stu Dent', preferredEmail: 'stu@example.com' });
+    expect(payload.progress).toMatchObject({ interviewer: expect.any(Number), interviewee: expect.any(Number), strikes: expect.any(Number) });
+    expect(payload.options.topics).toEqual(expect.arrayContaining([expect.objectContaining({ value: 'dsa' })]));
+    expect(Array.isArray(payload.sessions)).toBe(true);
+    expect(Array.isArray(payload.owedReports)).toBe(true);
   });
 
   it('shows email reminders as part of one save-all settings form', async () => {
@@ -249,6 +269,34 @@ describe('views + authorization', () => {
     expect(disable.status).toBe(302);
     const disabled = await env.DB.prepare('SELECT email_ok FROM participants WHERE id = 1').first<any>();
     expect(disabled.email_ok).toBe(0);
+
+    const apiSave = await app.request(
+      '/api/settings',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Cookie: cookie },
+        body: JSON.stringify({
+          name: 'Student Updated',
+          preferredEmail: 'student.updated@example.com',
+          westernEmail: 'supdated@uwo.ca',
+          year: 'Fourth',
+          program: 'Computer Science',
+          experience: '3-4',
+          priorWta: true,
+          emailOk: false,
+          opportunities: ['internships', 'new_grad'],
+          topics: ['dsa', 'system_design'],
+          blurb: 'word '.repeat(170),
+          interests: 'Saved through the React API',
+          priorFeedback: 'More mock interviews',
+        }),
+      },
+      env,
+    );
+    expect(apiSave.status).toBe(200);
+    expect(await apiSave.json()).toEqual({ ok: true });
+    expect((await env.DB.prepare('SELECT interests FROM participants WHERE id = 1').first<any>()).interests)
+      .toBe('Saved through the React API');
 
     // Keep shared fixtures stable for the remaining dashboard tests.
     await env.DB.prepare(

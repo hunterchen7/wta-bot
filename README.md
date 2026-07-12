@@ -12,7 +12,8 @@ local dev, troubleshooting) · [docs/OPERATIONS.md](docs/OPERATIONS.md)
 ## Stack
 
 - Cloudflare Workers (webhook interactions — no gateway) + D1 + cron triggers
-- hono (routing + JSX-rendered form pages), TypeScript
+- hono (Worker API + server-rendered form rail), TypeScript
+- React + Vite + Tailwind for the evolving dashboard web app
 - Cloudflare Email Service for email reminders (M5, opt-in per participant)
 
 ## Setup
@@ -21,7 +22,8 @@ local dev, troubleshooting) · [docs/OPERATIONS.md](docs/OPERATIONS.md)
 npm install
 cp .dev.vars.example .dev.vars   # fill in (see below)
 npm run migrate:local
-npm run dev                      # http://localhost:8787/health
+npm run dev                      # Worker/API: http://localhost:8787/health
+npm run dev:web                  # React app: http://localhost:5173/app/
 ```
 
 ### Discord application (one-time)
@@ -89,6 +91,7 @@ board, Reviews, Problems. `/preview` renders every web form read-only.
 | Bot messages (opt-in, pairings, nudges) | `src/engine/cycle.ts` |
 | Email sender/content | `src/email.ts` + call sites |
 | Web pages (forms, dashboard, previews) | `src/routes/forms.ts`, `src/routes/web.ts` |
+| React dashboard app | `web/` + JSON endpoints in `src/routes/api.ts` |
 | Round calendar anchors | `src/engine/weeks.ts` |
 
 ## Milestones

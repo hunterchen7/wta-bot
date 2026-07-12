@@ -4,6 +4,7 @@ import { handleInteraction } from './discord/interactions';
 import { forms } from './routes/forms';
 import { exportRoutes } from './routes/export';
 import { web } from './routes/web';
+import { api } from './routes/api';
 import { tick } from './cron';
 
 export const app = new Hono<{ Bindings: Env }>();
@@ -25,6 +26,7 @@ app.get('/discord', (c) =>
 app.route('/', forms);
 app.route('/', exportRoutes);
 app.route('/', web);
+app.route('/', api);
 app.get('/', (c) => c.redirect('/dashboard'));
 
 export default {

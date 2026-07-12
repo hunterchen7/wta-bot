@@ -6,6 +6,19 @@
   "compatibility_date": "2026-06-01",
   "observability": { "enabled": true },
 
+  // React/Vite dashboard. Existing Worker routes run first; everything else
+  // can fall through to the SPA shell for client-side routing.
+  "assets": {
+    "directory": "./web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/", "/health", "/discord*", "/api/*", "/login*", "/logout",
+      "/auth/*", "/dashboard*", "/f/*", "/p/*", "/export/*",
+      "/bank", "/preview*"
+    ]
+  },
+
   // Single 15-min tick; all real scheduling lives in the DB (weeks table) and is
   // dispatched from src/cron.ts. Keeps timezones/DST out of cron expressions.
   "triggers": { "crons": ["*/15 * * * *"] },

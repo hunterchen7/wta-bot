@@ -3,7 +3,6 @@ import { getCookie, setCookie } from 'hono/cookie';
 import { getSetting, getSettings } from '../config';
 import { DiscordRest } from '../discord/rest';
 import { sendEmail } from '../email';
-import { enqueue } from '../engine/outbox';
 import { maybeMarkEligible } from '../engine/reports';
 import { creditsOf, strikesOf } from '../engine/progress';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
@@ -12,6 +11,7 @@ import { esc, page } from '../forms/render';
 import { signToken, verifyToken } from '../forms/token';
 import { discordTime, formatToronto } from '../time';
 import { BLURB_MIN_CHARS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
+import { updateParticipantSettings } from '../services/participant-settings';
 
 // Authenticated dashboard (DESIGN task: email-code login). Students see their
 // own progress; organizers additionally get roster / week board / reviews /
@@ -30,9 +30,9 @@ export async function hashLoginCode(participantId: number, code: string): Promis
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-type SessionUser = { participantId: number; organizer: boolean };
+export type SessionUser = { participantId: number; organizer: boolean };
 
-async function sessionFrom(c: any): Promise<SessionUser | null> {
+export async function sessionFrom(c: any): Promise<SessionUser | null> {
   const secret = c.env.FORM_SIGNING_SECRET;
   const raw = getCookie(c, COOKIE);
   if (!secret || !raw) return null;
@@ -44,6 +44,7 @@ async function sessionFrom(c: any): Promise<SessionUser | null> {
 
 const nav = (user: SessionUser) =>
   `<nav class="top">
+    <a href="/app/"><b>New app</b></a>
     <a href="/dashboard">My progress</a>
     <a href="/dashboard/settings">Settings</a>
     ${user.organizer ? `<a href="/dashboard/roster">Roster</a><a href="/dashboard/week">Round board</a><a href="/dashboard/reviews">Reviews</a><a href="/dashboard/problems">Problems</a>` : ''}
@@ -389,82 +390,26 @@ web.post('/dashboard/settings/profile', async (c) => {
     return (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(String);
   };
 
-  const name = text('name');
-  const preferredEmail = text('preferred_email').toLowerCase();
-  const westernEmail = text('western_email').toLowerCase();
-  const year = text('year');
-  const program = text('program');
-  const experience = text('experience_band');
-  const opportunities = list('opportunities');
-  const topics = list('topics');
-  const emailOk = text('email_ok') === '1';
-  const blurb = text('blurb');
-  const interests = text('interests');
-  const priorFeedback = text('prior_feedback');
-  const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  const allowed = (values: string[], choices: Array<{ value: string }>) =>
-    values.length > 0 && values.every((value) => choices.some((choice) => choice.value === value));
-
-  if (
-    !name || name.length > 100 ||
-    !validEmail(preferredEmail) || preferredEmail.length > 200 ||
-    !validEmail(westernEmail) || westernEmail.length > 200 ||
-    !YEARS.includes(year) || !PROGRAMS.includes(program) || !EXPERIENCE.includes(experience) ||
-    !allowed(opportunities, OPPORTUNITIES) || !allowed(topics, TOPICS) ||
-    blurb.length < BLURB_MIN_CHARS || blurb.length > 2000 ||
-    interests.length > 1000 || priorFeedback.length > 1000
-  ) {
-    return c.html(page('Invalid profile', `${nav(user)}<h1>Check your answers</h1><div class="err">One or more profile fields were missing or invalid. Go back and try again.</div><p><a class="btn ghost" href="/dashboard/settings">Back to settings</a></p>`), 400);
-  }
-
-  const current = await c.env.DB.prepare(
-    'SELECT discord_id, name, preferred_email, email_ok FROM participants WHERE id = ?1',
-  )
-    .bind(user.participantId)
-    .first<{ discord_id: string; name: string | null; preferred_email: string | null; email_ok: number }>();
-  if (!current) return c.redirect('/login');
-  const duplicate = await c.env.DB.prepare(
-    'SELECT id FROM participants WHERE lower(preferred_email) = ?1 AND id <> ?2 LIMIT 1',
-  )
-    .bind(preferredEmail, user.participantId)
-    .first();
-  if (duplicate) {
-    return c.html(page('Email already used', `${nav(user)}<h1>Email already used</h1><div class="err">That preferred email belongs to another WTA profile.</div><p><a class="btn ghost" href="/dashboard/settings">Back to settings</a></p>`), 409);
-  }
-
-  await c.env.DB.prepare(
-    `UPDATE participants SET name = ?1, preferred_email = ?2, western_email = ?3,
-       year = ?4, program = ?5, opportunities = ?6, prior_wta = ?7,
-       experience_band = ?8, topics = ?9, blurb = ?10, interests = ?11,
-       prior_feedback = ?12, email_ok = ?13, updated_at = datetime('now') WHERE id = ?14`,
-  )
-    .bind(
-      name, preferredEmail, westernEmail, year, program, JSON.stringify(opportunities),
-      text('prior_wta') === '1' ? 1 : 0, experience, JSON.stringify(topics), blurb,
-      interests || null, priorFeedback || null, emailOk ? 1 : 0, user.participantId,
-    )
-    .run();
-
-  if (name !== current.name) {
-    const guildId = c.env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
-    if (guildId) await enqueue(c.env, 'nickname', { guildId, userId: current.discord_id, nick: name.slice(0, 32) });
-  }
-  if (emailOk && (current.email_ok !== 1 || preferredEmail !== current.preferred_email?.toLowerCase())) {
-    await enqueueEmailConfirmation(c.env, preferredEmail, name);
+  const result = await updateParticipantSettings(c.env, user.participantId, {
+    name: text('name'),
+    preferredEmail: text('preferred_email'),
+    westernEmail: text('western_email'),
+    year: text('year'),
+    program: text('program'),
+    experience: text('experience_band'),
+    opportunities: list('opportunities'),
+    topics: list('topics'),
+    priorWta: text('prior_wta') === '1',
+    emailOk: text('email_ok') === '1',
+    blurb: text('blurb'),
+    interests: text('interests'),
+    priorFeedback: text('prior_feedback'),
+  });
+  if (!result.ok) {
+    return c.html(page('Settings not saved', `${nav(user)}<h1>Check your answers</h1><div class="err">${esc(result.message)}</div><p><a class="btn ghost" href="/dashboard/settings">Back to settings</a></p>`), result.status);
   }
   return c.redirect('/dashboard/settings?saved=1');
 });
-
-async function enqueueEmailConfirmation(env: Env, to: string, name: string | null) {
-  await enqueue(env, 'email', {
-    to,
-    subject: "You're subscribed to WTA email reminders ✅",
-    text:
-      `Hi ${name ?? 'there'},\n\n` +
-      `This confirms you've opted into Western Tech Alumni email reminders — pairings, deadlines, and important program updates will land here alongside Discord.\n\n` +
-      `You can change this any time from your WTA dashboard settings.\n\n— Western Tech Alumni`,
-  });
-}
 
 /** Primary organizer gate for the web: a simple email whitelist (var
  *  DASHBOARD_ADMINS). The Discord-role check below is the fallback. */
