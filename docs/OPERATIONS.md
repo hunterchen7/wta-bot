@@ -63,11 +63,18 @@ interaction — no deploy.
 
 **One-time setup (organizer, in Discord):**
 
+0. **The fast path:** grant the bot role Manage Channels + Manage Roles +
+   Manage Nicknames, drag it near the top, then run
+   `/admin setup bootstrap year:2026`. The bot builds the "WTA 2026" category
+   (start-here / announcements / introductions / interviews / wta-organizers)
+   with permissions baked in, creates missing roles, archives last year's
+   channels read-only, saves all ids, and posts the verify panel. Steps 1-3
+   below are the manual equivalent / for adjustments.
 1. `/admin setup channels announce:#... organizer:#... threads:#... start_here:#... intros:#...`
 2. `/admin setup roles member:@Member participant:@Participant organizer:@Organizer`
    (bot role must sit above these, with Manage Roles + Manage Nicknames on)
 3. `/admin setup verify` → panel appears in #start-here; `/admin backfill` once
-   (needs Server Members intent toggled on); then lock `@everyone` to #start-here.
+   (needs Server Members intent toggled on).
 4. Load the bank: `/admin problems add` per problem (solution notes pasted in the
    dashboard → Problems), then `/admin problems setweek 1..3`. Sets are **public**:
    `/bank` + the pairing announcement; interviewers record their pick on the

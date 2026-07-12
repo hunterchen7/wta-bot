@@ -53,6 +53,12 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       await sendEmail(env, payload.to, payload.subject, payload.text);
       return;
 
+    case 'guild_setup': {
+      const { bootstrapGuild } = await import('./bootstrap');
+      await bootstrapGuild(env, payload);
+      return;
+    }
+
     case 'backfill': {
       // One-time Member-role backfill before locking @everyone down.
       // Requires the Server Members intent (docs/SETUP.md §2).

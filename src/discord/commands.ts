@@ -133,6 +133,12 @@ export const COMMANDS: Command[] = [
             ],
           },
           { type: SUB_COMMAND, name: 'verify', description: 'Post the verification panel' },
+          {
+            type: SUB_COMMAND,
+            name: 'bootstrap',
+            description: "Build the year's channels + roles, archive last year's",
+            options: [{ type: 4, name: 'year', description: 'Program year, e.g. 2026', required: true }],
+          },
         ],
       },
       {

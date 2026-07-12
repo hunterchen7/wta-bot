@@ -67,7 +67,7 @@ applied migration.
 `/report no-show|unresponsive|issue` · `/dashboard` (one-click web sign-in link).
 
 **Organizers — everything under one command:** `/admin` with subcommands:
-`setup channels|roles|cohort|verify` · `roster` · `export` · `standing` ·
+`setup bootstrap|channels|roles|cohort|verify` · `roster` · `export` · `standing` ·
 `excuse` · `pair` · `repair` · `participant hold|release|remove` ·
 `problems add|list|setweek` · `digest` · `eligible` · `backfill`.
 

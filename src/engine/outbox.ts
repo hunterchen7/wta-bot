@@ -13,7 +13,8 @@ export type OutboxKind =
   | 'nickname' // { guildId, userId, nick }
   | 'email' // { to, subject, text }
   | 'followup' // { interactionToken, message } — edits a deferred response
-  | 'backfill'; // { guildId, roleId, interactionToken } — member-role backfill
+  | 'backfill' // { guildId, roleId, interactionToken } — member-role backfill
+  | 'guild_setup'; // { guildId, year, interactionToken } — annual bootstrap
 
 export const MAX_ATTEMPTS = 5;
 

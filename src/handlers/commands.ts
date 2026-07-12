@@ -429,8 +429,18 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
       const message = await postVerifyPanel(c, interaction);
       return c.json(ephemeral(message));
     }
+    case 'bootstrap': {
+      if (!interaction.guild_id) return c.json(ephemeral('Run this in the server.'));
+      const year = Number(optVal(s.options, 'year') ?? new Date().getFullYear());
+      await enqueue(c.env, 'guild_setup', {
+        guildId: interaction.guild_id,
+        year,
+        interactionToken: interaction.token,
+      });
+      return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
+    }
     default:
-      return c.json(ephemeral('Subcommands: `channels`, `roles`, `cohort`, `verify`.'));
+      return c.json(ephemeral('Subcommands: `channels`, `roles`, `cohort`, `verify`, `bootstrap`.'));
   }
 }
 

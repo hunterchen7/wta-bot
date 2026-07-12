@@ -14,6 +14,7 @@ export type SettingKey =
   | 'organizer_role_id' // dashboard organizer check + admin surfaces
   | 'commands_json' // syncCommands bookkeeping
   | 'verify_panel_message_id'
+  | 'category_id' // current year's category (bootstrap renames it on archive)
   | 'packet_mode'; // 'on' enables private T-24h interviewer packets (future feature; default off = open question bank)
 
 export async function getSetting(env: Env, key: SettingKey): Promise<string | null> {
