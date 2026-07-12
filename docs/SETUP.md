@@ -112,13 +112,16 @@ Dashboard: Worker → **Settings → Variables & Secrets** (or `wrangler secret 
 Until secrets exist, `/discord` and `/f/*` return 503 by design; `/health`
 works regardless.
 
-### Email (M5+, optional until then)
+### Email (required for the dashboard login + email reminders)
 
 Cloudflare **Email Service**: add the zone as a sending domain in the dash
-(DKIM/SPF records are added automatically), choose the sender (e.g.
-`wta@hunterchen.ca`), then uncomment the `send_email` binding in
-`wrangler.jsonc`. Sending uses the Worker binding — no API keys. The included
-3k emails/month requires the Workers Paid plan (~$5/mo).
+(DKIM/SPF records are added automatically), choose the sender
+(`wta@hunterchen.ca` — must match `EMAIL_FROM` in `src/email.ts`), then
+uncomment the `send_email` binding in `wrangler.jsonc` and push. Sending uses
+the Worker binding — no API keys. The included 3k emails/month requires the
+Workers Paid plan (~$5/mo). Until this is enabled, everything works except
+outbound email: reminder emails are skipped (logged), and **dashboard login
+codes only appear in `wrangler tail` logs**.
 
 ## 4. Wire Discord to the Worker (order matters)
 

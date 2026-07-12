@@ -55,12 +55,47 @@ interaction — no deploy.
 - If the interactions endpoint ever shows as failing in the portal, the Worker
   is down or the public key changed — check `/health`, then secrets.
 
-## Weekly cohort operations
+## Running a cohort
 
-> Placeholder — this section fills in as M2–M6 land. It will cover: opening a
-> cohort and setting week anchors, the opt-in → matching → announcement cycle,
-> repairing broken sessions, the no-show case-file buttons, the W3 review
-> queue, and the weekly digest. Admin command reference: DESIGN.md §8.
+**One-time setup (organizer, in Discord):**
+
+1. `/setup channels announce:#... organizer:#... threads:#... start_here:#... intros:#...`
+2. `/setup roles member:@Member participant:@Participant organizer:@Organizer`
+   (bot role must sit above these, with Manage Roles + Manage Nicknames on)
+3. `/setup verify` → panel appears in #start-here; `/verify backfill` once
+   (needs Server Members intent toggled on); then lock `@everyone` to #start-here.
+4. Load the bank: `/problems add` per problem (statement/hints/solution get
+   pasted in the dashboard → Problems), then `/problems setweek 1..3`.
+5. `/setup cohort start_monday:YYYY-MM-DD name:"Fall 2026"` — **that's the last
+   manual step.** The cron runs everything else.
+
+**The automated week (all Toronto time):** Fri 16:00 opt-in opens (announce
+post + DMs) → Sat 18:00 reminder to non-responders → Sun 18:00 close, 18:15
+match (threads, pairing DMs/emails, residuals → repair queue) → Wed 18:00
+unscheduled-session nudge → packets to interviewers 24h before each session →
+report forms at session time → T-24h form nudges, overdue sweeps → Mon 09:00
+organizer digest. Final week gets a +4-day repair/report grace window.
+Mid-week no-shows: victims are re-paired automatically (complementary victims,
+then standby volunteers); anything unrepaired simply becomes next week's
+deficit and the demand math offers a catch-up double.
+
+**Humans in the loop:** case files (strike 2) land in the organizer channel
+with Remove / Excuse / Keep buttons; `/excuse @user` clears good-reason cases;
+W3 pass verdicts wait in dashboard → Reviews for a recording **verify/flag**;
+verify + 6/6 fires eligibility automatically.
+
+**Admin reference:** `/roster` `/standing` `/excuse` `/participant hold|release|remove`
+`/digest` `/eligible` `/export` `/problems` `/setup` — plus the dashboard
+(`/login` with your roster email) for roster, week board, reviews, problems.
+
+## Web dashboard
+
+- Students and organizers log in at `/login` with their **roster email**
+  (6-digit code, 10-min expiry). **Requires Email Service to be enabled** —
+  until then codes are only visible in `wrangler tail` logs.
+- Organizer views appear when the logged-in person holds the configured
+  organizer role in Discord (checked at login; re-login after role changes).
+- Sessions last 7 days; log out from the top nav.
 
 ## Costs
 

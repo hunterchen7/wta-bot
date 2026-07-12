@@ -156,7 +156,19 @@ Low-effort human check on the existing server (no new server, no KYC):
 - **Admin:** `/setup verify` posts/refreshes the panel and stores role/channel ids in `settings`; `/verify backfill` grants Member to all existing members once before @everyone is locked (requires Server Members Intent toggled on in the dev portal for the REST member list — instant at <10k users; harmless for a webhook-only bot).
 - Bot role must sit above Member/Participant in the role hierarchy.
 
-## 15. Open knobs (recap)
+## 15. Web dashboard & auth (built)
+
+- **Login:** roster email → 6-digit OTP (hashed in `login_codes`, 10-min
+  expiry, 5 attempts, 3 codes/15 min, no account enumeration) sent from the
+  notification sender → signed HttpOnly cookie (7 days, SameSite=Lax).
+- **Students:** progress bars, session list, owed reports (signed links), strikes.
+- **Organizers** (Discord organizer role, checked at login): roster, week
+  board, **W3 recording review queue** (verify → eligibility fires; flag →
+  organizer-channel ping), and the **problem editor** (statement / hint ladder /
+  solution) that feeds interviewer packets and post-report solution releases.
+- Writes stay behind organizer sessions; students never see admin surfaces.
+
+## 16. Open knobs (recap)
 
 1. Weekly schedule anchors (which days) + report deadline style (end-of-week vs 48h-after).
 2. Both reports required — confirmed? (Design assumes yes.)
