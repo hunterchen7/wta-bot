@@ -39,8 +39,8 @@ export function PracticeProblemsPage() {
           <span aria-hidden="true" className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-border text-xl text-muted-foreground transition group-open:rotate-45 group-open:border-western-300 group-open:text-western-700">+</span>
         </summary>
         <div className="border-t border-border px-5 py-6 sm:px-7 sm:py-8">
+          <div className="mb-6 text-sm text-muted-foreground"><a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a></div>
           <MarkdownContent>{problem.content}</MarkdownContent>
-          <div className="mt-8 border-t border-border pt-5 text-sm text-muted-foreground">Prefer the coding platform? <a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open the source problem ↗</a></div>
         </div>
       </details>)}
         </div>
