@@ -183,7 +183,7 @@ describe('nickname sync', () => {
         ),
         guild_id: '777000111',
       },
-      { DISCORD_TOKEN: 'test-token' },
+      { DISCORD_TOKEN: 'test-token', ALLOWED_GUILD_IDS: '777000111' },
     );
     await vi.waitFor(() => {
       const patch = calls.find((c) => c.method === 'PATCH');
