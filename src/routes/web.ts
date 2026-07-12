@@ -150,7 +150,7 @@ web.post('/login/code', async (c) => {
     .bind(row.id, new Date().toISOString())
     .run();
 
-  const organizer = await checkOrganizer(c.env, p.discord_id);
+  const organizer = isWhitelistedAdmin(c.env, email) || (await checkOrganizer(c.env, p.discord_id));
   const token = await signToken(
     secret,
     `sess:${p.id}:${organizer ? 1 : 0}`,
@@ -170,6 +170,16 @@ web.post('/logout', (c) => {
   setCookie(c, COOKIE, '', { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 0 });
   return c.redirect('/login');
 });
+
+/** Primary organizer gate for the web: a simple email whitelist (var
+ *  DASHBOARD_ADMINS). The Discord-role check below is the fallback. */
+export function isWhitelistedAdmin(env: Env, email: string): boolean {
+  return (env.DASHBOARD_ADMINS ?? '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(email.toLowerCase());
+}
 
 async function checkOrganizer(env: Env, discordId: string): Promise<boolean> {
   const roleId = await getSetting(env, 'organizer_role_id');

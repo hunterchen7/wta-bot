@@ -11,6 +11,9 @@ export type Env = {
   ALLOWED_GUILD_IDS?: string;
   // Public base URL for links minted outside a request context (cron DMs).
   PUBLIC_ORIGIN?: string;
+  // Comma-separated emails that get organizer views on the web dashboard
+  // (checked at login, alongside the Discord organizer-role fallback).
+  DASHBOARD_ADMINS?: string;
   // Outbox rows drained per tick (Discord/email sends). Default 20 — safe on
   // the free plan's external-subrequest cap; raise on Workers Paid.
   OUTBOX_BUDGET?: string;

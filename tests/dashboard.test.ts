@@ -92,6 +92,29 @@ describe('login flow', () => {
   });
 });
 
+describe('admin whitelist', () => {
+  it('grants organizer views to whitelisted emails at login', async () => {
+    await env.DB.prepare(
+      `INSERT INTO login_codes (participant_id, code_hash, expires_at) VALUES (1, ?1, ?2)`,
+    )
+      .bind(await hashLoginCode(1, '222333'), new Date(Date.now() + 600_000).toISOString())
+      .run();
+    const res = await app.request(
+      '/login/code',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'email=stu%40example.com&code=222333',
+      },
+      { ...env, DASHBOARD_ADMINS: 'other@example.com, STU@example.com' },
+    );
+    expect(res.status).toBe(302);
+    const cookie = res.headers.get('set-cookie')!.split(';')[0]!;
+    const roster = await app.request('/dashboard/roster', { headers: { Cookie: cookie } }, env);
+    expect(roster.status).toBe(200);
+  });
+});
+
 describe('views + authorization', () => {
   it('redirects anonymous visitors to /login', async () => {
     const res = await get('/dashboard');
