@@ -114,6 +114,6 @@ api.post('/api/settings', async (c) => {
     return c.json({ error: 'invalid_json', message: 'Invalid settings request.' }, 400);
   }
   const result = await updateParticipantSettings(c.env, session.participantId, input);
-  if (!result.ok) return c.json({ error: result.code, message: result.message }, result.status);
+  if (!result.ok) return c.json({ error: result.code, message: result.message, fieldErrors: result.fieldErrors }, result.status);
   return c.json({ ok: true });
 });

@@ -193,6 +193,11 @@ describe('views + authorization', () => {
       env,
     );
     expect(invalid.status).toBe(400);
+    const validationHtml = await invalid.text();
+    expect(validationHtml).toContain('Enter your full name.');
+    expect(validationHtml).toContain('Choose at least one opportunity type.');
+    expect(validationHtml).toContain('Choose at least one topic.');
+    expect(validationHtml).toContain('Dream company and role response must be at least 800 characters.');
   });
 
   it('lets participants update their own profile from settings', async () => {

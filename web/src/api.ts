@@ -42,8 +42,15 @@ export type DashboardData = {
 
 export type SettingsPayload = Omit<ParticipantSettings, 'id' | 'status'>;
 
+export class SettingsSaveError extends Error {
+  constructor(message: string, readonly fieldErrors: Record<string, string> = {}) {
+    super(message);
+    this.name = 'SettingsSaveError';
+  }
+}
+
 export async function getDashboard(): Promise<DashboardData> {
-  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('demo')) {
+  if (import.meta.env.DEV && demoEnabled()) {
     return (await import('./demo')).demoDashboard;
   }
   const response = await fetch('/api/dashboard', { headers: { Accept: 'application/json' } });
@@ -56,16 +63,50 @@ export async function getDashboard(): Promise<DashboardData> {
 }
 
 export async function saveSettings(payload: SettingsPayload): Promise<void> {
-  if (import.meta.env.DEV && new URLSearchParams(window.location.search).has('demo')) return;
+  if (import.meta.env.DEV && demoEnabled()) {
+    const fieldErrors: Record<string, string> = {};
+    if (payload.opportunities.length === 0) fieldErrors.opportunities = 'Choose at least one opportunity type.';
+    if (payload.topics.length === 0) fieldErrors.topics = 'Choose at least one topic.';
+    if (payload.blurb.trim().length < 800) fieldErrors.blurb = 'Dream company and role response must be at least 800 characters.';
+    if (Object.keys(fieldErrors).length) throw new SettingsSaveError('Check the highlighted profile fields.', fieldErrors);
+    return;
+  }
   const response = await fetch('/api/settings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(payload),
   });
-  const result = (await response.json().catch(() => ({}))) as { message?: string };
+  const result = (await response.json().catch(() => ({}))) as { message?: string; fieldErrors?: Record<string, string> };
   if (response.status === 401) {
     window.location.assign('/login');
     throw new Error('Your session expired. Redirecting to login…');
   }
-  if (!response.ok) throw new Error(result.message ?? 'Could not save your settings.');
+  if (!response.ok) throw new SettingsSaveError(result.message ?? 'Could not save your settings.', result.fieldErrors);
+}
+
+export async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  if (import.meta.env.DEV && demoEnabled()) {
+    const { adminDemoRequest } = await import('./demo-admin');
+    return adminDemoRequest(path, init) as T;
+  }
+  const response = await fetch(`/api/admin${path}`, {
+    ...init,
+    headers: { Accept: 'application/json', ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
+  });
+  if (response.status === 401) {
+    window.location.assign('/login');
+    throw new Error('Your session expired. Redirecting to login…');
+  }
+  const result = await response.json().catch(() => ({})) as { message?: string; error?: string };
+  if (!response.ok) throw new Error(result.message ?? result.error?.replaceAll('_', ' ') ?? 'The admin request failed.');
+  return result as T;
+}
+
+function demoEnabled() {
+  if (!import.meta.env.DEV) return false;
+  if (new URLSearchParams(window.location.search).has('demo')) {
+    sessionStorage.setItem('wta:demo', '1');
+    return true;
+  }
+  return sessionStorage.getItem('wta:demo') === '1';
 }

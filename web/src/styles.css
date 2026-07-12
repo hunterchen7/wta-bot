@@ -7,6 +7,7 @@
 @layer base {
   body {
     @apply m-0 min-w-80 bg-stone-50 font-sans text-slate-900 antialiased;
+    scrollbar-gutter: stable;
   }
 
   button, a, input, select, textarea {
@@ -15,5 +16,23 @@
 
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
     @apply ring-2 ring-emerald-500 ring-offset-2;
+  }
+}
+
+@keyframes route-enter {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.route-enter {
+  animation: route-enter 160ms cubic-bezier(.22, 1, .36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

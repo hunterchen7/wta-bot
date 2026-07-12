@@ -406,7 +406,8 @@ web.post('/dashboard/settings/profile', async (c) => {
     priorFeedback: text('prior_feedback'),
   });
   if (!result.ok) {
-    return c.html(page('Settings not saved', `${nav(user)}<h1>Check your answers</h1><div class="err">${esc(result.message)}</div><p><a class="btn ghost" href="/dashboard/settings">Back to settings</a></p>`), result.status);
+    const details = Object.values(result.fieldErrors ?? {});
+    return c.html(page('Settings not saved', `${nav(user)}<h1>Check your answers</h1><div class="err"><b>${esc(result.message)}</b>${details.length ? `<ul>${details.map((message) => `<li>${esc(message)}</li>`).join('')}</ul>` : ''}</div><p><a class="btn ghost" href="/dashboard/settings">Back to settings</a></p>`), result.status);
   }
   return c.redirect('/dashboard/settings?saved=1');
 });

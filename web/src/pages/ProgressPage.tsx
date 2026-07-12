@@ -1,4 +1,4 @@
-import { useDashboard } from '../App';
+import { useDashboard } from '../dashboard-context';
 
 const stateStyles: Record<string, string> = {
   completed: 'bg-emerald-100 text-emerald-800',

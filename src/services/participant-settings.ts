@@ -20,7 +20,7 @@ export type ParticipantSettingsInput = {
 
 export type ParticipantSettingsResult =
   | { ok: true }
-  | { ok: false; status: 400 | 404 | 409; code: 'invalid' | 'not_found' | 'duplicate_email'; message: string };
+  | { ok: false; status: 400 | 404 | 409; code: 'invalid' | 'not_found' | 'duplicate_email'; message: string; fieldErrors?: Record<string, string> };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -30,8 +30,9 @@ export async function updateParticipantSettings(
   raw: ParticipantSettingsInput,
 ): Promise<ParticipantSettingsResult> {
   const input = normalize(raw);
-  if (!valid(input)) {
-    return { ok: false, status: 400, code: 'invalid', message: 'One or more profile fields were missing or invalid.' };
+  const fieldErrors = validate(input);
+  if (Object.keys(fieldErrors).length > 0) {
+    return { ok: false, status: 400, code: 'invalid', message: 'Check the highlighted profile fields.', fieldErrors };
   }
 
   const current = await env.DB.prepare(
@@ -47,7 +48,7 @@ export async function updateParticipantSettings(
     .bind(input.preferredEmail, participantId)
     .first();
   if (duplicate) {
-    return { ok: false, status: 409, code: 'duplicate_email', message: 'That preferred email belongs to another WTA profile.' };
+    return { ok: false, status: 409, code: 'duplicate_email', message: 'That preferred email belongs to another WTA profile.', fieldErrors: { preferredEmail: 'This email is already used by another WTA profile.' } };
   }
 
   await env.DB.prepare(
@@ -112,26 +113,26 @@ function normalize(input: ParticipantSettingsInput): ParticipantSettingsInput {
   };
 }
 
-function valid(input: ParticipantSettingsInput): boolean {
-  const allowed = (values: string[], choices: Array<{ value: string }>) =>
-    values.length > 0 && values.every((value) => choices.some((choice) => choice.value === value));
-  return (
-    input.name.length > 0 &&
-    input.name.length <= 100 &&
-    EMAIL_RE.test(input.preferredEmail) &&
-    input.preferredEmail.length <= 200 &&
-    EMAIL_RE.test(input.westernEmail) &&
-    input.westernEmail.length <= 200 &&
-    YEARS.includes(input.year) &&
-    PROGRAMS.includes(input.program) &&
-    EXPERIENCE.includes(input.experience) &&
-    allowed(input.opportunities, OPPORTUNITIES) &&
-    allowed(input.topics, TOPICS) &&
-    input.blurb.length >= BLURB_MIN_CHARS &&
-    input.blurb.length <= 2000 &&
-    input.interests.length <= 1000 &&
-    input.priorFeedback.length <= 1000
-  );
+function validate(input: ParticipantSettingsInput): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (!input.name) errors.name = 'Enter your full name.';
+  else if (input.name.length > 100) errors.name = 'Full name must be 100 characters or fewer.';
+  if (!EMAIL_RE.test(input.preferredEmail)) errors.preferredEmail = 'Enter a valid preferred email address.';
+  else if (input.preferredEmail.length > 200) errors.preferredEmail = 'Preferred email must be 200 characters or fewer.';
+  if (!EMAIL_RE.test(input.westernEmail)) errors.westernEmail = 'Enter a valid Western email address.';
+  else if (input.westernEmail.length > 200) errors.westernEmail = 'Western email must be 200 characters or fewer.';
+  if (!YEARS.includes(input.year)) errors.year = 'Choose your incoming year.';
+  if (!PROGRAMS.includes(input.program)) errors.program = 'Choose your program.';
+  if (!EXPERIENCE.includes(input.experience)) errors.experience = 'Choose how many technical interviews you have completed.';
+  if (input.opportunities.length === 0) errors.opportunities = 'Choose at least one opportunity type.';
+  else if (!input.opportunities.every((value) => OPPORTUNITIES.some((choice) => choice.value === value))) errors.opportunities = 'One of the selected opportunity types is invalid.';
+  if (input.topics.length === 0) errors.topics = 'Choose at least one topic.';
+  else if (!input.topics.every((value) => TOPICS.some((choice) => choice.value === value))) errors.topics = 'One of the selected topics is invalid.';
+  if (input.blurb.length < BLURB_MIN_CHARS) errors.blurb = `Dream company and role response must be at least ${BLURB_MIN_CHARS} characters.`;
+  else if (input.blurb.length > 2000) errors.blurb = 'Dream company and role response must be 2,000 characters or fewer.';
+  if (input.interests.length > 1000) errors.interests = 'Learning interests must be 1,000 characters or fewer.';
+  if (input.priorFeedback.length > 1000) errors.priorFeedback = 'Prior feedback must be 1,000 characters or fewer.';
+  return errors;
 }
 
 async function enqueueEmailConfirmation(env: Env, to: string, name: string) {
