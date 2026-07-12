@@ -1,5 +1,6 @@
 export type Env = {
   DB: D1Database;
+  RECORDINGS?: R2Bucket;
   ASSETS?: Fetcher;
   // Secrets — optional so the Worker boots before configuration; handlers guard.
   DISCORD_APP_ID?: string;

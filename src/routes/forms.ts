@@ -3,6 +3,7 @@ import { onReportSubmitted } from '../engine/reports';
 import type { Env } from '../env';
 import { fieldsFor, validate, type Field } from '../forms/schema';
 import { verifyFormToken, verifyToken } from '../forms/token';
+import { sessionFrom } from './web';
 
 // Signed report and problem links now hydrate React pages. This module exposes
 // data and mutations only; it intentionally contains no HTML rendering.
@@ -70,6 +71,26 @@ forms.post('/api/forms/:token', async (c) => {
   if (!result.ok) {
     return c.json({ error: 'invalid_report', message: 'Check the highlighted fields.', fieldErrors: result.fieldErrors, errors: result.errors }, 400);
   }
+  const recordingUrl = result.payload.video_url;
+  if (instance.kind === 'interviewee_report' && recordingUrl) {
+    const parsed = safeUrl(recordingUrl, c.req.url);
+    if (!parsed) return c.json({
+      error: 'invalid_report', message: 'Check the highlighted fields.',
+      fieldErrors: { video_url: 'Enter a complete http:// or https:// link.' },
+      errors: ['Add your session recording: Enter a complete link.'],
+    }, 400);
+    const internal = parsed.origin === new URL(c.req.url).origin && /^\/api\/recordings\/(\d+)$/.exec(parsed.pathname);
+    if (internal) {
+      const owned = await c.env.DB.prepare(
+        "SELECT id FROM recording_assets WHERE id = ?1 AND form_instance_id = ?2 AND status = 'uploaded'",
+      ).bind(Number(internal[1]), instance.id).first<{ id: number }>();
+      if (!owned) return c.json({
+        error: 'invalid_report', message: 'Check the highlighted fields.',
+        fieldErrors: { video_url: 'This uploaded recording is unavailable. Upload it again or use a recording link.' },
+        errors: ['Add your session recording: This uploaded recording is unavailable.'],
+      }, 400);
+    }
+  }
   if (new Date() > new Date(instance.deadline_at)) result.payload._late = 'true';
 
   if (instance.kind === 'interviewer_report' && result.payload.problem_used) {
@@ -89,6 +110,98 @@ forms.post('/api/forms/:token', async (c) => {
     .bind(instance.id, JSON.stringify(result.payload), submittedAt).run();
   if (firstSubmission) await onReportSubmitted(c.env, instance as any, result.payload, new URL(c.req.url).origin);
   return c.json({ ok: true, submittedAt, message: firstSubmission ? 'Report submitted.' : 'Report updated.' });
+});
+
+const MAX_RECORDING_BYTES = 2 * 1024 * 1024 * 1024;
+const RECORDING_PART_BYTES = 16 * 1024 * 1024;
+
+forms.post('/api/forms/:token/recording/init', async (c) => {
+  if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured', message: 'Direct recording uploads are not configured yet.' }, 503);
+  const instance = await loadInstance(c.env, c.req.param('token'));
+  if (!instance || instance.kind !== 'interviewee_report') return c.json({ error: 'invalid_link', message: 'This recording upload link is invalid or expired.' }, 404);
+  const body = await c.req.json<{ filename?: string; size?: number; contentType?: string }>().catch(() => null);
+  const size = Number(body?.size ?? 0);
+  const contentType = String(body?.contentType ?? '').slice(0, 100);
+  if (!body?.filename || !Number.isFinite(size) || size <= 0 || size > MAX_RECORDING_BYTES || !contentType.startsWith('video/')) {
+    return c.json({ error: 'invalid_recording', message: 'Choose a supported video no larger than 2 GB.' }, 400);
+  }
+  const objectKey = `sessions/${instance.session_id}/recording-${crypto.randomUUID()}${recordingExtension(contentType)}`;
+  const upload = await c.env.RECORDINGS.createMultipartUpload(objectKey, { httpMetadata: { contentType, cacheControl: 'private, no-store' } });
+  const result = await c.env.DB.prepare(
+    `INSERT INTO recording_assets
+       (form_instance_id, session_id, participant_id, object_key, upload_id, original_filename, content_type, original_bytes)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
+  ).bind(instance.id, instance.session_id, instance.assignee_id, objectKey, upload.uploadId, String(body.filename).slice(0, 255), contentType, size).run();
+  return c.json({ id: Number(result.meta.last_row_id), partSize: RECORDING_PART_BYTES });
+});
+
+forms.put('/api/forms/:token/recording/:id/part/:part', async (c) => {
+  if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
+  const instance = await loadInstance(c.env, c.req.param('token'));
+  const asset = instance ? await recordingAsset(c.env, Number(c.req.param('id')), instance.id) : null;
+  const partNumber = Number(c.req.param('part'));
+  const contentLength = Number(c.req.header('content-length') ?? 0);
+  if (!asset || asset.status !== 'pending' || !Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) return c.json({ error: 'invalid_upload' }, 404);
+  if (!c.req.raw.body || contentLength <= 0 || contentLength > RECORDING_PART_BYTES) return c.json({ error: 'invalid_part' }, 400);
+  const upload = c.env.RECORDINGS.resumeMultipartUpload(asset.object_key, asset.upload_id);
+  const part = await upload.uploadPart(partNumber, c.req.raw.body);
+  return c.json({ partNumber: part.partNumber, etag: part.etag });
+});
+
+forms.post('/api/forms/:token/recording/:id/complete', async (c) => {
+  if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
+  const instance = await loadInstance(c.env, c.req.param('token'));
+  const asset = instance ? await recordingAsset(c.env, Number(c.req.param('id')), instance.id) : null;
+  const body = await c.req.json<{ parts?: Array<{ partNumber: number; etag: string }> }>().catch(() => null);
+  if (!asset || asset.status !== 'pending' || !body?.parts?.length) return c.json({ error: 'invalid_upload' }, 404);
+  const parts = body.parts
+    .filter((part) => Number.isInteger(part.partNumber) && part.partNumber > 0 && typeof part.etag === 'string')
+    .sort((a, b) => a.partNumber - b.partNumber);
+  if (parts.length !== body.parts.length) return c.json({ error: 'invalid_parts' }, 400);
+  const upload = c.env.RECORDINGS.resumeMultipartUpload(asset.object_key, asset.upload_id);
+  const object = await upload.complete(parts);
+  const storedBytes = object.size;
+  await c.env.DB.prepare(
+    `UPDATE recording_assets SET status = 'uploaded', stored_bytes = ?2, completed_at = ?3 WHERE id = ?1`,
+  ).bind(asset.id, storedBytes, new Date().toISOString()).run();
+  return c.json({ ok: true, id: asset.id, url: `${new URL(c.req.url).origin}/api/recordings/${asset.id}`, storedBytes });
+});
+
+forms.delete('/api/forms/:token/recording/:id', async (c) => {
+  if (!c.env.RECORDINGS) return c.json({ ok: true });
+  const instance = await loadInstance(c.env, c.req.param('token'));
+  const asset = instance ? await recordingAsset(c.env, Number(c.req.param('id')), instance.id) : null;
+  if (!asset || asset.status !== 'pending') return c.json({ ok: true });
+  await c.env.RECORDINGS.resumeMultipartUpload(asset.object_key, asset.upload_id).abort().catch(() => {});
+  await c.env.DB.prepare("UPDATE recording_assets SET status = 'aborted' WHERE id = ?1").bind(asset.id).run();
+  return c.json({ ok: true });
+});
+
+forms.get('/api/recordings/:id', async (c) => {
+  if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
+  const session = await sessionFrom(c);
+  if (!session?.organizer) return c.json({ error: 'forbidden' }, session ? 403 : 401);
+  const asset = await c.env.DB.prepare(
+    "SELECT object_key FROM recording_assets WHERE id = ?1 AND status = 'uploaded'",
+  ).bind(Number(c.req.param('id'))).first<{ object_key: string }>();
+  if (!asset) return c.json({ error: 'not_found' }, 404);
+  const requestedRange = Boolean(c.req.header('range'));
+  const object = await c.env.RECORDINGS.get(
+    asset.object_key,
+    requestedRange ? { range: c.req.raw.headers } : undefined,
+  );
+  if (!object) return c.json({ error: 'not_found' }, 404);
+  const headers = new Headers({ 'Accept-Ranges': 'bytes', 'Cache-Control': 'private, no-store', ETag: object.httpEtag });
+  object.writeHttpMetadata(headers);
+  let status: 200 | 206 = 200;
+  if (requestedRange && object.range && 'offset' in object.range && typeof object.range.offset === 'number' && typeof object.range.length === 'number') {
+    status = 206;
+    headers.set('Content-Range', `bytes ${object.range.offset}-${object.range.offset + object.range.length - 1}/${object.size}`);
+    headers.set('Content-Length', String(object.range.length));
+  } else {
+    headers.set('Content-Length', String(object.size));
+  }
+  return new Response(object.body, { status, headers });
 });
 
 forms.get('/api/problems/:token', async (c) => {
@@ -130,4 +243,21 @@ function reportPayload(instance: LoadedInstance, fields: Field[]) {
     fields,
     values: instance.payload ? JSON.parse(instance.payload) : {},
   };
+}
+
+function recordingAsset(env: Env, id: number, formInstanceId: number) {
+  return env.DB.prepare(
+    'SELECT id, object_key, upload_id, status FROM recording_assets WHERE id = ?1 AND form_instance_id = ?2',
+  ).bind(id, formInstanceId).first<{ id: number; object_key: string; upload_id: string; status: string }>();
+}
+
+function recordingExtension(contentType: string) {
+  if (contentType === 'video/webm') return '.webm';
+  if (contentType === 'video/quicktime') return '.mov';
+  if (contentType === 'video/x-matroska') return '.mkv';
+  return '.mp4';
+}
+
+function safeUrl(value: string, base: string) {
+  try { return new URL(value, base); } catch { return null; }
 }

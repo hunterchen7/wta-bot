@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createCohort } from '../src/engine/weeks';
-import { signFormToken } from '../src/forms/token';
+import { signFormToken, signToken } from '../src/forms/token';
 import { app } from '../src/index';
 
 // Full form-rail flow against real D1: render, validate, submit, credit,
@@ -10,6 +10,7 @@ import { app } from '../src/index';
 let interviewerToken: string;
 let intervieweeToken: string;
 let sessionId: number;
+let uploadedRecordingUrl: string;
 
 const post = (token: string, fields: Record<string, string>) =>
   app.request(
@@ -98,8 +99,52 @@ describe('form rail', () => {
     expect(await res.json<any>()).toMatchObject({ error: 'invalid_report', fieldErrors: { attendance_partner: 'This field is required.' } });
   });
 
+  it('uploads a private recording in parts and only serves it to organizers', async () => {
+    const bytes = new TextEncoder().encode('small test recording');
+    const initialized = await app.request(`/api/forms/${intervieweeToken}/recording/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: 'interview.webm', size: bytes.byteLength, contentType: 'video/webm' }),
+    }, env);
+    expect(initialized.status).toBe(200);
+    const upload = await initialized.json<{ id: number; partSize: number }>();
+    expect(upload.partSize).toBeGreaterThan(bytes.byteLength);
+
+    const uploaded = await app.request(`/api/forms/${intervieweeToken}/recording/${upload.id}/part/1`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream', 'Content-Length': String(bytes.byteLength) },
+      body: bytes,
+    }, env);
+    expect(uploaded.status).toBe(200);
+    const part = await uploaded.json<{ partNumber: number; etag: string }>();
+
+    const completed = await app.request(`/api/forms/${intervieweeToken}/recording/${upload.id}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parts: [part] }),
+    }, env);
+    expect(completed.status).toBe(200);
+    const recording = await completed.json<{ url: string; storedBytes: number }>();
+    expect(recording.storedBytes).toBe(bytes.byteLength);
+    expect(recording.url).toContain(`/api/recordings/${upload.id}`);
+    uploadedRecordingUrl = recording.url;
+
+    const anonymous = await app.request(`/api/recordings/${upload.id}`, {}, env);
+    expect(anonymous.status).toBe(401);
+    const cookie = await signToken(env.FORM_SIGNING_SECRET!, 'sess:1:1', new Date(Date.now() + 60_000));
+    const playback = await app.request(`/api/recordings/${upload.id}`, { headers: { Cookie: `wta_sess=${cookie}` } }, env);
+    expect(playback.status).toBe(200);
+    expect(playback.headers.get('content-type')).toBe('video/webm');
+    expect(new Uint8Array(await playback.arrayBuffer())).toEqual(bytes);
+
+    const partial = await app.request(`/api/recordings/${upload.id}`, { headers: { Cookie: `wta_sess=${cookie}`, Range: 'bytes=0-4' } }, env);
+    expect(partial.status).toBe(206);
+    expect(partial.headers.get('content-range')).toBe(`bytes 0-4/${bytes.byteLength}`);
+    expect(new TextDecoder().decode(await partial.arrayBuffer())).toBe('small');
+  });
+
   it('accepts a full interviewee report and credits the side', async () => {
-    const res = await post(intervieweeToken, INTERVIEWEE_OK);
+    const res = await post(intervieweeToken, { ...INTERVIEWEE_OK, video_url: uploadedRecordingUrl });
     expect(res.status).toBe(200);
     expect(await res.json<any>()).toMatchObject({ ok: true, message: 'Report submitted.' });
     const s = await env.DB.prepare('SELECT interviewee_credited, state FROM sessions WHERE id = ?1')

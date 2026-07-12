@@ -38,6 +38,10 @@
   // Cloudflare Email Service (structured send API): env.EMAIL.send({to, from, subject, text})
   "send_email": [{ "name": "EMAIL" }],
 
+  // Private participant recordings. Create once with:
+  // npx wrangler r2 bucket create wta-recordings
+  "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "wta-recordings" }],
+
   "d1_databases": [
     {
       "binding": "DB",
