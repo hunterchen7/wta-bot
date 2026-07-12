@@ -9,7 +9,7 @@ Items marked **[OPEN]** are defaults awaiting Hunter's confirmation. Everything 
 - A **cohort** runs 3 weeks. Each **participant** targets 6 sessions: 3 as interviewer + 3 as interviewee, normally one of each per week.
 - A **session** is one directed interview: `interviewer → interviewee`. Weekly matching gives every active participant two *different* partners (one per role). Your interviewer and your interviewee in the same week are never the same person, and you never meet the same counterpart twice in a cohort (either direction, repairs included).
 - Missed weeks are made up by **doubling**: per-role deficits are tracked, and weekly demand per role is `min(1 + deficit, 2)`.
-- Completing 6/6 with clean reports flags the participant **alumni-round eligible**. v1 tracks eligibility and notifies organizers; scheduling with actual alumni stays manual. **[OPEN — confirm scope]**
+- **Alumni-round eligibility** = 6/6 sessions completed **and the week-3 interview passed**, where "passed" has two parts: (a) the week-3 interviewer's report marks an explicit **pass verdict**, and (b) organizers verify the session recording. v1 automates the workflow around (b) — a review queue with video links and one-click verify/flag — while the watching stays human; §13 sketches the AI-assisted triage that replaces most watching later (deliberately low priority). Scheduling with actual alumni stays manual in v1. **[OPEN — confirm scope]**
 - Roles: **Participant** (enrolled student), **Organizer** (Discord role, gets admin commands + digest channel). Alumni-facing features are v2.
 
 ## 2. Weekly lifecycle
@@ -60,7 +60,8 @@ Three incident kinds, tracked distinctly: **ghost** (confirmed time, didn't show
 - One **template per form kind**, versioned: `interviewee_report`, `interviewer_report` **[OPEN — interviewer form fields pending access/paste]**, future kinds. "Week N" is a column, not a new form.
 - Each session spawns two **form instances** (one per side) at session start. Instance = `(kind, session, assignee, deadline, token, payload)`.
 - **Tokens:** HMAC-signed `instance_id + expiry`; the instance row is the source of truth (single-use semantics enforced server-side). The rendered page greets by name and shows full session context — no identity questions, no attendance-of-record questions duplicated from thread buttons (form keeps one attendance cross-check; mismatch between the two sides' reports auto-flags).
-- **Interviewee report keeps:** attendance cross-check, cameras, ratings (experience / interviewer communication / preparedness), language, duration, organizer-only note, partner-visible feedback, required code paste. Question-used is auto-known. Attestation replaced by a submit-confirmation screen.
+- **Interviewee report keeps:** attendance cross-check, cameras, ratings (experience / interviewer communication / preparedness), language, duration, organizer-only note, partner-visible feedback, required code paste, and the **session recording link** (recordings were required last year; v1 = paste a link, since Zoom/Meet recordings already live in the cloud — direct upload to R2 is a later option **[OPEN — where do recordings live today, and who uploads: interviewee or interviewer?]**). Question-used is auto-known. Attestation replaced by a submit-confirmation screen.
+- **Interviewer report adds an explicit verdict** (pass / borderline / fail + justification), required every week for signal but **binding in week 3** — it's half the alumni gate. (Exact remaining fields still pending the legacy interviewer form. All three legacy forms are replicated: intake natively in Discord, both reports on the rail.)
 - **Relay:** partner-visible feedback is DM'd to the partner once both reports are in, or at the deadline, whichever first. Organizer-only notes never relay.
 - **Reminder ladder per instance:** issued (thread + DM) → T−24h nudge if unfiled → overdue DM + digest line. `/status` lists owed forms with links.
 
@@ -68,6 +69,7 @@ Three incident kinds, tracked distinctly: **ghost** (confirmed time, didn't show
 
 - Problems: LeetCode-derived, stored with number, title, link, stripped statement, solution, hint ladder, and **difficulty** (plus a finer `difficulty_rank` for "harder medium / easier hard" grading).
 - **Difficulty progression:** week 1 = easy, week 2 = medium, week 3 = harder mediums / easier hards. Weekly sets are **pre-generated from the master list** by difficulty rule (excluding already-used problems); admins can regenerate or swap individual problems. Recommended set size 4–6 **[OPEN — size; also where do last year's materials live? Drive import?]**.
+- **Week-3 variance guard:** last year W3 problems varied too much in difficulty — unacceptable for the qualifying week. The W3 generator enforces a tight `difficulty_rank` band (e.g. all picks within ±0.2), the set gets a mandatory admin sign-off before the week opens, and the digest reports pass-rate per problem so a rogue-hard problem is visible immediately.
 - **Bank page:** the week's set is served as a page on the same web rail (per-person signed link, same token mechanics as forms) — who receives the link (all participants vs interviewers only) is the visibility knob below.
 - **Visibility change from last year:** week's *topics* are public for study guidance **[OPEN]**; actual problems are private. The interviewer gets the packet at **T−24h** via signed page.
 - **Assignment:** bot proposes a problem filtered by the **exposure ledger** — the interviewee has never received it *or conducted it* (covers returning participants and reused banks). Interviewer can swap via buttons to another eligible problem **[OPEN — or fully free choice]**; final pick recorded automatically.
@@ -122,11 +124,28 @@ One TypeScript **Cloudflare Worker** on Hunter's personal account:
 4. **M3** — form rail: tokens, interviewee/interviewer report templates, deadlines, reminder ladder, relay.
 5. **M4** — incidents: buttons, strikes, case files, holds, repair queue, standby.
 6. **M5** — problem bank: import, weekly sets, exposure ledger, packets, solution release; email channel + fallbacks.
-7. **M6** — polish: digests, grace window, eligibility flow, admin overrides end-to-end.
+7. **M6** — polish: digests, grace window, eligibility flow (W3 verdict + recording **review queue** with verify/flag buttons), admin overrides end-to-end.
+8. **M7 (deliberately last)** — AI-assisted W3 review triage; see §13.
 
 Deadline pending **[OPEN — cohort start date]**; M0–M2 before intake opens, M3–M4 before week 1, M5–M6 before week 2 at the latest.
 
-## 12. Open knobs (recap)
+## 12. Deployment (CI/CD)
+
+- **GitHub Actions**, repo `hunterchen7/wta-bot` (private): every push/PR runs typecheck + the workers-pool test suite; pushes to `main` that pass then apply D1 migrations (`--remote`) and `wrangler deploy` via `cloudflare/wrangler-action`. Tests gate every deploy — nothing ships red.
+- Requires one repo secret: `CLOUDFLARE_API_TOKEN` (created by Hunter; scoped to Workers Scripts:Edit + D1:Edit on the account, plus the `hunterchen.ca` zone for the custom domain). `account_id` is pinned in `wrangler.jsonc`. Claude never handles the token value.
+- Alternative considered: Cloudflare Workers Builds (native git integration) — rejected for now because Actions gives test-gated deploys and PR checks in one place. Easy to switch later.
+- Local `wrangler dev` / `npm test` workflow unchanged; production deploys happen only via CI.
+
+## 13. AI-assisted W3 review (M7 sketch — build last)
+
+Replaces most organizer video-watching with automated triage; humans keep the final call.
+
+- **Input:** the W3 recording link + both reports + the assigned problem/solution.
+- **Pipeline (cron-driven):** fetch audio → speech-to-text with timestamps (Workers AI Whisper, or provider transcripts where Zoom/Meet supply them) → LLM scores the timed transcript against a rubric: interview actually happened end-to-end (duration, two speakers, intro/coding/wrap arc), assigned problem was used, candidate drove the solution, hint frequency/dependency, reading-the-solution or coaching red flags; cross-checked against form data (duration bucket, question id, code paste vs. known solution similarity).
+- **Output:** score + confidence + timestamped flags ("check 12:30–14:00"). High-confidence passes auto-clear; everything else lands in the §11 review queue marked **suspicious** with pointers, so organizers watch minutes, not hours.
+- **Principles:** the AI never fails anyone — it only clears or escalates to humans; every auto-clear is logged and spot-checkable; rubric and thresholds live in `settings`.
+
+## 14. Open knobs (recap)
 
 1. Weekly schedule anchors (which days) + report deadline style (end-of-week vs 48h-after).
 2. Both reports required — confirmed? (Design assumes yes.)
@@ -136,5 +155,7 @@ Deadline pending **[OPEN — cohort start date]**; M0–M2 before intake opens, 
 6. Matching soft preferences (experience band, intern/new-grad) — or pure random.
 7. Problem set size (rec 4–6), topics-public compromise, auto-suggest-with-swap vs free choice, location of last year's materials.
 8. Interviewer form fields (need access or paste).
-9. Domain/subdomain + sender address.
+9. ~~Domain/subdomain + sender address~~ — settled: `wta.hunterchen.ca`, mail from `wta@hunterchen.ca`.
 10. Cohort start date → milestone dates.
+11. Recordings: where they live today (Zoom/Meet/Drive?), link-paste vs R2 direct upload, and who owns the upload (interviewee or interviewer).
+12. W3 variance band width (default ±0.2 rank) + whether non-W3 weeks also need admin sign-off on generated sets.
