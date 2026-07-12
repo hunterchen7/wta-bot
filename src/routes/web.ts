@@ -318,17 +318,8 @@ web.get('/dashboard/settings', async (c) => {
     .first<any>();
   if (!p) return c.redirect('/login');
 
-  const saved = c.req.query('saved') === '1';
-  const profileSaved = c.req.query('profile') === 'saved';
-  const noEmail = c.req.query('error') === 'no-email';
   const enabled = p.email_ok === 1;
-  const notice = profileSaved
-    ? '<div class="ok">Profile saved.</div>'
-    : saved
-    ? `<div class="ok">Email reminders are now <b>${enabled ? 'on' : 'off'}</b>.</div>`
-    : noEmail
-      ? '<div class="err">Add a preferred email through <code>/join</code> in Discord before enabling email reminders.</div>'
-      : '';
+  const notice = c.req.query('saved') === '1' ? '<div class="ok">Settings saved.</div>' : '';
   const jsonList = (raw: string | null): string[] => {
     try {
       return raw ? JSON.parse(raw) : [];
@@ -343,26 +334,17 @@ web.get('/dashboard/settings', async (c) => {
   const body = `
     ${nav(user)}
     <h1>Settings</h1>
-    <p class="sub">Manage how WTA contacts you. These choices do not change your round participation.</p>
+    <p class="sub">Manage your profile and notifications. Nothing changes until you save at the bottom.</p>
     ${notice}
-    <div class="card">
-      <h2 style="margin-top:0">Email reminders</h2>
-      <p><b>${enabled ? 'On 📧' : 'Off'}</b></p>
-      <p class="sub">${
-        p.preferred_email
-          ? `Optional pairing announcements, opt-in reminders, and overdue-report alerts go to <b>${esc(p.preferred_email)}</b> alongside Discord.`
-          : 'No preferred email is saved. Add one in the profile section below first.'
-      }</p>
-      <form method="POST" action="/dashboard/settings/email">
-        <input type="hidden" name="enabled" value="${enabled ? '0' : '1'}">
-        <button type="submit" ${!enabled && !p.preferred_email ? 'disabled' : ''}>${enabled ? 'Turn off email reminders' : 'Turn on email reminders'}</button>
-      </form>
-      <p class="help">If Discord cannot deliver an important DM, the bot may still use your saved email as a delivery fallback. You can change the address in the profile section below.</p>
-    </div>
-    <div class="card">
-      <h2 style="margin-top:0">Your profile</h2>
-      <p class="sub">These are the same answers used by <code>/join</code>. Your Discord account, participation status, credits, and strikes cannot be changed here.</p>
-      <form method="POST" action="/dashboard/settings/profile">
+    <form method="POST" action="/dashboard/settings/profile">
+      <div class="card">
+        <h2 style="margin-top:0">Email reminders</h2>
+        <label><input type="checkbox" name="email_ok" value="1" ${enabled ? 'checked' : ''}> Email me reminders alongside Discord</label>
+        <p class="help">Includes pairing announcements, opt-in reminders, and overdue-report alerts. Turning this on and saving sends a confirmation email. Important DMs may still fall back to email when Discord delivery fails.</p>
+      </div>
+      <div class="card">
+        <h2 style="margin-top:0">Your profile</h2>
+        <p class="sub">These are the same answers used by <code>/join</code>. Your Discord account, participation status, credits, and strikes cannot be changed here.</p>
         <label class="f" for="name">Full name</label>
         <input type="text" id="name" name="name" required maxlength="100" value="${esc(p.name ?? '')}">
         <label class="f" for="preferred_email">Preferred email</label>
@@ -388,9 +370,9 @@ web.get('/dashboard/settings', async (c) => {
         <textarea id="interests" name="interests" maxlength="1000">${esc(p.interests ?? '')}</textarea>
         <label class="f" for="prior_feedback">Feedback from last year</label>
         <textarea id="prior_feedback" name="prior_feedback" maxlength="1000">${esc(p.prior_feedback ?? '')}</textarea>
-        <p style="margin-top:1.2rem"><button type="submit">Save profile</button></p>
-      </form>
-    </div>`;
+      </div>
+      <p style="margin-top:1.2rem"><button type="submit">Save all changes</button></p>
+    </form>`;
   return c.html(page('Settings', body));
 });
 
@@ -415,6 +397,7 @@ web.post('/dashboard/settings/profile', async (c) => {
   const experience = text('experience_band');
   const opportunities = list('opportunities');
   const topics = list('topics');
+  const emailOk = text('email_ok') === '1';
   const blurb = text('blurb');
   const interests = text('interests');
   const priorFeedback = text('prior_feedback');
@@ -453,12 +436,12 @@ web.post('/dashboard/settings/profile', async (c) => {
     `UPDATE participants SET name = ?1, preferred_email = ?2, western_email = ?3,
        year = ?4, program = ?5, opportunities = ?6, prior_wta = ?7,
        experience_band = ?8, topics = ?9, blurb = ?10, interests = ?11,
-       prior_feedback = ?12, updated_at = datetime('now') WHERE id = ?13`,
+       prior_feedback = ?12, email_ok = ?13, updated_at = datetime('now') WHERE id = ?14`,
   )
     .bind(
       name, preferredEmail, westernEmail, year, program, JSON.stringify(opportunities),
       text('prior_wta') === '1' ? 1 : 0, experience, JSON.stringify(topics), blurb,
-      interests || null, priorFeedback || null, user.participantId,
+      interests || null, priorFeedback || null, emailOk ? 1 : 0, user.participantId,
     )
     .run();
 
@@ -466,36 +449,8 @@ web.post('/dashboard/settings/profile', async (c) => {
     const guildId = c.env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
     if (guildId) await enqueue(c.env, 'nickname', { guildId, userId: current.discord_id, nick: name.slice(0, 32) });
   }
-  if (current.email_ok === 1 && preferredEmail !== current.preferred_email?.toLowerCase()) {
+  if (emailOk && (current.email_ok !== 1 || preferredEmail !== current.preferred_email?.toLowerCase())) {
     await enqueueEmailConfirmation(c.env, preferredEmail, name);
-  }
-  return c.redirect('/dashboard/settings?profile=saved');
-});
-
-web.post('/dashboard/settings/email', async (c) => {
-  const user = await sessionFrom(c);
-  if (!user) return c.redirect('/login');
-  const body = await c.req.parseBody();
-  const raw = String(body.enabled ?? '');
-  if (raw !== '0' && raw !== '1') return c.text('invalid email preference', 400);
-
-  const p = await c.env.DB.prepare(
-    'SELECT name, preferred_email, email_ok FROM participants WHERE id = ?1',
-  )
-    .bind(user.participantId)
-    .first<{ name: string | null; preferred_email: string | null; email_ok: number }>();
-  if (!p) return c.redirect('/login');
-  const enabled = raw === '1';
-  if (enabled && !p.preferred_email) return c.redirect('/dashboard/settings?error=no-email');
-
-  await c.env.DB.prepare(
-    "UPDATE participants SET email_ok = ?1, updated_at = datetime('now') WHERE id = ?2",
-  )
-    .bind(enabled ? 1 : 0, user.participantId)
-    .run();
-
-  if (enabled && p.email_ok !== 1) {
-    await enqueueEmailConfirmation(c.env, p.preferred_email!, p.name);
   }
   return c.redirect('/dashboard/settings?saved=1');
 });

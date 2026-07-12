@@ -141,7 +141,7 @@ describe('views + authorization', () => {
     expect(roster.status).toBe(403);
   });
 
-  it('lets participants manage email reminders from settings', async () => {
+  it('shows email reminders as part of one save-all settings form', async () => {
     const cookie = await cookieFor(1, false);
     await env.DB.prepare('UPDATE participants SET email_ok = 0 WHERE id = 1').run();
 
@@ -149,58 +149,25 @@ describe('views + authorization', () => {
     expect(settings.status).toBe(200);
     const html = await settings.text();
     expect(html).toContain('Email reminders');
-    expect(html).toContain('stu@example.com');
-    expect(html).toContain('Turn on email reminders');
-
-    const enable = await app.request(
-      '/dashboard/settings/email',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
-        body: 'enabled=1',
-      },
-      env,
-    );
-    expect(enable.status).toBe(302);
-    expect(enable.headers.get('location')).toBe('/dashboard/settings?saved=1');
-    const enabled = await env.DB.prepare('SELECT email_ok FROM participants WHERE id = 1').first<any>();
-    expect(enabled.email_ok).toBe(1);
-    const confirmation = await env.DB.prepare(
-      "SELECT payload FROM outbox WHERE kind = 'email' ORDER BY id DESC LIMIT 1",
-    ).first<any>();
-    expect(JSON.parse(confirmation.payload)).toMatchObject({
-      to: 'stu@example.com',
-      subject: "You're subscribed to WTA email reminders ✅",
-    });
-
-    const disable = await app.request(
-      '/dashboard/settings/email',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
-        body: 'enabled=0',
-      },
-      env,
-    );
-    expect(disable.status).toBe(302);
-    const disabled = await env.DB.prepare('SELECT email_ok FROM participants WHERE id = 1').first<any>();
-    expect(disabled.email_ok).toBe(0);
+    expect(html).toContain('type="checkbox" name="email_ok"');
+    expect(html).toContain('action="/dashboard/settings/profile"');
+    expect(html).toContain('Save all changes');
   });
 
-  it('protects settings and rejects invalid preference values', async () => {
+  it('protects settings and rejects invalid profile values', async () => {
     const anonymous = await get('/dashboard/settings');
     expect(anonymous.status).toBe(302);
     expect(anonymous.headers.get('location')).toBe('/login');
 
     const invalid = await app.request(
-      '/dashboard/settings/email',
+      '/dashboard/settings/profile',
       {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
           Cookie: await cookieFor(1, false),
         },
-        body: 'enabled=maybe',
+        body: '',
       },
       env,
     );
@@ -220,6 +187,7 @@ describe('views + authorization', () => {
       blurb: 'word '.repeat(170),
       interests: 'System design and networking',
       prior_feedback: 'More mock interviews',
+      email_ok: '1',
     });
     body.append('opportunities', 'internships');
     body.append('opportunities', 'new_grad');
@@ -236,7 +204,7 @@ describe('views + authorization', () => {
       env,
     );
     expect(save.status).toBe(302);
-    expect(save.headers.get('location')).toBe('/dashboard/settings?profile=saved');
+    expect(save.headers.get('location')).toBe('/dashboard/settings?saved=1');
 
     const participant = await env.DB.prepare('SELECT * FROM participants WHERE id = 1').first<any>();
     expect(participant).toMatchObject({
@@ -248,6 +216,7 @@ describe('views + authorization', () => {
       prior_wta: 1,
       experience_band: '3-4',
       interests: 'System design and networking',
+      email_ok: 1,
     });
     expect(JSON.parse(participant.opportunities)).toEqual(['internships', 'new_grad']);
     expect(JSON.parse(participant.topics)).toEqual(['dsa', 'system_design']);
@@ -257,6 +226,29 @@ describe('views + authorization', () => {
       "SELECT payload FROM outbox WHERE kind = 'nickname' ORDER BY id DESC LIMIT 1",
     ).first<any>();
     expect(JSON.parse(nickname.payload)).toMatchObject({ userId: '401', nick: 'Student Updated' });
+
+    const confirmation = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'email' ORDER BY id DESC LIMIT 1",
+    ).first<any>();
+    expect(JSON.parse(confirmation.payload)).toMatchObject({
+      to: 'student.updated@example.com',
+      subject: "You're subscribed to WTA email reminders ✅",
+    });
+
+    // Unchecking only takes effect when the same save-all form is submitted.
+    body.delete('email_ok');
+    const disable = await app.request(
+      '/dashboard/settings/profile',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
+        body: body.toString(),
+      },
+      env,
+    );
+    expect(disable.status).toBe(302);
+    const disabled = await env.DB.prepare('SELECT email_ok FROM participants WHERE id = 1').first<any>();
+    expect(disabled.email_ok).toBe(0);
 
     // Keep shared fixtures stable for the remaining dashboard tests.
     await env.DB.prepare(
