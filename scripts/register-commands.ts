@@ -1,51 +1,10 @@
-// Registers slash commands. Run: npm run register  (reads .dev.vars via --env-file)
-// With DEV_GUILD_ID set, commands register to that guild only (instant — good
-// for dev). Without it, they register globally (propagation up to an hour).
-// Runs directly under Node >=23 type-stripping; keep syntax erasable (no enums).
+// OPTIONAL dev tool: instant slash-command registration to a dev guild.
+// Production needs none of this — the deployed Worker self-syncs global
+// commands via syncCommands() in src/cron.ts (within one 15-min cron tick
+// of a definition change). Use this only for instant iteration in a dev
+// guild. Run: npm run register  (reads .dev.vars via --env-file)
 
-const SUB_COMMAND = 1;
-const STRING = 3;
-
-type CommandOption = {
-  type: number;
-  name: string;
-  description: string;
-  required?: boolean;
-  options?: CommandOption[];
-};
-
-type Command = {
-  name: string;
-  description: string;
-  options?: CommandOption[];
-  default_member_permissions?: string;
-};
-
-const commands: Command[] = [
-  { name: 'join', description: 'Enroll in the WTA mock-interview program (or edit your info)' },
-  { name: 'status', description: 'Your progress, sessions, owed forms, and standing' },
-  { name: 'optout', description: 'Sit out this week (no penalty — catch up later)' },
-  { name: 'cancel', description: 'Cancel one of your sessions so your partner is freed ASAP' },
-  {
-    name: 'export',
-    description: 'Organizers: download the roster as CSV',
-    default_member_permissions: '32', // MANAGE_GUILD — hidden from regular members
-  },
-  {
-    name: 'report',
-    description: 'Report a session problem to the organizers',
-    options: [
-      { type: SUB_COMMAND, name: 'no-show', description: 'Your partner missed a scheduled session' },
-      { type: SUB_COMMAND, name: 'unresponsive', description: 'Your partner is not responding to scheduling' },
-      {
-        type: SUB_COMMAND,
-        name: 'issue',
-        description: 'Anything else — goes privately to the organizers',
-        options: [{ type: STRING, name: 'details', description: 'What happened?', required: true }],
-      },
-    ],
-  },
-];
+import { COMMANDS } from '../src/discord/commands.ts';
 
 const { DISCORD_APP_ID, DISCORD_TOKEN, DEV_GUILD_ID } = process.env;
 if (!DISCORD_APP_ID || !DISCORD_TOKEN) {
@@ -60,7 +19,7 @@ const url = DEV_GUILD_ID
 const res = await fetch(url, {
   method: 'PUT',
   headers: { Authorization: `Bot ${DISCORD_TOKEN}`, 'Content-Type': 'application/json' },
-  body: JSON.stringify(commands),
+  body: JSON.stringify(COMMANDS),
 });
 
 console.log(`${res.status} ${res.statusText} — ${DEV_GUILD_ID ? `guild ${DEV_GUILD_ID}` : 'global'}`);
