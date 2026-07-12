@@ -32,9 +32,10 @@ beforeAll(async () => {
   ];
   for (const [number, title, difficulty, rank] of rows) {
     await env.DB.prepare(
-      'INSERT INTO problems (number, title, url, difficulty, difficulty_rank) VALUES (?1, ?2, ?3, ?4, ?5)',
+      'INSERT INTO problems (number, title, url, difficulty, difficulty_rank, available_weeks) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
     )
-      .bind(number, title, `https://leetcode.com/problems/${number}`, difficulty, rank)
+      .bind(number, title, `https://leetcode.com/problems/${number}`, difficulty, rank,
+        difficulty === 'easy' ? '[1]' : difficulty === 'medium' && (rank ?? 2) < 2.5 ? '[2]' : '[3]')
       .run();
   }
 });
@@ -42,7 +43,7 @@ beforeAll(async () => {
 describe('problem bank', () => {
   it('generates week sets inside the difficulty bands', async () => {
     const w1 = await generateWeekSet(env, weekIds[0]!, 1, 5);
-    expect(w1.chosen.length).toBe(3); // only 3 easies exist
+    expect(w1.chosen.length).toBe(3); // only 3 questions are tagged for round 1
     const w2 = await generateWeekSet(env, weekIds[1]!, 2, 3);
     expect(w2.chosen.length).toBe(3);
     const w3 = await generateWeekSet(env, weekIds[2]!, 3, 5);

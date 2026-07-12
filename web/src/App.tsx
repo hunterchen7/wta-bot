@@ -75,7 +75,7 @@ function pageTitle(pathname: string) {
   const titles: Record<string, string> = {
     '/app': 'My progress', '/app/settings': 'My settings', '/app/admin': 'Overview',
     '/app/admin/participants': 'Participants', '/app/admin/rounds': 'Rounds', '/app/admin/reviews': 'Reviews',
-    '/app/admin/forms': 'Forms', '/app/admin/problems': 'Problems', '/app/admin/analytics': 'Analytics', '/app/admin/operations': 'Operations',
+    '/app/admin/forms': 'Forms', '/app/admin/problems': 'Questions', '/app/admin/analytics': 'Analytics', '/app/admin/operations': 'Operations',
     '/app/admin/settings': 'Program settings',
   };
   return titles[pathname] ?? 'WTA Dashboard';

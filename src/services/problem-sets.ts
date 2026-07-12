@@ -1,6 +1,7 @@
 import type { Env } from '../env';
-import { generateWeekSet, WEEK_BANDS } from '../engine/problems';
+import { generateWeekSet } from '../engine/problems';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
+import { composeQuestionMarkdown, readAvailableWeeks } from '../question-markdown';
 
 export class ProblemSetError extends Error {
   constructor(message: string, readonly status: 400 | 404 = 400) { super(message); }
@@ -21,7 +22,20 @@ export async function problemBankWorkspace(env: Env) {
        JOIN problems p ON p.id = wps.problem_id WHERE c.id = ?1 ORDER BY w.idx, p.title`,
     ).bind(cohort.id).all<any>() : Promise.resolve({ results: [] as any[] }),
   ]);
-  return { problems: problems.results, sets: sets.results, cohort, weeks, bands: WEEK_BANDS };
+  return {
+    problems: problems.results.map((problem: any) => ({
+      ...problem,
+      content_md: problem.content_md || composeQuestionMarkdown({
+        statement: problem.statement_md,
+        hints: problem.hints_md,
+        solution: problem.solution_md,
+      }),
+      available_weeks: readAvailableWeeks(problem.available_weeks),
+    })),
+    sets: sets.results,
+    cohort,
+    weeks,
+  };
 }
 
 async function requireActiveWeek(env: Env, weekId: number) {
@@ -33,14 +47,18 @@ async function requireActiveWeek(env: Env, weekId: number) {
 }
 
 export async function replaceProblemSet(env: Env, weekId: number, requestedIds: number[]) {
-  await requireActiveWeek(env, weekId);
+  const week = await requireActiveWeek(env, weekId);
   const problemIds = [...new Set(requestedIds.filter(Number.isInteger))].slice(0, 25);
   if (problemIds.length !== requestedIds.length) throw new ProblemSetError('Problem IDs must be unique integers (maximum 25).');
   if (problemIds.length) {
     const placeholders = problemIds.map((_, index) => `?${index + 1}`).join(',');
-    const row = await env.DB.prepare(`SELECT count(*) AS n FROM problems WHERE active = 1 AND id IN (${placeholders})`)
-      .bind(...problemIds).first<{ n: number }>();
-    if (Number(row?.n ?? 0) !== problemIds.length) throw new ProblemSetError('Every selected problem must exist and be active.');
+    const rows = await env.DB.prepare(
+      `SELECT id, available_weeks FROM problems WHERE active = 1 AND id IN (${placeholders})`,
+    ).bind(...problemIds).all<{ id: number; available_weeks: string }>();
+    if (rows.results.length !== problemIds.length) throw new ProblemSetError('Every selected question must exist and be active.');
+    if (rows.results.some((problem) => !readAvailableWeeks(problem.available_weeks).includes(week.idx))) {
+      throw new ProblemSetError(`Every selected question must be tagged for round ${week.idx}.`);
+    }
   }
   const insert = env.DB.prepare('INSERT INTO week_problem_sets (week_id, problem_id) VALUES (?1, ?2)');
   await env.DB.batch([

@@ -568,22 +568,7 @@ async function problemsCommand(c: Ctx, interaction: Interaction, s: Opt) {
 
   switch (s?.name) {
     case 'add': {
-      const title = String(optVal(opts, 'title') ?? '').trim();
-      const difficulty = String(optVal(opts, 'difficulty') ?? 'medium');
-      const number = optVal(opts, 'number');
-      const url = optVal(opts, 'url');
-      const rank = optVal(opts, 'rank');
-      if (!title) return c.json(ephemeral('Title required.'));
-      await c.env.DB.prepare(
-        `INSERT INTO problems (number, title, url, difficulty, difficulty_rank) VALUES (?1, ?2, ?3, ?4, ?5)`,
-      )
-        .bind(number ?? null, title, url ?? null, difficulty, rank ?? null)
-        .run();
-      return c.json(
-        ephemeral(
-          `Added **${title}** (${difficulty}${rank ? `, rank ${rank}` : ''}). Statement/solution/hints are edited on the dashboard → Problems.`,
-        ),
-      );
+      return c.json(ephemeral('Questions are authored as one Markdown document with round-availability tags. Add them in Dashboard → Problems.'));
     }
     case 'list': {
       const { results } = await c.env.DB.prepare(
@@ -608,17 +593,16 @@ async function problemsCommand(c: Ctx, interaction: Interaction, s: Opt) {
         .bind(cohort.id, idx)
         .first<any>();
       if (!week) return c.json(ephemeral(`No round ${idx} in the active cohort.`));
-      const { generateWeekSet, WEEK_BANDS } = await import('../engine/problems');
+      const { generateWeekSet } = await import('../engine/problems');
       const { chosen } = await generateWeekSet(c.env, week.id, idx, size);
-      const band = WEEK_BANDS[Math.min(idx, 3)];
       if (chosen.length === 0) {
-        return c.json(ephemeral(`No eligible problems in the ${band?.[0]}–${band?.[1]} rank band — add some with \`/problems add\`.`));
+        return c.json(ephemeral(`No active questions are tagged for round ${idx}. Add or retag them in Dashboard → Problems.`));
       }
       return c.json(
         ephemeral(
-          `Round ${idx} set (${chosen.length}${chosen.length < size ? ` of ${size} requested — bank is thin` : ''}, band ${band?.[0]}–${band?.[1]}):\n` +
+          `Round ${idx} set (${chosen.length}${chosen.length < size ? ` of ${size} requested — the tagged pool is thin` : ''}):\n` +
             chosen.map((p) => `• ${p.title}`).join('\n') +
-            `\nPublished at ${c.env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca'}/bank and in the round announcement — interviewers pick one and record it in their report.${idx === 3 ? ' (R3: sanity-check these — the band is tight on purpose.)' : ''}`,
+            `\nPublished at ${c.env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca'}/bank and in the round announcement — interviewers pick one and record it in their report.`,
         ),
       );
     }

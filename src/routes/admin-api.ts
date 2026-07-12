@@ -6,6 +6,7 @@ import { activeCohort, cohortWeeks, createCohort } from '../engine/weeks';
 import type { Env } from '../env';
 import { fieldsFor } from '../forms/schema';
 import { listParticipants, participantsToCsv } from '../participants';
+import { composeQuestionMarkdown, normalizeAvailableWeeks, parseQuestionMarkdown } from '../question-markdown';
 import { generateProblemSet, ProblemSetError, problemBankWorkspace, replaceProblemSet } from '../services/problem-sets';
 import { sessionFrom, type SessionUser } from './web';
 
@@ -393,19 +394,21 @@ adminApi.post('/api/admin/problems', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const body = await c.req.json<any>().catch(() => null);
-  if (!body?.title?.trim() || !['easy', 'medium', 'hard'].includes(body.difficulty)) return c.json({ error: 'invalid_request' }, 400);
+  const question = questionInput(body);
+  if (!question) return c.json({ error: 'invalid_request', message: 'Title, statement Markdown, difficulty, and at least one available round are required.' }, 400);
   const result = await c.env.DB.prepare(
-    `INSERT INTO problems (source, number, title, url, difficulty, difficulty_rank, statement_md, hints_md, solution_md, active)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`,
+    `INSERT INTO problems
+       (source, number, title, url, difficulty, difficulty_rank, content_md,
+        available_weeks, statement_md, hints_md, solution_md, active)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
   ).bind(
-    String(body.source ?? 'manual').slice(0, 50), body.number ? Number(body.number) : null,
-    String(body.title).trim().slice(0, 200), String(body.url ?? '').trim().slice(0, 1000) || null,
-    body.difficulty, body.difficultyRank == null ? null : Number(body.difficultyRank),
-    String(body.statement ?? '').slice(0, 50000) || null, String(body.hints ?? '').slice(0, 20000) || null,
-    String(body.solution ?? '').slice(0, 50000) || null, body.active === false ? 0 : 1,
+    question.source, question.number, question.title, question.url, question.difficulty,
+    question.difficultyRank, question.content, JSON.stringify(question.availableWeeks),
+    question.sections.statement, question.sections.hints || null, question.sections.solution || null,
+    question.active,
   ).run();
   const id = Number(result.meta.last_row_id);
-  await audit(c.env, gate.participantId, 'problem.created', 'problem', id, { title: body.title });
+  await audit(c.env, gate.participantId, 'problem.created', 'problem', id, { title: question.title, availableWeeks: question.availableWeeks });
   return c.json({ ok: true, id }, 201);
 });
 
@@ -414,21 +417,54 @@ adminApi.post('/api/admin/problems/:id', async (c) => {
   if (gate instanceof Response) return gate;
   const id = Number(c.req.param('id'));
   const body = await c.req.json<any>().catch(() => null);
-  if (!Number.isInteger(id) || !body?.title?.trim() || !['easy', 'medium', 'hard'].includes(body.difficulty)) return c.json({ error: 'invalid_request' }, 400);
+  const question = questionInput(body);
+  if (!Number.isInteger(id) || !question) return c.json({ error: 'invalid_request', message: 'Title, statement Markdown, difficulty, and at least one available round are required.' }, 400);
   const result = await c.env.DB.prepare(
-    `UPDATE problems SET number = ?2, title = ?3, url = ?4, difficulty = ?5, difficulty_rank = ?6,
-       statement_md = ?7, hints_md = ?8, solution_md = ?9, active = ?10 WHERE id = ?1`,
+    `UPDATE problems SET source = ?2, number = ?3, title = ?4, url = ?5,
+       difficulty = ?6, difficulty_rank = ?7, content_md = ?8, available_weeks = ?9,
+       statement_md = ?10, hints_md = ?11, solution_md = ?12, active = ?13 WHERE id = ?1`,
   ).bind(
-    id, body.number ? Number(body.number) : null, String(body.title).trim().slice(0, 200),
-    String(body.url ?? '').trim().slice(0, 1000) || null, body.difficulty,
-    body.difficultyRank == null ? null : Number(body.difficultyRank), String(body.statement ?? '').slice(0, 50000) || null,
-    String(body.hints ?? '').slice(0, 20000) || null, String(body.solution ?? '').slice(0, 50000) || null,
-    body.active === false ? 0 : 1,
+    id, question.source, question.number, question.title, question.url, question.difficulty,
+    question.difficultyRank, question.content, JSON.stringify(question.availableWeeks),
+    question.sections.statement, question.sections.hints || null, question.sections.solution || null,
+    question.active,
   ).run();
   if (!result.meta.changes) return c.json({ error: 'not_found' }, 404);
-  await audit(c.env, gate.participantId, 'problem.updated', 'problem', id, { title: body.title });
+  await c.env.DB.prepare(
+    `DELETE FROM week_problem_sets
+     WHERE problem_id = ?1 AND (?2 = 0 OR week_id IN (
+       SELECT w.id FROM weeks w
+       WHERE NOT EXISTS (SELECT 1 FROM json_each(?3) WHERE value = w.idx)
+     ))`,
+  ).bind(id, question.active, JSON.stringify(question.availableWeeks)).run();
+  await audit(c.env, gate.participantId, 'problem.updated', 'problem', id, { title: question.title, availableWeeks: question.availableWeeks });
   return c.json({ ok: true });
 });
+
+function questionInput(body: any) {
+  if (!body?.title?.trim() || !['easy', 'medium', 'hard'].includes(body.difficulty)) return null;
+  const availableWeeks = normalizeAvailableWeeks(body.availableWeeks);
+  const content = String(body.content ?? composeQuestionMarkdown({
+    statement: body.statement,
+    hints: body.hints,
+    solution: body.solution,
+  })).trim().slice(0, 100_000);
+  const sections = parseQuestionMarkdown(content);
+  if (!availableWeeks.length || !sections.statement) return null;
+  const rawRank = body.difficultyRank == null ? null : Number(body.difficultyRank);
+  return {
+    source: String(body.source ?? 'manual').trim().slice(0, 50) || 'manual',
+    number: body.number ? Number(body.number) : null,
+    title: String(body.title).trim().slice(0, 200),
+    url: String(body.url ?? '').trim().slice(0, 1000) || null,
+    difficulty: body.difficulty as 'easy' | 'medium' | 'hard',
+    difficultyRank: rawRank != null && Number.isFinite(rawRank) ? rawRank : null,
+    content,
+    availableWeeks,
+    sections,
+    active: body.active === false ? 0 : 1,
+  };
+}
 
 adminApi.get('/api/admin/analytics', async (c) => {
   const gate = await requireOrganizer(c);

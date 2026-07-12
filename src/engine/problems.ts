@@ -4,18 +4,8 @@ import { discordTime } from '../time';
 import { buttonRow } from '../discord/components';
 import { enqueue } from './outbox';
 
-// Problem bank (DESIGN §6). Difficulty progression via effective rank:
-// easy=1, medium=2, hard=3 unless a finer difficulty_rank is set.
-// W1 [1,1.9] · W2 [2,2.4] · W3 [2.5,3.1] — the W3 band is deliberately tight
-// (last year's variance problem).
-
-export const WEEK_BANDS: Record<number, [number, number]> = {
-  1: [1.0, 1.9],
-  2: [2.0, 2.4],
-  3: [2.5, 3.1],
-};
-
-const EFFECTIVE_RANK = `COALESCE(p.difficulty_rank, CASE p.difficulty WHEN 'easy' THEN 1.0 WHEN 'medium' THEN 2.0 ELSE 3.0 END)`;
+// Problem bank (DESIGN §6). Each question explicitly declares the round
+// numbers in which it is available; difficulty rank remains useful metadata.
 
 export async function generateWeekSet(
   env: Env,
@@ -23,18 +13,18 @@ export async function generateWeekSet(
   weekIdx: number,
   size = 5,
 ): Promise<{ chosen: Array<{ id: number; title: string }>; poolSize: number }> {
-  const [lo, hi] = WEEK_BANDS[Math.min(weekIdx, 3)] ?? WEEK_BANDS[3]!;
   const { results: pool } = await env.DB.prepare(
     `SELECT p.id, p.title FROM problems p
-     WHERE p.active = 1 AND ${EFFECTIVE_RANK} BETWEEN ?1 AND ?2
+     WHERE p.active = 1
+       AND EXISTS (SELECT 1 FROM json_each(p.available_weeks) WHERE value = ?1)
        AND p.id NOT IN (
          SELECT wps.problem_id FROM week_problem_sets wps
          JOIN weeks w ON w.id = wps.week_id
-         WHERE w.cohort_id = (SELECT cohort_id FROM weeks WHERE id = ?3)
+         WHERE w.cohort_id = (SELECT cohort_id FROM weeks WHERE id = ?2)
        )
-     ORDER BY RANDOM() LIMIT ?4`,
+     ORDER BY RANDOM() LIMIT ?3`,
   )
-    .bind(lo, hi, weekId, size)
+    .bind(weekIdx, weekId, size)
     .all<{ id: number; title: string }>();
 
   await env.DB.prepare('DELETE FROM week_problem_sets WHERE week_id = ?1').bind(weekId).run();

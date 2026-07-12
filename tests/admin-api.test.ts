@@ -214,27 +214,34 @@ describe('admin mutations and audit history', () => {
   it('creates and edits problems', async () => {
     const create = await request('/api/admin/problems', {
       method: 'POST',
-      body: JSON.stringify({ title: 'Merge Intervals', difficulty: 'medium', difficultyRank: 2.4, statement: 'Merge overlaps.' }),
+      body: JSON.stringify({ title: 'Merge Intervals', difficulty: 'medium', difficultyRank: 2.4, availableWeeks: [2, 3], content: '## Statement\n\nMerge overlaps.\n\n## Hints\n\nSort first.\n\n## Solution\n\nSweep once.' }),
     });
     expect(create.status).toBe(201);
     const { id } = await create.json<any>();
 
     const update = await request(`/api/admin/problems/${id}`, {
       method: 'POST',
-      body: JSON.stringify({ title: 'Merge Intervals', difficulty: 'medium', difficultyRank: 2.5, active: false, solution: 'Sort first.' }),
+      body: JSON.stringify({ title: 'Merge Intervals', difficulty: 'medium', difficultyRank: 2.5, active: false, availableWeeks: [3], content: '## Statement\n\nMerge overlaps.\n\n## Hints\n\nSort first.\n\n## Solution\n\nSort first.' }),
     });
     expect(update.status).toBe(200);
-    const row = await env.DB.prepare('SELECT difficulty_rank, active, solution_md FROM problems WHERE id = ?1').bind(id).first<any>();
-    expect(row).toEqual({ difficulty_rank: 2.5, active: 0, solution_md: 'Sort first.' });
+    const row = await env.DB.prepare('SELECT difficulty_rank, active, solution_md, available_weeks FROM problems WHERE id = ?1').bind(id).first<any>();
+    expect(row).toEqual({ difficulty_rank: 2.5, active: 0, solution_md: 'Sort first.', available_weeks: '[3]' });
   });
 
   it('stages and generates problem sets for future rounds', async () => {
     await env.DB.prepare(
-      `INSERT INTO problems (id, title, difficulty, difficulty_rank) VALUES
-        (9919302, 'Binary Search', 'medium', 2.1),
-        (9919303, 'Number of Islands', 'medium', 2.2),
-        (9919304, 'Course Schedule', 'medium', 2.3)`,
+      `INSERT INTO problems (id, title, difficulty, difficulty_rank, available_weeks) VALUES
+        (9919302, 'Binary Search', 'medium', 2.1, '[2]'),
+        (9919303, 'Number of Islands', 'medium', 2.2, '[2]'),
+        (9919304, 'Course Schedule', 'medium', 2.3, '[2]')`,
     ).run();
+
+    const wrongRound = await request(`/api/admin/problem-sets/${futureWeekId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ problemIds: [9301] }),
+    });
+    expect(wrongRound.status).toBe(400);
+    expect((await wrongRound.json<any>()).message).toContain('tagged for round 2');
 
     const save = await request(`/api/admin/problem-sets/${futureWeekId}`, {
       method: 'PUT',
