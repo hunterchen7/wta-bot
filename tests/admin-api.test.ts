@@ -7,6 +7,7 @@ import { app } from '../src/index';
 const ADMIN_ID = 9101;
 const STUDENT_ID = 9102;
 let weekId = 0;
+let futureWeekId = 0;
 
 const cookieFor = async (participantId: number, organizer: boolean) => {
   const token = await signToken(
@@ -37,6 +38,7 @@ beforeAll(async () => {
   ).bind(ADMIN_ID, STUDENT_ID).run();
   const cohort = await createCohort(env, 'Admin API Cohort', [2026, 7, 26]);
   weekId = cohort.weeks[0]!.id;
+  futureWeekId = cohort.weeks[1]!.id;
   await env.DB.prepare(
     `INSERT INTO problems (id, title, difficulty, difficulty_rank) VALUES (9301, 'Two Sum', 'easy', 1.0)`,
   ).run();
@@ -181,6 +183,44 @@ describe('admin mutations and audit history', () => {
     expect(update.status).toBe(200);
     const row = await env.DB.prepare('SELECT difficulty_rank, active, solution_md FROM problems WHERE id = ?1').bind(id).first<any>();
     expect(row).toEqual({ difficulty_rank: 2.5, active: 0, solution_md: 'Sort first.' });
+  });
+
+  it('stages and generates problem sets for future rounds', async () => {
+    await env.DB.prepare(
+      `INSERT INTO problems (id, title, difficulty, difficulty_rank) VALUES
+        (9919302, 'Binary Search', 'medium', 2.1),
+        (9919303, 'Number of Islands', 'medium', 2.2),
+        (9919304, 'Course Schedule', 'medium', 2.3)`,
+    ).run();
+
+    const save = await request(`/api/admin/problem-sets/${futureWeekId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ problemIds: [9919302, 9919303] }),
+    });
+    expect(save.status).toBe(200);
+    expect(await save.json<any>()).toMatchObject({ ok: true, problemIds: [9919302, 9919303] });
+
+    const workspace = await (await request('/api/admin/problems')).json<any>();
+    expect(workspace.weeks).toEqual(expect.arrayContaining([expect.objectContaining({ id: futureWeekId, idx: 2 })]));
+    expect(workspace.sets).toEqual(expect.arrayContaining([
+      expect.objectContaining({ week_id: futureWeekId, problem_id: 9919302 }),
+      expect.objectContaining({ week_id: futureWeekId, problem_id: 9919303 }),
+    ]));
+
+    const generate = await request(`/api/admin/problem-sets/${futureWeekId}/generate`, {
+      method: 'POST',
+      body: JSON.stringify({ size: 1 }),
+    });
+    expect(generate.status).toBe(200);
+    expect((await generate.json<any>()).chosen).toEqual([
+      expect.objectContaining({ id: 9919304 }),
+    ]);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS count FROM week_problem_sets WHERE week_id = ?1').bind(futureWeekId).first()).toEqual({ count: 1 });
+
+    const audits = await env.DB.prepare(
+      "SELECT action FROM audit_log WHERE action IN ('problem_set.replaced', 'problem_set.generated') ORDER BY id",
+    ).all<any>();
+    expect(audits.results.map((row) => row.action)).toEqual(['problem_set.replaced', 'problem_set.generated']);
   });
 
   it('updates program settings and creates a cohort calendar', async () => {

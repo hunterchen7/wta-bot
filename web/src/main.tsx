@@ -8,7 +8,6 @@ import { OverviewPage } from './pages/admin/OverviewPage';
 import { ParticipantsPage } from './pages/admin/ParticipantsPage';
 import { RoundsPage } from './pages/admin/RoundsPage';
 import { ReviewsPage } from './pages/admin/ReviewsPage';
-import { ProblemsPage } from './pages/admin/ProblemsPage';
 import { AnalyticsPage } from './pages/admin/AnalyticsPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { LoginPage } from './pages/LoginPage';
@@ -21,6 +20,7 @@ import './styles.css';
 
 const OperationsPage = lazy(() => import('./pages/admin/OperationsPage').then((module) => ({ default: module.OperationsPage })));
 const FormsPage = lazy(() => import('./pages/admin/FormsPage').then((module) => ({ default: module.FormsPage })));
+const ProblemsPage = lazy(() => import('./pages/admin/ProblemsPage').then((module) => ({ default: module.ProblemsPage })));
 const deferred = (page: ReactNode) => <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl bg-slate-200/70" />}>{page}</Suspense>;
 
 const router = createBrowserRouter(
@@ -47,7 +47,7 @@ const router = createBrowserRouter(
         { path: 'admin/rounds', element: <RoundsPage /> },
         { path: 'admin/reviews', element: <ReviewsPage /> },
         { path: 'admin/forms', element: deferred(<FormsPage />) },
-        { path: 'admin/problems', element: <ProblemsPage /> },
+        { path: 'admin/problems', element: deferred(<ProblemsPage />) },
         { path: 'admin/analytics', element: <AnalyticsPage /> },
         { path: 'admin/operations', element: deferred(<OperationsPage />) },
         { path: 'admin/settings', element: <AdminSettingsPage /> },

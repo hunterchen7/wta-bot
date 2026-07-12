@@ -28,7 +28,13 @@ export type ReviewRow = { id: number; review_state: string; state: string; round
 export type ReviewsData = { reviews: ReviewRow[] };
 
 export type ProblemRow = { id: number; source: string; number: number | null; title: string; url: string | null; difficulty: 'easy' | 'medium' | 'hard'; difficulty_rank: number | null; statement_md: string | null; solution_md: string | null; hints_md: string | null; active: number; uses: number; exposures: number };
-export type ProblemsData = { problems: ProblemRow[]; sets: Array<{ week_id: number; round: number; cohort_name: string; problem_id: number; title: string }> };
+export type ProblemsData = {
+  problems: ProblemRow[];
+  sets: Array<{ week_id: number; round: number; cohort_name: string; problem_id: number; title: string }>;
+  cohort: Cohort | null;
+  weeks: Week[];
+  bands: Record<string, [number, number]>;
+};
 
 export type AnalyticsData = {
   participants: CountRow[]; sessions: CountRow[];

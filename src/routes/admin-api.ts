@@ -5,6 +5,7 @@ import { maybeMarkEligible } from '../engine/reports';
 import { activeCohort, cohortWeeks, createCohort } from '../engine/weeks';
 import type { Env } from '../env';
 import { listParticipants, participantsToCsv } from '../participants';
+import { generateProblemSet, ProblemSetError, problemBankWorkspace, replaceProblemSet } from '../services/problem-sets';
 import { sessionFrom, type SessionUser } from './web';
 
 export const adminApi = new Hono<{ Bindings: Env }>();
@@ -274,19 +275,37 @@ adminApi.post('/api/admin/reviews/:id', async (c) => {
 adminApi.get('/api/admin/problems', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
-  const [problems, sets] = await Promise.all([
-    c.env.DB.prepare(
-      `SELECT p.*, (SELECT count(*) FROM sessions s WHERE s.problem_id = p.id) AS uses,
-              (SELECT count(*) FROM exposures e WHERE e.problem_id = p.id) AS exposures
-       FROM problems p ORDER BY p.active DESC, p.difficulty_rank, lower(p.title)`,
-    ).all<any>(),
-    c.env.DB.prepare(
-      `SELECT wps.week_id, w.idx AS round, c.name AS cohort_name, p.id AS problem_id, p.title
-       FROM week_problem_sets wps JOIN weeks w ON w.id = wps.week_id JOIN cohorts c ON c.id = w.cohort_id
-       JOIN problems p ON p.id = wps.problem_id ORDER BY c.id DESC, w.idx, p.title`,
-    ).all<any>(),
-  ]);
-  return c.json({ problems: problems.results, sets: sets.results });
+  return c.json(await problemBankWorkspace(c.env));
+});
+
+adminApi.put('/api/admin/problem-sets/:weekId', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  try {
+    const body = await c.req.json<{ problemIds?: number[] }>().catch(() => null);
+    if (!body || !Array.isArray(body.problemIds)) return c.json({ error: 'invalid_request' }, 400);
+    const result = await replaceProblemSet(c.env, Number(c.req.param('weekId')), body.problemIds);
+    await audit(c.env, gate.participantId, 'problem_set.replaced', 'week', result.weekId, { problemIds: result.problemIds });
+    return c.json({ ok: true, ...result });
+  } catch (error) {
+    if (error instanceof ProblemSetError) return c.json({ error: 'invalid_problem_set', message: error.message }, error.status);
+    throw error;
+  }
+});
+
+adminApi.post('/api/admin/problem-sets/:weekId/generate', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  try {
+    const body = await c.req.json<{ size?: number }>().catch(() => null);
+    const size = Number(body?.size ?? 5);
+    const result = await generateProblemSet(c.env, Number(c.req.param('weekId')), size);
+    await audit(c.env, gate.participantId, 'problem_set.generated', 'week', result.weekId, { size, chosen: result.chosen.map((row) => row.id) });
+    return c.json({ ok: true, ...result });
+  } catch (error) {
+    if (error instanceof ProblemSetError) return c.json({ error: 'invalid_problem_set', message: error.message }, error.status);
+    throw error;
+  }
 });
 
 adminApi.post('/api/admin/problems', async (c) => {
