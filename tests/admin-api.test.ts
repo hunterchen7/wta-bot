@@ -249,10 +249,13 @@ describe('admin mutations and audit history', () => {
 
   it('surfaces operations and retries dead outbox rows', async () => {
     await env.DB.prepare(
-      `INSERT INTO outbox (id, kind, payload, run_after, attempts, last_error) VALUES (9501, 'email', '{}', ?1, 5, 'mail failed')`,
+      `INSERT INTO outbox (id, kind, payload, run_after, attempts, last_error) VALUES
+        (9501, 'email', '{}', ?1, 5, 'mail failed'),
+        (9502, 'email', '{"to":"student@example.com","subject":"Round reminder"}', ?1, 0, NULL)`,
     ).bind(new Date(Date.now() + 86400_000).toISOString()).run();
     const operations = await (await request('/api/admin/operations')).json<any>();
-    expect(operations.outbox).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9501, attempts: 5 })]));
+    expect(operations.outbox).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9501, attempts: 5, payload: '{}' })]));
+    expect(operations.outbox).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9502, participant_name: 'Student Person' })]));
 
     const retry = await request('/api/admin/operations/outbox/9501/retry', { method: 'POST', body: '{}' });
     expect(retry.status).toBe(200);

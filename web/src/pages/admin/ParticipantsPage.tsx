@@ -1,7 +1,8 @@
 import { useDeferredValue, useMemo, useState } from 'react';
 import type { ParticipantDetail, ParticipantRow, ParticipantsData } from '../../admin-types';
 import { adminRequest } from '../../api';
-import { Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, formatDate, inputClass, LoadingState, PageIntro, Panel, tableClass, tableWrapClass, tdClass, thClass } from '../../components/AdminUI';
+import { Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, formatDate, inputClass, LoadingState, PageIntro, Panel, tableClass, tdClass, thClass } from '../../components/AdminUI';
+import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
 
 export function ParticipantsPage() {
@@ -34,7 +35,7 @@ export function ParticipantsPage() {
         <div className="text-xs font-semibold text-slate-500 lg:ml-auto">{filtered.length} of {data.participants.length}</div>
       </div>
       {selected.size ? <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-950 px-4 py-2.5 text-white"><span className="mr-2 text-xs font-bold tabular-nums">{selected.size} selected</span><Button variant="secondary" className="!border-white/10 !bg-white/10 !py-1.5 !text-white hover:!bg-white/15" onClick={() => setBulkOpen('status')}>Change status</Button><Button variant="secondary" className="!border-white/10 !bg-white/10 !py-1.5 !text-white hover:!bg-white/15" onClick={() => setBulkOpen('message')}>Send message</Button><button className="ml-auto text-xs font-bold text-slate-300 hover:text-white" onClick={() => setSelected(new Set())}>Clear</button></div> : null}
-      {filtered.length ? <div className={tableWrapClass}><table className={tableClass}>
+      {filtered.length ? <ScrollArea horizontal className="overscroll-contain" style={{ height: `min(${Math.max(3, filtered.length + 1) * 84}px, 62vh, 672px)` }}><div className="min-w-max pr-3 [&_th]:sticky [&_th]:top-0 [&_th]:z-10"><table className={tableClass}>
         <thead><tr><th className={`${thClass} w-10`}><input type="checkbox" aria-label="Select visible participants" checked={allVisibleSelected} onChange={toggleAll} /></th><th className={thClass}>Participant</th><th className={thClass}>Program</th><th className={thClass}>Progress</th><th className={thClass}>Signals</th><th className={thClass}>Status</th></tr></thead>
         <tbody>{filtered.map((participant) => <tr key={participant.id} className="group hover:bg-slate-50/70">
           <td className={tdClass}><input type="checkbox" aria-label={`Select ${participant.name}`} checked={selected.has(participant.id)} onChange={() => setSelected((current) => { const next = new Set(current); if (next.has(participant.id)) next.delete(participant.id); else next.add(participant.id); return next; })} /></td>
@@ -44,7 +45,7 @@ export function ParticipantsPage() {
           <td className={tdClass}><div className="flex flex-wrap gap-1.5">{participant.strikes ? <span className="rounded-full bg-rose-50 px-2 py-0.5 text-xs font-bold text-rose-700">{participant.strikes} strike{participant.strikes === 1 ? '' : 's'}</span> : null}{participant.reports_owed ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">{participant.reports_owed} owed</span> : null}{participant.opted_in ? <span className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-bold text-sky-700">opted in</span> : null}{participant.email_ok ? <span title="Email reminders enabled" className="text-xs text-slate-400">email ✓</span> : null}</div></td>
           <td className={tdClass}><Badge value={participant.status} /></td>
         </tr>)}</tbody>
-      </table></div> : <EmptyState title="No participants match" description="Try a broader search or a different status filter." />}
+      </table></div></ScrollArea> : <EmptyState title="No participants match" description="Try a broader search or a different status filter." />}
     </Panel>
     {(detail || detailLoading) ? <ParticipantDrawer detail={detail} loading={detailLoading} onClose={() => { setDetail(null); setDetailLoading(false); }} /> : null}
     {bulkOpen === 'status' ? <StatusDialog count={selected.size} busy={busy} onClose={() => setBulkOpen(null)} onSubmit={runStatus} /> : null}

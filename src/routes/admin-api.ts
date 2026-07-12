@@ -380,7 +380,14 @@ adminApi.get('/api/admin/operations', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const [outbox, notifications, jobs, auditRows] = await Promise.all([
-    c.env.DB.prepare(`SELECT id, kind, attempts, run_after, done_at, last_error, created_at FROM outbox ORDER BY id DESC LIMIT 100`).all<any>(),
+    c.env.DB.prepare(
+      `SELECT o.id, o.kind, o.payload, o.attempts, o.run_after, o.done_at, o.last_error, o.created_at,
+              (SELECT p.name FROM participants p
+               WHERE p.discord_id = json_extract(o.payload, '$.userId')
+                  OR lower(p.preferred_email) = lower(json_extract(o.payload, '$.to'))
+               LIMIT 1) AS participant_name
+       FROM outbox o ORDER BY o.id DESC LIMIT 100`,
+    ).all<any>(),
     c.env.DB.prepare(`SELECT n.*, p.name FROM notify_log n LEFT JOIN participants p ON p.id = n.participant_id ORDER BY n.id DESC LIMIT 100`).all<any>(),
     c.env.DB.prepare('SELECT * FROM job_runs ORDER BY ran_at DESC LIMIT 100').all<any>(),
     c.env.DB.prepare(`SELECT a.*, p.name AS actor_name FROM audit_log a LEFT JOIN participants p ON p.id = a.actor_participant_id ORDER BY a.id DESC LIMIT 100`).all<any>(),

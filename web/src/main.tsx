@@ -4,12 +4,6 @@ import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom'
 import { AppLayout } from './App';
 import { ProgressPage } from './pages/ProgressPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { OverviewPage } from './pages/admin/OverviewPage';
-import { ParticipantsPage } from './pages/admin/ParticipantsPage';
-import { RoundsPage } from './pages/admin/RoundsPage';
-import { ReviewsPage } from './pages/admin/ReviewsPage';
-import { AnalyticsPage } from './pages/admin/AnalyticsPage';
-import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { LoginPage } from './pages/LoginPage';
 import { ReportPage } from './pages/ReportPage';
 import { ProblemPage } from './pages/ProblemPage';
@@ -21,6 +15,12 @@ import './styles.css';
 const OperationsPage = lazy(() => import('./pages/admin/OperationsPage').then((module) => ({ default: module.OperationsPage })));
 const FormsPage = lazy(() => import('./pages/admin/FormsPage').then((module) => ({ default: module.FormsPage })));
 const ProblemsPage = lazy(() => import('./pages/admin/ProblemsPage').then((module) => ({ default: module.ProblemsPage })));
+const ParticipantsPage = lazy(() => import('./pages/admin/ParticipantsPage').then((module) => ({ default: module.ParticipantsPage })));
+const OverviewPage = lazy(() => import('./pages/admin/OverviewPage').then((module) => ({ default: module.OverviewPage })));
+const RoundsPage = lazy(() => import('./pages/admin/RoundsPage').then((module) => ({ default: module.RoundsPage })));
+const ReviewsPage = lazy(() => import('./pages/admin/ReviewsPage').then((module) => ({ default: module.ReviewsPage })));
+const AnalyticsPage = lazy(() => import('./pages/admin/AnalyticsPage').then((module) => ({ default: module.AnalyticsPage })));
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })));
 const deferred = (page: ReactNode) => <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl bg-slate-200/70" />}>{page}</Suspense>;
 
 const router = createBrowserRouter(
@@ -42,15 +42,15 @@ const router = createBrowserRouter(
       children: [
         { index: true, element: <ProgressPage /> },
         { path: 'settings', element: <SettingsPage /> },
-        { path: 'admin', element: <OverviewPage /> },
-        { path: 'admin/participants', element: <ParticipantsPage /> },
-        { path: 'admin/rounds', element: <RoundsPage /> },
-        { path: 'admin/reviews', element: <ReviewsPage /> },
+        { path: 'admin', element: deferred(<OverviewPage />) },
+        { path: 'admin/participants', element: deferred(<ParticipantsPage />) },
+        { path: 'admin/rounds', element: deferred(<RoundsPage />) },
+        { path: 'admin/reviews', element: deferred(<ReviewsPage />) },
         { path: 'admin/forms', element: deferred(<FormsPage />) },
         { path: 'admin/problems', element: deferred(<ProblemsPage />) },
-        { path: 'admin/analytics', element: <AnalyticsPage /> },
+        { path: 'admin/analytics', element: deferred(<AnalyticsPage />) },
         { path: 'admin/operations', element: deferred(<OperationsPage />) },
-        { path: 'admin/settings', element: <AdminSettingsPage /> },
+        { path: 'admin/settings', element: deferred(<AdminSettingsPage />) },
       ],
     },
   ],
