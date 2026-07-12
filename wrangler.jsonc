@@ -10,6 +10,10 @@
   // dispatched from src/cron.ts. Keeps timezones/DST out of cron expressions.
   "triggers": { "crons": ["*/15 * * * *"] },
 
+  // Guild allowlist — the app is public on Discord's side; this is the gate.
+  // Comma-separate to add more servers (e.g. a separate dev guild).
+  "vars": { "ALLOWED_GUILD_IDS": "1124746819184906431" },
+
   "d1_databases": [
     {
       "binding": "DB",
