@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useBlocker } from "react-router-dom";
 import { useDashboard } from "../dashboard-context";
 import { saveSettings, SettingsSaveError, type SettingsPayload } from "../api";
+import { ProfileSelect } from "../components/ProfileSelect";
 import { PriorParticipationCheckbox } from "../components/PriorParticipationCheckbox";
 import {
   profileBlurbHelp,
@@ -194,55 +195,46 @@ export function SettingsPage() {
               label={profileFormContent.fields.year.label}
               error={fieldErrors.year}
             >
-              <select
+              <ProfileSelect
                 name="year"
-                aria-invalid={Boolean(fieldErrors.year)}
-                required
+                label={profileFormContent.fields.year.label}
                 value={form.year}
-                onChange={(event) => set("year", event.target.value)}
+                options={data.options.years}
+                placeholder={profileFormContent.selectPlaceholder}
+                invalid={Boolean(fieldErrors.year)}
+                onChange={(value) => set("year", value)}
                 className={fieldClass(fieldErrors.year)}
-              >
-                <option value="">{profileFormContent.selectPlaceholder}</option>
-                {data.options.years.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
+              />
             </Field>
             <Field
               label={profileFormContent.fields.program.label}
               error={fieldErrors.program}
             >
-              <select
+              <ProfileSelect
                 name="program"
-                aria-invalid={Boolean(fieldErrors.program)}
-                required
+                label={profileFormContent.fields.program.label}
                 value={form.program}
-                onChange={(event) => set("program", event.target.value)}
+                options={data.options.programs}
+                placeholder={profileFormContent.selectPlaceholder}
+                invalid={Boolean(fieldErrors.program)}
+                onChange={(value) => set("program", value)}
                 className={fieldClass(fieldErrors.program)}
-              >
-                <option value="">{profileFormContent.selectPlaceholder}</option>
-                {data.options.programs.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
+              />
             </Field>
             <Field
               label={profileFormContent.fields.experience.label}
               error={fieldErrors.experience}
             >
-              <select
+              <ProfileSelect
                 name="experience"
-                aria-invalid={Boolean(fieldErrors.experience)}
-                required
+                label={profileFormContent.fields.experience.label}
                 value={form.experience}
-                onChange={(event) => set("experience", event.target.value)}
+                options={data.options.experience}
+                placeholder={profileFormContent.selectPlaceholder}
+                invalid={Boolean(fieldErrors.experience)}
+                onChange={(value) => set("experience", value)}
                 className={fieldClass(fieldErrors.experience)}
-              >
-                <option value="">{profileFormContent.selectPlaceholder}</option>
-                {data.options.experience.map((item) => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
+              />
             </Field>
           </div>
 

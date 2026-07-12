@@ -3,15 +3,15 @@ import { useBlocker, useParams, useSearchParams } from 'react-router-dom';
 import { adminRequest, publicRequest, SettingsSaveError } from '../api';
 import { PublicShell } from '../components/PublicShell';
 import { CodeEditor } from '../components/CodeEditor';
+import { SelectControl } from '../components/SelectControl';
 import { VideoUploadField } from '../components/VideoUploadField';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Textarea } from '../components/ui/textarea';
 
 export type ReportField = { id: string; label: string; type: 'radio' | 'select' | 'scale' | 'text' | 'textarea' | 'url'; options?: Array<{ value: string; label: string }>; required?: boolean; shared?: boolean; help?: string; mono?: boolean; low?: string; high?: string };
-export type ReportData = { preview?: boolean; id: number; kind: string; round: number; role: string; assigneeName: string | null; partnerName: string | null; scheduledAt: string | null; deadlineAt: string; submittedAt: string | null; overdue: boolean; fields: ReportField[]; values: Record<string, string> };
+export type ReportData = { preview?: boolean; id: number; kind: string; round: number; role: string; assigneeName: string | null; assigneeDiscordId: string; assigneeDiscordUsername: string | null; assigneeDiscordNickname: string | null; partnerName: string | null; scheduledAt: string | null; deadlineAt: string; submittedAt: string | null; overdue: boolean; fields: ReportField[]; values: Record<string, string> };
 
 export function ReportPage({ previewKind }: { previewKind?: string }) {
   const { token } = useParams();
@@ -78,12 +78,27 @@ function ReportIntro({ data, preview }: { data: ReportData; preview: boolean }) 
     <div className="text-[0.68rem] font-black uppercase tracking-[0.2em] text-western-700">{preview ? 'Read-only preview' : `Round ${data.round} report`}</div>
     <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 sm:text-5xl">{interviewer ? 'Interviewer' : 'Interviewee'} report</h1>
     <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">Hi {data.assigneeName ?? 'there'}. {interviewer ? 'Review how the interview went and give your interviewee clear, useful feedback.' : 'Reflect on the interview while the details are fresh and tell us about your experience.'}</p>
+    <ConnectedAccount data={data} />
     <dl className="mt-5 grid overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.025)] sm:grid-cols-3 dark:border-border dark:bg-card">
       <ReportMeta label={interviewer ? 'Interviewee' : 'Interviewer'} value={data.partnerName ?? 'Your partner'} />
       <ReportMeta label="Session" value={data.scheduledAt ? formatDate(data.scheduledAt) : 'Time not recorded'} dateTime={data.scheduledAt} />
       <ReportMeta label={data.overdue ? 'Overdue since' : 'Report due'} value={formatDate(data.deadlineAt)} dateTime={data.deadlineAt} urgent={data.overdue} />
     </dl>
   </header>;
+}
+
+function ConnectedAccount({ data }: { data: ReportData }) {
+  const displayName = data.assigneeDiscordNickname ?? data.assigneeName ?? data.assigneeDiscordUsername ?? 'Discord account';
+  const username = data.assigneeDiscordUsername ? `@${data.assigneeDiscordUsername}` : 'Username not synced';
+  return <aside className="mt-5 flex items-center gap-3 rounded-2xl border border-western-200 bg-western-50/70 px-4 py-3.5 dark:border-western-800 dark:bg-western-950/30">
+    <span aria-hidden="true" className="grid size-10 shrink-0 place-items-center rounded-xl bg-western-700 text-base font-black text-white">@</span>
+    <div className="min-w-0 flex-1">
+      <div className="text-[0.65rem] font-black uppercase tracking-[0.14em] text-western-700 dark:text-western-300">Connected Discord account</div>
+      <div className="mt-0.5 truncate text-sm font-black text-slate-900 dark:text-slate-100">{displayName}</div>
+      <div className="truncate text-xs font-semibold text-slate-500 dark:text-slate-400">{username} · ID {data.assigneeDiscordId}</div>
+    </div>
+    <div className="hidden text-right text-xs font-semibold text-western-700 dark:text-western-300 sm:block">This report is linked<br />to this account</div>
+  </aside>;
 }
 
 function ReportMeta({ label, value, dateTime, urgent = false }: { label: string; value: string; dateTime?: string | null; urgent?: boolean }) {
@@ -105,7 +120,7 @@ function ReportFieldInput({ field, value, error, index, token, preview, onChange
     const options = field.type === 'scale' ? [1, 2, 3, 4, 5].map((number) => ({ value: String(number), label: String(number) })) : field.options ?? [];
     return <fieldset data-report-field={field.id} className={shell}>{head}<RadioGroup required={field.required} value={value} onValueChange={onChange} className={`mt-4 ${field.type === 'scale' ? 'grid-cols-5' : 'sm:grid-cols-2'}`}>{options.map((option) => <label key={option.value} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm font-bold transition ${field.type === 'scale' ? 'justify-center' : ''} ${value === option.value ? 'border-primary bg-primary/5 text-foreground shadow-sm' : 'border-input text-muted-foreground hover:border-primary/40 hover:bg-accent/50'}`}><RadioGroupItem value={option.value} aria-label={option.label} />{option.label}</label>)}</RadioGroup>{field.type === 'scale' ? <div className="mt-2 flex justify-between text-xs font-semibold text-slate-400"><span>{field.low}</span><span>{field.high}</span></div> : null}{alert}</fieldset>;
   }
-  return <div data-report-field={field.id} className={`${shell} block`}>{head}<div className="mt-4">{field.id === 'video_url' ? <VideoUploadField token={token} value={value} preview={preview} invalid={Boolean(error)} onChange={onChange} /> : field.type === 'select' ? <Select required={field.required} value={value || undefined} onValueChange={onChange}><SelectTrigger aria-invalid={Boolean(error)} className="h-11 w-full cursor-pointer rounded-xl bg-background"><SelectValue placeholder="Choose an option…" /></SelectTrigger><SelectContent position="popper" align="start" className="min-w-[var(--radix-select-trigger-width)]">{field.options?.map((option) => <SelectItem key={option.value} value={option.value} className="cursor-pointer py-2.5">{option.label}</SelectItem>)}</SelectContent></Select> : field.type === 'textarea' && field.mono ? <CodeEditor value={value} invalid={Boolean(error)} onChange={onChange} /> : field.type === 'textarea' ? <Textarea aria-invalid={Boolean(error)} required={field.required} rows={5} value={value} onChange={(event) => onChange(event.target.value)} className="min-h-32 resize-y rounded-xl bg-background" /> : <Input aria-invalid={Boolean(error)} required={field.required} type={field.type === 'url' ? 'url' : 'text'} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl bg-background" />}</div>{alert}</div>;
+  return <div data-report-field={field.id} className={`${shell} block`}>{head}<div className="mt-4">{field.id === 'video_url' ? <VideoUploadField token={token} value={value} preview={preview} invalid={Boolean(error)} onChange={onChange} /> : field.type === 'select' ? <SelectControl label={field.label} required={field.required} value={value} onChange={onChange} options={field.options ?? []} placeholder="Choose an option…" invalid={Boolean(error)} className="h-11" /> : field.type === 'textarea' && field.mono ? <CodeEditor value={value} invalid={Boolean(error)} onChange={onChange} /> : field.type === 'textarea' ? <Textarea aria-invalid={Boolean(error)} required={field.required} rows={5} value={value} onChange={(event) => onChange(event.target.value)} className="min-h-32 resize-y rounded-xl bg-background" /> : <Input aria-invalid={Boolean(error)} required={field.required} type={field.type === 'url' ? 'url' : 'text'} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl bg-background" />}</div>{alert}</div>;
 }
 
 function LeaveDialog({ onStay, onLeave }: { onStay: () => void; onLeave: () => void }) { return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby="leave-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><h2 id="leave-title" className="text-xl font-black text-slate-950">Leave with unsaved answers?</h2><p className="mt-2 text-sm leading-6 text-slate-600">Changes on this report have not been submitted.</p><div className="mt-6 flex justify-end gap-2"><Button variant="outline" className="cursor-pointer" onClick={onStay}>Stay here</Button><Button variant="destructive" className="cursor-pointer" onClick={onLeave}>Discard changes</Button></div></div></div>; }

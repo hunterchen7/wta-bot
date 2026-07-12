@@ -53,10 +53,16 @@ adminApi.get('/api/admin/previews/:kind', async (c) => {
   const kind = c.req.param('kind');
   const fields = fieldsFor(kind);
   if (!fields) return c.json({ error: 'not_found', message: 'Unknown preview.' }, 404);
+  const viewer = await c.env.DB.prepare(
+    'SELECT name, discord_id, discord_username, discord_nickname FROM participants WHERE id = ?1',
+  ).bind(gate.participantId).first<{ name: string | null; discord_id: string; discord_username: string | null; discord_nickname: string | null }>();
   return c.json({
     preview: true, id: 0, kind, round: 2,
     role: kind === 'interviewer_report' ? 'interviewer' : 'interviewee',
-    assigneeName: 'Alex Example', partnerName: 'Jordan Example',
+    assigneeName: viewer?.name ?? 'Alex Example', partnerName: 'Jordan Example',
+    assigneeDiscordId: viewer?.discord_id ?? '000000000000000000',
+    assigneeDiscordUsername: viewer?.discord_username ?? 'alex.example',
+    assigneeDiscordNickname: viewer?.discord_nickname ?? 'Alex Example',
     scheduledAt: '2026-08-12T23:30:00.000Z', deadlineAt: '2026-08-23T03:59:00.000Z',
     submittedAt: null, overdue: false, fields, values: {},
   });

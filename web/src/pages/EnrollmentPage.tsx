@@ -11,6 +11,7 @@ import {
   PublicShell,
   publicInputClass,
 } from "../components/PublicShell";
+import { ProfileSelect } from "../components/ProfileSelect";
 import { PriorParticipationCheckbox } from "../components/PriorParticipationCheckbox";
 import {
   profileBlurbHelp,
@@ -269,52 +270,46 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
               label={profileFormContent.fields.year.label}
               error={fieldErrors.year}
             >
-              <select
+              <ProfileSelect
                 name="year"
-                required
+                label={profileFormContent.fields.year.label}
                 value={form.year}
-                onChange={(event) => set("year", event.target.value)}
+                options={data.options.years}
+                placeholder={profileFormContent.selectPlaceholder}
+                invalid={Boolean(fieldErrors.year)}
+                onChange={(value) => set("year", value)}
                 className={fieldClass(fieldErrors.year)}
-              >
-                <option value="">{profileFormContent.selectPlaceholder}</option>
-                {data.options.years.map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </select>
+              />
             </Field>
             <Field
               label={profileFormContent.fields.program.label}
               error={fieldErrors.program}
             >
-              <select
+              <ProfileSelect
                 name="program"
-                required
+                label={profileFormContent.fields.program.label}
                 value={form.program}
-                onChange={(event) => set("program", event.target.value)}
+                options={data.options.programs}
+                placeholder={profileFormContent.selectPlaceholder}
+                invalid={Boolean(fieldErrors.program)}
+                onChange={(value) => set("program", value)}
                 className={fieldClass(fieldErrors.program)}
-              >
-                <option value="">{profileFormContent.selectPlaceholder}</option>
-                {data.options.programs.map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </select>
+              />
             </Field>
             <Field
               label={profileFormContent.fields.experience.label}
               error={fieldErrors.experience}
             >
-              <select
+              <ProfileSelect
                 name="experience"
-                required
+                label={profileFormContent.fields.experience.label}
                 value={form.experience}
-                onChange={(event) => set("experience", event.target.value)}
+                options={data.options.experience}
+                placeholder={profileFormContent.selectPlaceholder}
+                invalid={Boolean(fieldErrors.experience)}
+                onChange={(value) => set("experience", value)}
                 className={fieldClass(fieldErrors.experience)}
-              >
-                <option value="">{profileFormContent.selectPlaceholder}</option>
-                {data.options.experience.map((value) => (
-                  <option key={value}>{value}</option>
-                ))}
-              </select>
+              />
             </Field>
           </div>
         </Section>

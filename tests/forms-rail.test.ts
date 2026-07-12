@@ -70,9 +70,9 @@ const INTERVIEWER_OK: Record<string, string> = {
 beforeAll(async () => {
   // Roster + final-week session (idx 3 of 3 -> verdict feeds the review queue)
   await env.DB.prepare(
-    `INSERT INTO participants (discord_id, name, preferred_email, topics, status)
-     VALUES ('201', 'Ivy Interviewer', 'ivy@example.com', '["dsa"]', 'active'),
-            ('202', 'Eve Interviewee', 'eve@example.com', '["dsa"]', 'active')`,
+    `INSERT INTO participants (discord_id, discord_username, discord_nickname, name, preferred_email, topics, status)
+     VALUES ('201', 'ivy.dev', 'Ivy', 'Ivy Interviewer', 'ivy@example.com', '["dsa"]', 'active'),
+            ('202', 'eve.codes', 'Eve', 'Eve Interviewee', 'eve@example.com', '["dsa"]', 'active')`,
   ).run();
   const { weeks } = await createCohort(env, 'Rail Test', [2026, 9, 14]);
   const week3 = weeks[2]!;
@@ -100,6 +100,11 @@ describe('form rail', () => {
   it('returns the interviewee form schema with session context', async () => {
     const res = await app.request(`/api/forms/${intervieweeToken}`, {}, env);
     expect(res.status).toBe(200);
+    expect(await res.clone().json<any>()).toMatchObject({
+      assigneeDiscordId: '202',
+      assigneeDiscordUsername: 'eve.codes',
+      assigneeDiscordNickname: 'Eve',
+    });
     const form = await res.json<any>();
     expect(form).toMatchObject({ round: 3, partnerName: 'Ivy Interviewer', role: 'interviewee' });
     expect(form.fields.map((field: any) => field.label)).toEqual(expect.arrayContaining([

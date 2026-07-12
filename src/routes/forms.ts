@@ -15,6 +15,8 @@ type LoadedInstance = {
   week_idx: number; scheduled_at: string | null;
   interviewer_name: string | null; interviewee_name: string | null;
   interviewer_id: number; interviewee_id: number; assignee_name: string | null;
+  assignee_discord_id: string; assignee_discord_username: string | null;
+  assignee_discord_nickname: string | null;
 };
 
 async function loadInstance(env: Env, token: string): Promise<LoadedInstance | null> {
@@ -24,7 +26,10 @@ async function loadInstance(env: Env, token: string): Promise<LoadedInstance | n
   return env.DB.prepare(
     `SELECT f.id, f.kind, f.session_id, f.assignee_id, f.deadline_at, f.submitted_at, f.payload,
             w.idx AS week_idx, s.scheduled_at, s.interviewer_id, s.interviewee_id,
-            pi.name AS interviewer_name, pe.name AS interviewee_name, pa.name AS assignee_name
+            pi.name AS interviewer_name, pe.name AS interviewee_name, pa.name AS assignee_name,
+            pa.discord_id AS assignee_discord_id,
+            pa.discord_username AS assignee_discord_username,
+            pa.discord_nickname AS assignee_discord_nickname
      FROM form_instances f JOIN sessions s ON s.id = f.session_id JOIN weeks w ON w.id = s.week_id
      JOIN participants pi ON pi.id = s.interviewer_id JOIN participants pe ON pe.id = s.interviewee_id
      JOIN participants pa ON pa.id = f.assignee_id WHERE f.id = ?1`,
@@ -235,6 +240,9 @@ function reportPayload(instance: LoadedInstance, fields: Field[]) {
     round: instance.week_idx,
     role: isInterviewer ? 'interviewer' : 'interviewee',
     assigneeName: instance.assignee_name,
+    assigneeDiscordId: instance.assignee_discord_id,
+    assigneeDiscordUsername: instance.assignee_discord_username,
+    assigneeDiscordNickname: instance.assignee_discord_nickname,
     partnerName: isInterviewer ? instance.interviewee_name : instance.interviewer_name,
     scheduledAt: instance.scheduled_at,
     deadlineAt: instance.deadline_at,

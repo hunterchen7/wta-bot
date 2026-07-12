@@ -8,6 +8,7 @@ import {
 import { Checkbox } from '../../components/ui/checkbox';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
+import { SelectControl } from '../../components/SelectControl';
 
 const QUESTION_TEMPLATE = `## Statement
 
@@ -80,9 +81,7 @@ export function ProblemsPage() {
       : <Panel>
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
           <input className={`${inputClass} sm:max-w-sm`} type="search" placeholder="Search title or number…" value={query} onChange={(event) => setQuery(event.target.value)} />
-          <select className={`${inputClass} sm:w-40`} value={difficulty} onChange={(event) => setDifficulty(event.target.value)}>
-            <option value="all">All difficulties</option><option>easy</option><option>medium</option><option>hard</option>
-          </select>
+          <SelectControl label="Filter by difficulty" className="sm:w-40" value={difficulty} onChange={setDifficulty} options={[{ value: 'all', label: 'All difficulties' }, { value: 'easy', label: 'easy' }, { value: 'medium', label: 'medium' }, { value: 'hard', label: 'hard' }]} />
           <div className="self-center text-xs font-semibold text-slate-500 sm:ml-auto">{rows.length} questions</div>
         </div>
         {rows.length ? <div className={tableWrapClass}><table className={tableClass}>
@@ -133,7 +132,7 @@ function RoundSets({ data, reload, onNotice }: { data: ProblemsData; reload: () 
   return <Panel
     title={`${data.cohort.name} · Round ${selectedWeek?.idx ?? '—'}`}
     description={`Only active questions tagged for round ${selectedWeek?.idx ?? '—'} are shown. Future round sets can be staged now.`}
-    actions={<div className="flex items-center gap-2"><select aria-label="Auto-fill size" className={`${inputClass} w-20 py-2`} value={size} onChange={(event) => setSize(Number(event.target.value))}>{[3, 4, 5, 6, 8, 10].map((value) => <option key={value}>{value}</option>)}</select><Button variant="secondary" disabled={busy || !available.length} onClick={() => void generate()}>Auto-fill</Button><Button disabled={busy || !dirty} onClick={() => void save()}>{busy ? 'Saving…' : 'Save set'}</Button></div>}
+    actions={<div className="flex items-center gap-2"><SelectControl label="Auto-fill size" className="w-20" value={String(size)} onChange={(value) => setSize(Number(value))} options={[3, 4, 5, 6, 8, 10].map((value) => ({ value: String(value), label: String(value) }))} /><Button variant="secondary" disabled={busy || !available.length} onClick={() => void generate()}>Auto-fill</Button><Button disabled={busy || !dirty} onClick={() => void save()}>{busy ? 'Saving…' : 'Save set'}</Button></div>}
   >
     <div className="border-b border-slate-100 p-4"><Tabs value={String(weekId)} onChange={(value) => setWeekId(Number(value))} items={data.weeks.map((week) => ({ value: String(week.id), label: `Round ${week.idx}`, count: data.sets.filter((row) => row.week_id === week.id).length }))} /></div>
     {available.length ? <ScrollArea className="h-[min(58vh,38rem)]"><div className="grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-3">{available.map((problem) => {
@@ -156,7 +155,7 @@ function QuestionEditor({ value, weeks, busy, onClose, onSave }: { value: Proble
     <div className="grid gap-4 sm:grid-cols-[8rem_minmax(0,1fr)]">
       <Field label="Number"><input type="number" className={inputClass} value={draft.number ?? ''} onChange={(event) => update('number', event.target.value ? Number(event.target.value) : null)} /></Field>
       <Field label="Title"><input autoFocus className={inputClass} value={draft.title} onChange={(event) => update('title', event.target.value)} /></Field>
-      <Field label="Difficulty"><select className={inputClass} value={draft.difficulty} onChange={(event) => update('difficulty', event.target.value)}><option>easy</option><option>medium</option><option>hard</option></select></Field>
+      <Field label="Difficulty"><SelectControl label="Difficulty" value={draft.difficulty} onChange={(value) => update('difficulty', value)} options={[{ value: 'easy', label: 'easy' }, { value: 'medium', label: 'medium' }, { value: 'hard', label: 'hard' }]} /></Field>
       <Field label="Difficulty rank"><input type="number" step="0.1" className={inputClass} value={draft.difficulty_rank ?? ''} onChange={(event) => update('difficulty_rank', event.target.value ? Number(event.target.value) : null)} /></Field>
       <div className="sm:col-span-2"><Field label="Source URL"><input className={inputClass} value={draft.url ?? ''} onChange={(event) => update('url', event.target.value)} /></Field></div>
       <fieldset className="sm:col-span-2"><legend className="text-sm font-bold text-slate-800">Available rounds</legend><div className="mt-2 flex flex-wrap gap-2">{weekOptions.map((week) => <label key={week} className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800"><Checkbox checked={draft.available_weeks.includes(week)} onCheckedChange={() => toggleWeek(week)} />Round {week}</label>)}</div></fieldset>

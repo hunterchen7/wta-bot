@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { RoundsData } from '../../admin-types';
-import { Badge, EmptyState, ErrorState, formatDate, inputClass, LoadingState, Metric, PageIntro, Panel, tableClass, tableWrapClass, tdClass, thClass, Tabs } from '../../components/AdminUI';
+import { Badge, EmptyState, ErrorState, formatDate, LoadingState, Metric, PageIntro, Panel, tableClass, tableWrapClass, tdClass, thClass, Tabs } from '../../components/AdminUI';
 import { useAdminData } from '../../hooks/useAdminData';
+import { SelectControl } from '../../components/SelectControl';
 
 export function RoundsPage() {
   const [weekId, setWeekId] = useState<number | null>(null); const [tab, setTab] = useState('sessions');
@@ -12,7 +13,7 @@ export function RoundsPage() {
   if (error || !data) return <ErrorState message={error ?? 'No round data returned.'} onRetry={() => void reload()} />;
   if (!data.cohort) return <div className="space-y-7"><PageIntro title="Rounds" description="Opt-ins, session execution, report completion, and repair work." /><Panel><EmptyState title="No active cohort" description="Create a cohort in Program settings to generate its round calendar." /></Panel></div>;
   return <div className="space-y-7">
-    <PageIntro title="Rounds" description="One operational board for opt-ins, matching results, session exceptions, reports, and repairs." actions={<select aria-label="Select round" className={`${inputClass} w-auto min-w-40`} value={data.selectedWeek?.id ?? ''} onChange={(event) => setWeekId(Number(event.target.value))}>{data.weeks.map((week) => <option value={week.id} key={week.id}>Round {week.idx}</option>)}</select>} />
+    <PageIntro title="Rounds" description="One operational board for opt-ins, matching results, session exceptions, reports, and repairs." actions={<SelectControl label="Select round" className="min-w-40" value={String(data.selectedWeek?.id ?? '')} onChange={(value) => setWeekId(Number(value))} options={data.weeks.map((week) => ({ value: String(week.id), label: `Round ${week.idx}` }))} />} />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Opted in" value={data.optins.length} note={data.optins.length >= 3 ? 'Matching pool is viable' : 'At least 3 required'} tone={data.optins.length >= 3 ? 'good' : 'warn'} /><Metric label="Sessions" value={data.sessions.length} note={`${counts.unscheduled} unscheduled`} tone={counts.unscheduled ? 'warn' : 'default'} /><Metric label="Completed" value={counts.completed} note={data.sessions.length ? `${Math.round(counts.completed / data.sessions.length * 100)}% of sessions` : 'No sessions yet'} /><Metric label="Reports filed" value={`${counts.reports}/${data.sessions.length * 2}`} note={`${Math.max(0, data.sessions.length * 2 - counts.reports)} outstanding`} /></div>
     {data.selectedWeek ? <Panel><div className="grid gap-px bg-slate-100 sm:grid-cols-4"><Timeline label="Opt-in opens" value={data.selectedWeek.optin_opens_at} /><Timeline label="Opt-in closes" value={data.selectedWeek.optin_closes_at} /><Timeline label="Matching" value={data.selectedWeek.match_at} /><Timeline label="Reports due" value={data.selectedWeek.reports_due_at} /></div></Panel> : null}
     <div className="flex"><Tabs value={tab} onChange={setTab} items={[{ value: 'sessions', label: 'Sessions', count: data.sessions.length }, { value: 'optins', label: 'Opt-ins', count: data.optins.length }, { value: 'repairs', label: 'Repairs', count: data.repairs.filter((row) => row.state === 'open').length }]} /></div>
