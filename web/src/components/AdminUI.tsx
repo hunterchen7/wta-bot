@@ -1,5 +1,10 @@
-import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Button as ShadcnButton } from '@/components/ui/button';
+import { Badge as ShadcnBadge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Dialog as ShadcnDialog, DialogClose as ShadcnDialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs as ShadcnTabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export function PageIntro({ eyebrow = 'Admin', title, description, actions }: { eyebrow?: string; title: string; description: string; actions?: ReactNode }) {
   return <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
@@ -9,10 +14,10 @@ export function PageIntro({ eyebrow = 'Admin', title, description, actions }: { 
 }
 
 export function Panel({ children, className = '', title, description, actions }: { children: ReactNode; className?: string; title?: string; description?: string; actions?: ReactNode }) {
-  return <section className={`overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-[0_1px_2px_rgba(15,23,42,.025)] ${className}`}>
+  return <Card className={`gap-0 overflow-hidden rounded-2xl py-0 shadow-[0_1px_2px_rgba(15,23,42,.025)] ${className}`}>
     {title || actions ? <div className="flex min-h-16 flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4"><div>{title ? <h2 className="text-sm font-extrabold text-slate-950">{title}</h2> : null}{description ? <p className="mt-0.5 text-xs text-slate-500">{description}</p> : null}</div>{actions}</div> : null}
     {children}
-  </section>;
+  </Card>;
 }
 
 export function Metric({ label, value, note, tone = 'default' }: { label: string; value: string | number; note?: string; tone?: 'default' | 'good' | 'warn' | 'bad' }) {
@@ -29,7 +34,7 @@ export function Badge({ value }: { value: string | null | undefined }) {
       : normalized.includes('failed') || normalized.includes('flag') || normalized.includes('broken') || normalized.includes('removed') || normalized === 'ghost'
         ? 'border-rose-200 bg-rose-50 text-rose-700'
         : 'border-slate-200 bg-slate-50 text-slate-600';
-  return <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[0.68rem] font-extrabold capitalize ${tone}`}>{(value ?? 'unknown').replaceAll('_', ' ')}</span>;
+  return <ShadcnBadge variant="outline" className={`px-2 py-0.5 text-[0.68rem] font-extrabold capitalize ${tone}`}>{(value ?? 'unknown').replaceAll('_', ' ')}</ShadcnBadge>;
 }
 
 export function EmptyState({ title, description }: { title: string; description: string }) {
@@ -37,7 +42,7 @@ export function EmptyState({ title, description }: { title: string; description:
 }
 
 export function LoadingState() {
-  return <div aria-label="Loading" className="space-y-4 animate-pulse"><div className="h-24 rounded-2xl bg-slate-200/70" /><div className="grid gap-4 sm:grid-cols-3">{[1, 2, 3].map((item) => <div key={item} className="h-28 rounded-2xl bg-slate-200/70" />)}</div><div className="h-80 rounded-2xl bg-slate-200/70" /></div>;
+  return <div aria-label="Loading" className="space-y-4"><Skeleton className="h-24 rounded-2xl" /><div className="grid gap-4 sm:grid-cols-3">{[1, 2, 3].map((item) => <Skeleton key={item} className="h-28 rounded-2xl" />)}</div><Skeleton className="h-80 rounded-2xl" /></div>;
 }
 
 export function ErrorState({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -45,12 +50,12 @@ export function ErrorState({ message, onRetry }: { message: string; onRetry: () 
 }
 
 export function Button({ children, variant = 'primary', className = '', ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'danger' | 'quiet' }) {
-  const variants = { primary: 'bg-slate-950 text-white hover:bg-slate-800', secondary: 'border border-slate-200 bg-white text-slate-700 hover:bg-slate-50', danger: 'bg-rose-700 text-white hover:bg-rose-800', quiet: 'text-slate-600 hover:bg-slate-100' };
-  return <button {...props} className={`rounded-lg px-3.5 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}>{children}</button>;
+  const variants = { primary: 'default', secondary: 'outline', danger: 'destructive', quiet: 'ghost' } as const;
+  return <ShadcnButton {...props} variant={variants[variant]} className={`font-bold ${className}`}>{children}</ShadcnButton>;
 }
 
 export function Tabs({ items, value, onChange }: { items: Array<{ value: string; label: string; count?: number }>; value: string; onChange: (value: string) => void }) {
-  return <div className="flex max-w-full gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-slate-100/80 p-1">{items.map((item) => <button aria-label={item.label} key={item.value} onClick={() => onChange(item.value)} className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-extrabold transition ${value === item.value ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>{item.label}{item.count == null ? null : <span className="ml-1.5 tabular-nums text-slate-400">{item.count}</span>}</button>)}</div>;
+  return <ShadcnTabs value={value} onValueChange={onChange} className="max-w-full overflow-x-auto"><TabsList className="border border-slate-200">{items.map((item) => <TabsTrigger aria-label={item.label} key={item.value} value={item.value} className="text-xs font-extrabold">{item.label}{item.count == null ? null : <span className="ml-1.5 tabular-nums text-slate-400">{item.count}</span>}</TabsTrigger>)}</TabsList></ShadcnTabs>;
 }
 
 export function Dialog({ title, description, children, onClose, actions, wide = false }: { title: string; description?: string; children: ReactNode; onClose: () => void; actions?: ReactNode; wide?: boolean }) {
@@ -73,26 +78,22 @@ export function Dialog({ title, description, children, onClose, actions, wide = 
     if (fallbackTimer.current !== null) window.clearTimeout(fallbackTimer.current);
   }, []);
 
-  return <DialogPrimitive.Root open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose(); }}>
-    <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="dialog-overlay fixed inset-0 z-[70] bg-slate-950/50 backdrop-blur-[2px]" />
-      <DialogPrimitive.Content onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }} onAnimationEnd={(event) => { if (!open && event.target === event.currentTarget) finishClose(); }} className={`dialog-content fixed left-1/2 top-1/2 z-[71] max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-white/60 bg-white shadow-[0_24px_80px_rgba(15,23,42,.3)] focus:outline-none ${wide ? 'max-w-4xl' : 'max-w-lg'}`}>
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-xl">
-          <div>
-            <DialogPrimitive.Title className="text-lg font-black text-slate-950">{title}</DialogPrimitive.Title>
-            {description ? <DialogPrimitive.Description className="mt-1 text-sm leading-5 text-slate-500">{description}</DialogPrimitive.Description> : null}
-          </div>
-          <DialogPrimitive.Close aria-label="Close dialog" className="grid size-9 shrink-0 place-items-center rounded-lg text-xl leading-none text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">×</DialogPrimitive.Close>
+  return <ShadcnDialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose(); }}>
+      <DialogContent onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }} onAnimationEnd={(event) => { if (!open && event.target === event.currentTarget) finishClose(); }} className={`max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto rounded-2xl p-0 shadow-[0_24px_80px_rgba(15,23,42,.3)] [&_[data-slot=dialog-close]]:z-20 ${wide ? 'sm:max-w-4xl' : 'sm:max-w-lg'}`}>
+        <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 pr-14 backdrop-blur-xl">
+          <DialogHeader className="gap-1 text-left">
+            <DialogTitle className="font-black text-slate-950">{title}</DialogTitle>
+            {description ? <DialogDescription className="text-sm leading-5 text-slate-500">{description}</DialogDescription> : null}
+          </DialogHeader>
         </div>
         <div className="p-5">{children}</div>
         {actions ? <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-xl">{actions}</div> : null}
-      </DialogPrimitive.Content>
-    </DialogPrimitive.Portal>
-  </DialogPrimitive.Root>;
+      </DialogContent>
+  </ShadcnDialog>;
 }
 
 export function DialogClose({ children }: { children: ReactNode }) {
-  return <DialogPrimitive.Close asChild>{children}</DialogPrimitive.Close>;
+  return <ShadcnDialogClose asChild>{children}</ShadcnDialogClose>;
 }
 
 export const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15';

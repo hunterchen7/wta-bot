@@ -3,6 +3,8 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": { "@/*": ["./web/src/*"] },
     "lib": ["ES2022"],
     "types": ["@cloudflare/workers-types", "node", "@cloudflare/vitest-pool-workers/types"],
     "jsx": "react-jsx",

@@ -5,6 +5,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: fileURLToPath(new URL('.', import.meta.url)),
+  resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   // Assets live at /assets while the client router is mounted at /app.
   // This lets Workers' SPA fallback serve the same index for every /app route.
   base: '/',
