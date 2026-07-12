@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wta-bot",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "observability": { "enabled": true },
+
+  // Single 15-min tick; all real scheduling lives in the DB (weeks table) and is
+  // dispatched from src/cron.ts. Keeps timezones/DST out of cron expressions.
+  "triggers": { "crons": ["*/15 * * * *"] },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wta-bot",
+      "database_id": "093725cc-b4ef-4247-95f5-b9c5ad342da7",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "routes": [{ "pattern": "wta.hunterchen.ca", "custom_domain": true }]
+
+  // M5: Email Service binding goes here once the domain is enabled for sending
+  // in the dashboard (Email Service is public beta):
+  // "send_email": [{ "name": "EMAIL" }]
+}

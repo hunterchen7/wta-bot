@@ -1,0 +1,26 @@
+{
+  "name": "wta-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "register": "node --env-file=.dev.vars scripts/register-commands.ts",
+    "migrate:local": "wrangler d1 migrations apply wta-bot --local",
+    "migrate:remote": "wrangler d1 migrations apply wta-bot --remote"
+  },
+  "dependencies": {
+    "hono": "^4.8.0"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.4",
+    "@cloudflare/workers-types": "^5.20260708.1",
+    "@types/node": "^26.1.1",
+    "typescript": "^5.8.0",
+    "vitest": "^4.1.10",
+    "wrangler": "^4.110.0"
+  }
+}

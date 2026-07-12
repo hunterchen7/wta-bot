@@ -1,0 +1,13 @@
+# Copy to .dev.vars (gitignored) and fill in.
+# Production equivalents are set with: wrangler secret put <NAME>
+
+# From https://discord.com/developers/applications -> your app
+DISCORD_APP_ID=
+DISCORD_PUBLIC_KEY=
+# Bot tab -> Reset Token
+DISCORD_TOKEN=
+# Right-click your dev server -> Copy Server ID (enable Developer Mode in Discord settings)
+DEV_GUILD_ID=
+
+# openssl rand -hex 32
+FORM_SIGNING_SECRET=
