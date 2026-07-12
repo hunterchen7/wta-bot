@@ -52,7 +52,7 @@ describe('POST /discord', () => {
     expect(await res.json()).toEqual({ type: 1 });
   });
 
-  it('answers unbuilt commands with the milestone stub', async () => {
+  it('answers commands from non-enrolled users gracefully', async () => {
     const res = await sendInteraction(signer, {
       type: 2,
       id: '1',
@@ -64,7 +64,7 @@ describe('POST /discord', () => {
     const json = (await res.json()) as { type: number; data: { content: string; flags: number } };
     expect(json.type).toBe(4);
     expect(json.data.flags).toBe(64);
-    expect(json.data.content).toContain('/report');
+    expect(json.data.content).toContain('/join');
   });
 });
 

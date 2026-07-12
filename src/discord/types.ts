@@ -35,6 +35,7 @@ export type Interaction = {
   id: string;
   token: string;
   guild_id?: string; // absent in DMs
+  channel_id?: string; // where the interaction happened (thread-aware)
   data?: {
     name?: string; // command name
     options?: Array<{ name: string; type: number; value?: string | number | boolean; options?: unknown[] }>;

@@ -54,6 +54,28 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       await sendEmail(env, payload.to, payload.subject, payload.text);
       return;
 
+    case 'backfill': {
+      // One-time Member-role backfill before locking @everyone down.
+      // Requires the Server Members intent (docs/SETUP.md §2).
+      const r = needRest();
+      const members = await r.listAllMembers(payload.guildId);
+      const missing = members.filter((m) => !m.user.bot && !m.roles.includes(payload.roleId));
+      await enqueue(env, 'followup', {
+        interactionToken: payload.interactionToken,
+        message: {
+          content: `Backfill queued: ${missing.length} member(s) get <@&${payload.roleId}> (${members.length} scanned). Grants roll out over the next ticks.`,
+        },
+      });
+      for (const m of missing) {
+        await enqueue(env, 'role_add', {
+          guildId: payload.guildId,
+          userId: m.user.id,
+          roleId: payload.roleId,
+        });
+      }
+      return;
+    }
+
     case 'followup': {
       // Edit the original deferred interaction response.
       const appId = env.DISCORD_APP_ID;

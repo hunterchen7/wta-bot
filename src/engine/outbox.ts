@@ -12,7 +12,8 @@ export type OutboxKind =
   | 'role_add' // { guildId, userId, roleId }
   | 'nickname' // { guildId, userId, nick }
   | 'email' // { to, subject, text }
-  | 'followup'; // { interactionToken, message } — edits a deferred response
+  | 'followup' // { interactionToken, message } — edits a deferred response
+  | 'backfill'; // { guildId, roleId, interactionToken } — member-role backfill
 
 export const MAX_ATTEMPTS = 5;
 

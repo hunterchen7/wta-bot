@@ -151,22 +151,7 @@ describe('/join intake flow', () => {
 });
 
 describe('nickname sync', () => {
-  function stubDiscord() {
-    const calls: Array<{ method?: string; url: string; body?: string }> = [];
-    const realFetch = globalThis.fetch;
-    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url.startsWith('https://discord.com/')) {
-        calls.push({ method: init?.method, url, body: init?.body as string });
-        return Promise.resolve(new Response('{}', { status: 200 }));
-      }
-      return realFetch(input as any, init);
-    });
-    return calls;
-  }
-
-  it('sets the server nickname to the entered name (truncated to 32)', async () => {
-    const calls = stubDiscord();
+  it('enqueues a nickname update (truncated to 32) for guild submissions', async () => {
     const longName = 'A'.repeat(40);
     await sendInteraction(
       signer,
@@ -183,18 +168,20 @@ describe('nickname sync', () => {
         ),
         guild_id: '777000111',
       },
-      { DISCORD_TOKEN: 'test-token', ALLOWED_GUILD_IDS: '777000111' },
+      { ALLOWED_GUILD_IDS: '777000111' },
     );
-    await vi.waitFor(() => {
-      const patch = calls.find((c) => c.method === 'PATCH');
-      expect(patch?.url).toBe('https://discord.com/api/v10/guilds/777000111/members/424242');
-      expect(JSON.parse(patch!.body!)).toEqual({ nick: 'A'.repeat(32) });
+    const row = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'nickname' ORDER BY id DESC LIMIT 1",
+    ).first<{ payload: string }>();
+    expect(row).not.toBeNull();
+    expect(JSON.parse(row!.payload)).toEqual({
+      guildId: '777000111',
+      userId: '424242',
+      nick: 'A'.repeat(32),
     });
-    vi.unstubAllGlobals();
   });
 
   it('skips nickname sync in DMs', async () => {
-    const calls = stubDiscord();
     await sendInteraction(
       signer,
       modalSubmit(
@@ -207,11 +194,11 @@ describe('nickname sync', () => {
         ],
         '535353',
       ),
-      { DISCORD_TOKEN: 'test-token' },
     );
-    await new Promise((r) => setTimeout(r, 50));
-    expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
-    vi.unstubAllGlobals();
+    const row = await env.DB.prepare(
+      "SELECT count(*) AS n FROM outbox WHERE kind = 'nickname' AND payload LIKE '%535353%'",
+    ).first<{ n: number }>();
+    expect(row?.n).toBe(0);
   });
 });
 

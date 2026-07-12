@@ -5,6 +5,9 @@
 
 const SUB_COMMAND = 1;
 const STRING = 3;
+const USER = 6;
+const CHANNEL = 7;
+const ROLE = 8;
 
 export type CommandOption = {
   type: number;
@@ -49,5 +52,94 @@ export const COMMANDS: Command[] = [
         options: [{ type: STRING, name: 'details', description: 'What happened?', required: true }],
       },
     ],
+  },
+  {
+    name: 'setup',
+    description: 'Organizers: configure the bot for this server',
+    default_member_permissions: '32',
+    options: [
+      {
+        type: SUB_COMMAND,
+        name: 'channels',
+        description: 'Where the bot posts',
+        options: [
+          { type: CHANNEL, name: 'announce', description: 'Opt-ins + pairing announcements' },
+          { type: CHANNEL, name: 'organizer', description: 'Digests, case files, enrollment feed' },
+          { type: CHANNEL, name: 'threads', description: 'Parent channel for session threads' },
+          { type: CHANNEL, name: 'start_here', description: 'Verification panel channel' },
+          { type: CHANNEL, name: 'intros', description: 'Where verified intros get posted (optional)' },
+        ],
+      },
+      {
+        type: SUB_COMMAND,
+        name: 'roles',
+        description: 'Roles the bot grants/checks',
+        options: [
+          { type: ROLE, name: 'member', description: 'Granted by verification' },
+          { type: ROLE, name: 'participant', description: 'Granted on enrollment' },
+          { type: ROLE, name: 'organizer', description: 'Admin-command access' },
+        ],
+      },
+      {
+        type: SUB_COMMAND,
+        name: 'cohort',
+        description: 'Start a cohort — the cron runs the rest',
+        options: [
+          { type: STRING, name: 'start_monday', description: 'Week 1 Monday, YYYY-MM-DD', required: true },
+          { type: STRING, name: 'name', description: 'Cohort name' },
+        ],
+      },
+      { type: SUB_COMMAND, name: 'verify', description: 'Post the verification panel' },
+    ],
+  },
+  {
+    name: 'verify',
+    description: 'Organizers: verification utilities',
+    default_member_permissions: '32',
+    options: [
+      { type: SUB_COMMAND, name: 'backfill', description: 'Grant the member role to all existing members' },
+    ],
+  },
+  {
+    name: 'standing',
+    description: "Organizers: a participant's progress, strikes, and incidents",
+    default_member_permissions: '32',
+    options: [{ type: USER, name: 'user', description: 'Who?', required: true }],
+  },
+  {
+    name: 'excuse',
+    description: "Organizers: excuse someone's latest incident (good-reason cases)",
+    default_member_permissions: '32',
+    options: [{ type: USER, name: 'user', description: 'Who?', required: true }],
+  },
+  {
+    name: 'participant',
+    description: 'Organizers: hold, release, or remove a participant',
+    default_member_permissions: '32',
+    options: [
+      {
+        type: SUB_COMMAND,
+        name: 'hold',
+        description: 'Hold out of matching',
+        options: [{ type: USER, name: 'user', description: 'Who?', required: true }],
+      },
+      {
+        type: SUB_COMMAND,
+        name: 'release',
+        description: 'Release a hold',
+        options: [{ type: USER, name: 'user', description: 'Who?', required: true }],
+      },
+      {
+        type: SUB_COMMAND,
+        name: 'remove',
+        description: 'Remove from the program',
+        options: [{ type: USER, name: 'user', description: 'Who?', required: true }],
+      },
+    ],
+  },
+  {
+    name: 'digest',
+    description: 'Organizers: post the weekly digest now',
+    default_member_permissions: '32',
   },
 ];
