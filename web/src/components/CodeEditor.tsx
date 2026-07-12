@@ -1,7 +1,7 @@
 import { useMemo, useState, type UIEvent } from 'react';
 import { Textarea } from './ui/textarea';
+import { detectLanguage, type SupportedLanguage } from '../lib/code-language';
 
-type SupportedLanguage = 'Python' | 'Java' | 'JavaScript/TypeScript' | 'C/C++' | 'Rust' | 'Go' | 'Other';
 type Token = { text: string; kind?: 'comment' | 'string' | 'number' | 'keyword' | 'type' | 'literal' | 'function' };
 
 const tokenColors: Record<NonNullable<Token['kind']>, string> = {
@@ -37,21 +37,6 @@ export function CodeEditor({ value, invalid, onChange }: { value: string; invali
   </div>;
 }
 
-export function detectLanguage(code: string): SupportedLanguage | null {
-  if (code.trim().length < 12) return null;
-  const scores: Array<[SupportedLanguage, number]> = [
-    ['Python', score(code, [/\bdef\s+\w+\s*\(/g, /\b(?:from|import)\s+[\w.]+/g, /\b(?:elif|None|True|False)\b/g, /^\s*(?:if|for|while|def|class).*:\s*$/gm])],
-    ['Java', score(code, [/\bpublic\s+static\s+void\s+main\b/g, /\bSystem\.out\./g, /\b(?:public|private|protected)\s+class\b/g, /\b(?:ArrayList|HashMap|String)\s*</g])],
-    ['JavaScript/TypeScript', score(code, [/\b(?:const|let|var)\s+[$\w]+/g, /=>/g, /\bconsole\.log\b/g, /\b(?:interface|type)\s+\w+/g, /\bfunction\s+\w+\s*\(/g])],
-    ['C/C++', score(code, [/#include\s*[<"]/g, /\bstd::/g, /\b(?:cout|cin)\s*<</g, /\b(?:vector|string|unordered_map)\s*</g, /\bint\s+main\s*\(/g])],
-    ['Rust', score(code, [/\bfn\s+\w+\s*\(/g, /\blet\s+mut\b/g, /\bprintln!\s*\(/g, /\b(?:impl|trait)\s+\w+/g, /\buse\s+std::/g])],
-    ['Go', score(code, [/\bpackage\s+main\b/g, /\bfunc\s+\w+\s*\(/g, /\bfmt\.(?:Print|Scan)/g, /\b:=/g, /\b(?:chan|defer|goroutine)\b/g])],
-  ];
-  scores.sort((a, b) => b[1] - a[1]);
-  return scores[0]![1] >= 2 && scores[0]![1] > scores[1]![1] ? scores[0]![0] : null;
-}
-
-function score(code: string, patterns: RegExp[]) { return patterns.reduce((total, pattern) => total + Math.min(code.match(pattern)?.length ?? 0, 3), 0); }
 function highlight(code: string, language: SupportedLanguage): Token[] {
   const tokens: Token[] = [];
   const pattern = /(\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|\b(?:0x[\da-f]+|\d+(?:\.\d+)?)\b|\b[A-Za-z_$][\w$]*\b)/gi;
