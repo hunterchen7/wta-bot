@@ -4,6 +4,7 @@ import * as intake from '../intake';
 import { getParticipant, upsertParticipant } from '../participants';
 import { signToken } from '../forms/token';
 import { ephemeral } from './components';
+import { DiscordRest } from './rest';
 import {
   ADMINISTRATOR,
   collectModalValues,
@@ -35,9 +36,23 @@ export async function handleInteraction(c: Ctx) {
 
   const interaction = JSON.parse(body) as Interaction;
 
+  // PING must always pong — it's how Discord verifies the endpoint.
+  if (interaction.type === InteractionType.PING) {
+    return c.json({ type: ResponseType.PONG });
+  }
+
+  // Public app, private program: interactions from foreign guilds get a
+  // polite refusal, touch nothing, and the bot leaves that guild.
+  if (!guildAllowed(c.env, interaction)) {
+    leaveForeignGuild(c, interaction.guild_id!);
+    return c.json(
+      ephemeral(
+        'This bot runs a private program for **Western Tech Alumni** and does not work in other servers. It will remove itself shortly. 👋',
+      ),
+    );
+  }
+
   switch (interaction.type) {
-    case InteractionType.PING:
-      return c.json({ type: ResponseType.PONG });
     case InteractionType.APPLICATION_COMMAND:
       return handleCommand(c, interaction);
     case InteractionType.MESSAGE_COMPONENT:
@@ -109,6 +124,27 @@ async function handleComponent(c: Ctx, interaction: Interaction) {
       return c.json(intake.modal3(existing));
     default:
       return c.json(ephemeral('🚧 Not implemented yet.'));
+  }
+}
+
+function guildAllowed(env: Env, interaction: Interaction): boolean {
+  const raw = env.ALLOWED_GUILD_IDS?.trim();
+  if (!raw) return true; // unconfigured (pre-setup) — allow
+  if (!interaction.guild_id) return true; // DMs are user-scoped, always fine
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .includes(interaction.guild_id);
+}
+
+function leaveForeignGuild(c: Ctx, guildId: string) {
+  const token = c.env.DISCORD_TOKEN;
+  if (!token) return;
+  const leave = new DiscordRest(token).leaveGuild(guildId).catch(() => {});
+  try {
+    c.executionCtx.waitUntil(leave);
+  } catch {
+    // no execution context (tests) — the promise still runs
   }
 }
 

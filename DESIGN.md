@@ -111,6 +111,7 @@ One TypeScript **Cloudflare Worker** on Hunter's personal account:
 - **Cron triggers** — opt-in open/close, matching, nudge sweeps, packet delivery (T−24h scan), session-start form drops, deadline/overdue sweeps, digests, DM-failure email retries.
 - **Bindings:** D1 (db), Email Service (send), secrets: `DISCORD_TOKEN`, `DISCORD_PUBLIC_KEY`, `APP_ID`, `FORM_SIGNING_SECRET`.
 - Outbound Discord REST for DMs/threads/announcements (paced against rate limits; ≤200 participants is comfortable).
+- **Public app, private program:** the Discord app stays public (Hunter's call — avoids install-link friction); the backend enforces an `ALLOWED_GUILD_IDS` allowlist. Interactions from foreign guilds get an ephemeral refusal, write nothing, and the bot auto-leaves that guild. DMs and endpoint PINGs are unaffected. Unset allowlist = allow (pre-setup only).
 - Command registration script run on deploy. Local dev via `wrangler dev` + a dev guild.
 - **All TypeScript** — including ops scripts (run directly with Node ≥23 type-stripping; no `.mjs`).
 - **Testing:** vitest + `@cloudflare/vitest-pool-workers` — tests execute inside the real Workers runtime against a real D1 with migrations applied. Every milestone lands with `npm run typecheck` and `npm test` green; work is committed in small chunks.

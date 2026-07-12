@@ -11,3 +11,8 @@ DEV_GUILD_ID=
 
 # openssl rand -hex 32
 FORM_SIGNING_SECRET=
+
+# Comma-separated guild ids the bot serves (the app is public on Discord's
+# side; this is the real gate). Unset = allow all, for pre-setup only.
+# Set to your dev guild locally; dev+prod guild ids in production.
+ALLOWED_GUILD_IDS=

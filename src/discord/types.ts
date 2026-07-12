@@ -34,6 +34,7 @@ export type Interaction = {
   type: number;
   id: string;
   token: string;
+  guild_id?: string; // absent in DMs
   data?: {
     name?: string; // command name
     options?: Array<{ name: string; type: number; value?: string | number | boolean; options?: unknown[] }>;

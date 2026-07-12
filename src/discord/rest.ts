@@ -30,4 +30,9 @@ export class DiscordRest {
     });
     return this.request('POST', `/channels/${channel.id}/messages`, message);
   }
+
+  /** Leave a guild the bot shouldn't be in (public app + private program). */
+  async leaveGuild(guildId: string) {
+    return this.request('DELETE', `/users/@me/guilds/${guildId}`);
+  }
 }

@@ -30,7 +30,11 @@ export async function makeSigner() {
 export type Signer = Awaited<ReturnType<typeof makeSigner>>;
 
 /** POSTs a signed interaction to /discord with the signer's key configured. */
-export async function sendInteraction(signer: Signer, interaction: unknown) {
+export async function sendInteraction(
+  signer: Signer,
+  interaction: unknown,
+  envOverrides: Record<string, unknown> = {},
+) {
   const body = JSON.stringify(interaction);
   const ts = '1720000000';
   return app.request(
@@ -43,7 +47,7 @@ export async function sendInteraction(signer: Signer, interaction: unknown) {
       },
       body,
     },
-    { ...env, DISCORD_PUBLIC_KEY: signer.publicKeyHex },
+    { ...env, DISCORD_PUBLIC_KEY: signer.publicKeyHex, ...envOverrides },
   );
 }
 
