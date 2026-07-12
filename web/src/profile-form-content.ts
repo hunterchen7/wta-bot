@@ -28,8 +28,7 @@ export const profileFormContent = {
     name: { label: "Full name" },
     preferredEmail: {
       label: "Preferred email",
-      help:
-        "Use a personal email you expect to keep long-term, not your school email. This is used for dashboard login and optional reminders.",
+      help: "A personal email is recommended.",
     },
     westernEmail: { label: "Western email" },
     year: { label: "Incoming year" },
