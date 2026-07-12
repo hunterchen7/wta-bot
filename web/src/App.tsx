@@ -4,6 +4,7 @@ import { getDashboard, logout, type DashboardData } from './api';
 import { AppSidebar } from './components/AppSidebar';
 import { Icon } from './components/Icon';
 import { ThemeToggle } from './components/ThemeToggle';
+import { useDocumentTitle } from './components/DocumentTitle';
 import { DashboardContext } from './dashboard-context';
 import { preloadAdminRoute, preloadAllAdminModules } from './admin-routes';
 
@@ -13,6 +14,7 @@ export function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readInitialSidebarState);
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  useDocumentTitle(pageTitle(location.pathname));
 
   const refresh = useCallback(async () => {
     try {

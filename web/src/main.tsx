@@ -6,6 +6,7 @@ import { adminRouteModules } from './admin-routes';
 import { ProgressPage } from './pages/ProgressPage';
 import { SettingsPage } from './pages/SettingsPage';
 import { OrganizerPreviewGate } from './components/OrganizerPreviewGate';
+import { DocumentTitle } from './components/DocumentTitle';
 import './styles.css';
 
 const OperationsPage = lazy(adminRouteModules.operations);
@@ -25,20 +26,21 @@ const PreviewPage = lazy(() => import('./pages/PreviewPage').then((module) => ({
 const EnrollmentPage = lazy(() => import('./pages/EnrollmentPage').then((module) => ({ default: module.EnrollmentPage })));
 const deferred = (page: ReactNode) => <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl bg-slate-200/70" />}>{page}</Suspense>;
 const publicDeferred = (page: ReactNode) => <Suspense fallback={<div className="min-h-screen animate-pulse bg-stone-50 p-6"><div className="mx-auto h-96 max-w-3xl rounded-3xl bg-slate-200/70" /></div>}>{page}</Suspense>;
+const titled = (title: string, page: ReactNode) => <><DocumentTitle title={title} />{page}</>;
 
 const router = createBrowserRouter(
   [
     { path: '/', element: <Navigate to="/login" replace /> },
-    { path: '/login', element: publicDeferred(<LoginPage />) },
-    { path: '/bank', element: publicDeferred(<BankPage />) },
-    { path: '/preview', element: publicDeferred(<OrganizerPreviewGate><PreviewPage /></OrganizerPreviewGate>) },
-    { path: '/preview/form/interviewee_report', element: publicDeferred(<OrganizerPreviewGate><ReportPage previewKind="interviewee_report" /></OrganizerPreviewGate>) },
-    { path: '/preview/form/interviewer_report', element: publicDeferred(<OrganizerPreviewGate><ReportPage previewKind="interviewer_report" /></OrganizerPreviewGate>) },
-    { path: '/preview/packet', element: publicDeferred(<OrganizerPreviewGate><ProblemPage preview /></OrganizerPreviewGate>) },
-    { path: '/preview/enrollment', element: publicDeferred(<OrganizerPreviewGate><EnrollmentPage preview /></OrganizerPreviewGate>) },
-    { path: '/f/:token', element: publicDeferred(<ReportPage />) },
-    { path: '/p/:token', element: publicDeferred(<ProblemPage />) },
-    { path: '/enroll/:token', element: publicDeferred(<EnrollmentPage />) },
+    { path: '/login', element: titled('Sign in', publicDeferred(<LoginPage />)) },
+    { path: '/bank', element: titled('Question bank', publicDeferred(<BankPage />)) },
+    { path: '/preview', element: titled('Form previews', publicDeferred(<OrganizerPreviewGate><PreviewPage /></OrganizerPreviewGate>)) },
+    { path: '/preview/form/interviewee_report', element: titled('Interviewee report preview', publicDeferred(<OrganizerPreviewGate><ReportPage previewKind="interviewee_report" /></OrganizerPreviewGate>)) },
+    { path: '/preview/form/interviewer_report', element: titled('Interviewer report preview', publicDeferred(<OrganizerPreviewGate><ReportPage previewKind="interviewer_report" /></OrganizerPreviewGate>)) },
+    { path: '/preview/packet', element: titled('Question preview', publicDeferred(<OrganizerPreviewGate><ProblemPage preview /></OrganizerPreviewGate>)) },
+    { path: '/preview/enrollment', element: titled('Enrollment preview', publicDeferred(<OrganizerPreviewGate><EnrollmentPage preview /></OrganizerPreviewGate>)) },
+    { path: '/f/:token', element: titled('Interview report', publicDeferred(<ReportPage />)) },
+    { path: '/p/:token', element: titled('Interview question', publicDeferred(<ProblemPage />)) },
+    { path: '/enroll/:token', element: titled('Enrollment', publicDeferred(<EnrollmentPage />)) },
     {
       path: '/app',
       element: <AppLayout />,
