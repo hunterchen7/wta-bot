@@ -3,6 +3,11 @@ import { PageIntro, Panel, Tabs } from '../../components/AdminUI';
 import { Button } from '../../components/ui/button';
 
 const forms = {
+  enrollment: {
+    label: 'Program enrollment',
+    description: 'Discord-linked identity, program goals, experience, learning interests, and reminder preferences.',
+    path: '/preview/enrollment',
+  },
   interviewee_report: {
     label: 'Interviewee report',
     description: 'Attendance, recording and code links, experience ratings, and private or shared feedback.',
@@ -18,7 +23,7 @@ const forms = {
 type FormKind = keyof typeof forms;
 
 export function FormsPage() {
-  const [kind, setKind] = useState<FormKind>('interviewee_report');
+  const [kind, setKind] = useState<FormKind>('enrollment');
   const form = forms[kind];
   return <div className="space-y-7">
     <PageIntro title="Forms" description="Inspect the exact participant-facing reports. These previews use the live form schemas and never write program data." actions={<Button asChild variant="outline"><a href={form.path} target="_blank" rel="noreferrer">Open full preview ↗</a></Button>} />
