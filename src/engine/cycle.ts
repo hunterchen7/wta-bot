@@ -226,10 +226,22 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
   }
 
   if (cfg.announce_channel_id) {
+    // Open question bank: publish the round's set with the pairings.
+    const { results: bank } = await env.DB.prepare(
+      `SELECT p.number, p.title, p.url FROM week_problem_sets wps
+       JOIN problems p ON p.id = wps.problem_id WHERE wps.week_id = ?1 ORDER BY p.id`,
+    )
+      .bind(week.id)
+      .all<{ number: number | null; title: string; url: string | null }>();
+    const bankLines = bank.length
+      ? `\n📚 **Round ${week.idx} question bank** (interviewers pick one):\n` +
+        bank.map((p) => `• ${p.url ? `[${p.number ? `#${p.number} ` : ''}${p.title}](${p.url})` : `${p.number ? `#${p.number} ` : ''}${p.title}`}`).join('\n') +
+        `\nAlso at ${env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca'}/bank`
+      : '';
     await enqueue(env, 'channel_msg', {
       channelId: cfg.announce_channel_id,
       message: {
-        content: `🤝 **Round ${week.idx} pairings are out** — ${result.edges.length} sessions across ${perPerson.size} participants. Check your DMs and session threads!`,
+        content: `🤝 **Round ${week.idx} pairings are out** — ${result.edges.length} sessions across ${perPerson.size} participants. Check your DMs and session threads!${bankLines}`,
       },
     });
   }

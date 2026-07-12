@@ -48,6 +48,43 @@ const nav = (user: SessionUser) =>
   </nav>`;
 
 // ---------------------------------------------------------------------------
+// Public question bank — the current round's set (open-bank model; private
+// interviewer packets remain a future feature behind settings.packet_mode).
+
+web.get('/bank', async (c) => {
+  const cohort = await activeCohort(c.env);
+  if (!cohort) return c.html(page('Question bank', '<h1>Question bank</h1><p class="sub">No active cohort yet.</p>'));
+  const weeks = await cohortWeeks(c.env, cohort.id);
+  const now = Date.now();
+  const current =
+    weeks.find(
+      (w) => now >= new Date(w.optin_opens_at).getTime() && now <= new Date(w.grace_until ?? w.reports_due_at).getTime(),
+    ) ??
+    weeks.find((w) => now < new Date(w.optin_opens_at).getTime()) ??
+    weeks[weeks.length - 1]!;
+  const { results: bank } = await c.env.DB.prepare(
+    `SELECT p.number, p.title, p.url, p.difficulty FROM week_problem_sets wps
+     JOIN problems p ON p.id = wps.problem_id WHERE wps.week_id = ?1 ORDER BY p.id`,
+  )
+    .bind(current.id)
+    .all<any>();
+  const body = `
+    <h1>📚 Round ${current.idx} question bank</h1>
+    <p class="sub">${cohort.name} · interviewers pick <b>one</b> problem from this set per session and record it in their report. Everyone can study these — that's the point.</p>
+    ${
+      bank.length
+        ? `<div class="card"><table><tr><th>#</th><th>Problem</th><th>Difficulty</th></tr>${bank
+            .map(
+              (p: any) =>
+                `<tr><td>${esc(p.number ?? '')}</td><td>${p.url ? `<a href="${esc(p.url)}" rel="noreferrer">${esc(p.title)} ↗</a>` : esc(p.title)}</td><td><span class="tag">${esc(p.difficulty)}</span></td></tr>`,
+            )
+            .join('')}</table></div>`
+        : '<div class="card">Not published yet — check back before the round starts.</div>'
+    }`;
+  return c.html(page('Question bank', body));
+});
+
+// ---------------------------------------------------------------------------
 // Public form previews — organizers walk every flow without seeding data.
 // Read-only: submissions are disabled and nothing here touches the DB.
 
@@ -60,7 +97,8 @@ web.get('/preview', (c) =>
        <div class="card">
          <p>📝 <a href="/preview/form/interviewee_report">Interviewee report</a> — filed by the person who was interviewed (recording link + code paste)</p>
          <p>🎙️ <a href="/preview/form/interviewer_report">Interviewer report</a> — filed by the interviewer (ratings + verdict)</p>
-         <p>🎯 <a href="/preview/packet">Interviewer packet</a> — the problem page interviewers get 24h before a session</p>
+         <p>📚 <a href="/bank">Question bank</a> — the current round's open problem set (live page)</p>
+         <p>🎯 <a href="/preview/packet">Interviewer packet</a> — <i>future feature, currently off</i>: private problem page interviewers would get 24h pre-session</p>
          <p>🔐 <a href="/login">Login</a> → dashboard (live, needs a roster email)</p>
        </div>`,
     ),

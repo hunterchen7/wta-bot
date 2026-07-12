@@ -109,6 +109,72 @@ describe('problem bank', () => {
     expect(after.problem_id).not.toBe(before.problem_id);
   });
 
+  it('serves the public /bank page with the current round set', async () => {
+    const res = await app.request('/bank', {}, env);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('question bank');
+    expect(html).toContain('Two Sum'); // round 1 is current relative to test clock? — falls back to a published set
+  });
+
+  it('open-bank mode: interviewer report offers the round set and records the pick', async () => {
+    const { signFormToken } = await import('../src/forms/token');
+    // fresh session in week 3, no packet assignment
+    const ins = await env.DB.prepare(
+      `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, scheduled_at)
+       VALUES (?1, 2, 1, 'scheduled', ?2)`,
+    )
+      .bind(weekIds[2], new Date().toISOString())
+      .run();
+    const sid = Number(ins.meta.last_row_id);
+    const fi = await env.DB.prepare(
+      `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at)
+       VALUES ('interviewer_report', ?1, 2, ?2, ?3)`,
+    )
+      .bind(sid, crypto.randomUUID(), new Date(Date.now() + 86400_000).toISOString())
+      .run();
+    const token = await signFormToken(env.FORM_SIGNING_SECRET!, Number(fi.meta.last_row_id), new Date(Date.now() + 86400_000));
+
+    const res = await app.request(`/f/${token}`, {}, env);
+    const html = await res.text();
+    expect(html).toContain('Which problem from the bank did you use?');
+    expect(html).toContain('LRU Cache');
+
+    const set = await env.DB.prepare('SELECT problem_id FROM week_problem_sets WHERE week_id = ?1 LIMIT 1')
+      .bind(weekIds[2])
+      .first<any>();
+    const submit = await app.request(
+      `/f/${token}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          attendance_self: 'yes',
+          attendance_partner: 'yes',
+          camera_self: 'yes',
+          camera_partner: 'yes',
+          problem_used: String(set.problem_id),
+          rating_problem_solving: '4',
+          rating_communication: '4',
+          rating_code_quality: '4',
+          hints: 'few',
+          verdict: 'pass',
+          verdict_reason: 'Good.',
+        }).toString(),
+      },
+      env,
+    );
+    expect(submit.status).toBe(200);
+    const s = await env.DB.prepare('SELECT problem_id FROM sessions WHERE id = ?1').bind(sid).first<any>();
+    expect(s.problem_id).toBe(set.problem_id);
+    const exp = await env.DB.prepare(
+      "SELECT count(*) AS n FROM exposures WHERE session_id = ?1 AND role = 'interviewer'",
+    )
+      .bind(sid)
+      .first<any>();
+    expect(exp.n).toBe(1);
+  });
+
   it('never hands the interviewee a problem they have seen', async () => {
     // Expose Quinn (participant 2) to every W3 problem except one.
     const { results: set } = await env.DB.prepare(

@@ -74,6 +74,13 @@ export async function onReportSubmitted(
     }
     // 4) Both in -> relay shared fields both ways.
     await relayShared(env, session.id, instance, payload, other, otherPayload);
+
+    // Open-bank mode: if the interviewer's report just recorded the problem
+    // and the interviewee already filed, release the solution now.
+    if (instance.kind === 'interviewer_report') {
+      const { releaseSolution } = await import('./problems');
+      await releaseSolution(env, session.id, origin ?? env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca');
+    }
   }
 
   // 5) W3 verdict: pass -> recording review queue; fail/borderline recorded.

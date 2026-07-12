@@ -64,8 +64,10 @@ interaction — no deploy.
    (bot role must sit above these, with Manage Roles + Manage Nicknames on)
 3. `/setup verify` → panel appears in #start-here; `/verify backfill` once
    (needs Server Members intent toggled on); then lock `@everyone` to #start-here.
-4. Load the bank: `/problems add` per problem (statement/hints/solution get
-   pasted in the dashboard → Problems), then `/problems setweek 1..3`.
+4. Load the bank: `/problems add` per problem (solution notes pasted in the
+   dashboard → Problems), then `/problems setweek 1..3`. Sets are **public**:
+   `/bank` + the pairing announcement; interviewers record their pick on the
+   report. (Private T-24h packets exist but are off — `settings.packet_mode`.)
 5. `/setup cohort start_date:YYYY-MM-DD name:"Summer 2026"` — round 1's first
    day, any weekday (2026: `2026-07-26`). **That's the last manual step.** The
    cron runs everything else.

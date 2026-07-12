@@ -152,7 +152,8 @@ export async function swapProblem(env: Env, sessionId: number, requesterDiscordI
   return `Swapped ✅ — new packet DM incoming: **${next.title}**.`;
 }
 
-/** After the interviewee files their report: exposure + solution link. */
+/** After the interviewee files their report: exposure + solution link.
+ *  Idempotent — the interviewee exposure row marks it done. */
 export async function releaseSolution(env: Env, sessionId: number, origin: string): Promise<void> {
   const s = await env.DB.prepare(
     `SELECT s.problem_id, s.interviewee_id, p.discord_id FROM sessions s
@@ -161,6 +162,12 @@ export async function releaseSolution(env: Env, sessionId: number, origin: strin
     .bind(sessionId)
     .first<{ problem_id: number | null; interviewee_id: number; discord_id: string }>();
   if (!s?.problem_id) return;
+  const already = await env.DB.prepare(
+    `SELECT 1 AS x FROM exposures WHERE session_id = ?1 AND role = 'interviewee' LIMIT 1`,
+  )
+    .bind(sessionId)
+    .first();
+  if (already) return;
   await env.DB.prepare(
     `INSERT INTO exposures (participant_id, problem_id, role, session_id) VALUES (?1, ?2, 'interviewee', ?3)`,
   )

@@ -48,7 +48,13 @@ export async function tick(env: Env, now: Date): Promise<void> {
     await formDropScan(env, origin, now).catch((err) => console.error('formDropScan failed:', err));
     await deadlineSweep(env, origin, now).catch((err) => console.error('deadlineSweep failed:', err));
     await repairScan(env, now).catch((err) => console.error('repairScan failed:', err));
-    await packetScan(env, origin, now).catch((err) => console.error('packetScan failed:', err));
+    // Private interviewer packets are a future feature (settings.packet_mode = 'on').
+    // Default model: the round's question bank is open (/bank + announcements)
+    // and interviewers report which problem they used.
+    const { getSetting } = await import('./config');
+    if ((await getSetting(env, 'packet_mode')) === 'on') {
+      await packetScan(env, origin, now).catch((err) => console.error('packetScan failed:', err));
+    }
   }
 
   const budget = Math.max(1, Number(env.OUTBOX_BUDGET ?? 20) || 20);

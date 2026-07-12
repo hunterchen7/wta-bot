@@ -484,7 +484,7 @@ async function problemsCommand(c: Ctx, interaction: Interaction) {
         ephemeral(
           `Round ${idx} set (${chosen.length}${chosen.length < size ? ` of ${size} requested — bank is thin` : ''}, band ${band?.[0]}–${band?.[1]}):\n` +
             chosen.map((p) => `• ${p.title}`).join('\n') +
-            `\nInterviewers get packets automatically 24h before each session.${idx === 3 ? ' (W3: sanity-check these — the band is tight on purpose.)' : ''}`,
+            `\nPublished at ${c.env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca'}/bank and in the round announcement — interviewers pick one and record it in their report.${idx === 3 ? ' (R3: sanity-check these — the band is tight on purpose.)' : ''}`,
         ),
       );
     }

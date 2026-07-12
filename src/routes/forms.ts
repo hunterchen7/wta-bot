@@ -62,6 +62,37 @@ function contextHeader(inst: LoadedInstance): string {
       Due <b>${esc(formatToronto(inst.deadline_at))}</b>. You can re-submit until then — last submission wins.</p>`;
 }
 
+/** Open-bank mode: the interviewer reports which problem they used, picked
+ *  from the round's published set. (When packets assign problems up front,
+ *  session.problem_id is already set and this field is skipped.) */
+async function dynamicFields(env: Env, inst: LoadedInstance) {
+  const base = fieldsFor(inst.kind);
+  if (!base) return null;
+  if (inst.kind !== 'interviewer_report') return base;
+  const assigned = await env.DB.prepare('SELECT problem_id FROM sessions WHERE id = ?1')
+    .bind(inst.session_id)
+    .first<{ problem_id: number | null }>();
+  if (assigned?.problem_id) return base;
+  const { results: set } = await env.DB.prepare(
+    `SELECT p.id, p.title, p.number FROM week_problem_sets wps
+     JOIN problems p ON p.id = wps.problem_id
+     WHERE wps.week_id = (SELECT week_id FROM sessions WHERE id = ?1)
+     ORDER BY p.id`,
+  )
+    .bind(inst.session_id)
+    .all<{ id: number; title: string; number: number | null }>();
+  if (set.length === 0) return base;
+  const picker = {
+    id: 'problem_used',
+    label: 'Which problem from the bank did you use?',
+    type: 'select' as const,
+    required: true,
+    options: set.map((p) => ({ value: String(p.id), label: `${p.number ? `#${p.number} ` : ''}${p.title}` })),
+    help: "This round's bank — your interviewee gets the solution notes after they file their report.",
+  };
+  return [...base.slice(0, 4), picker, ...base.slice(4)];
+}
+
 forms.get('/f/:token', async (c) => {
   if (!c.env.FORM_SIGNING_SECRET) return c.html(page('Not configured', '<h1>Form rail not configured</h1>'), 503);
   const inst = await loadInstance(c.env, c.req.param('token'));
@@ -71,7 +102,7 @@ forms.get('/f/:token', async (c) => {
       404,
     );
   }
-  const fields = fieldsFor(inst.kind);
+  const fields = await dynamicFields(c.env, inst);
   if (!fields) return c.html(page('Unknown form', '<h1>Unknown form type</h1>'), 400);
   const existing = inst.payload ? (JSON.parse(inst.payload) as Record<string, string>) : {};
   const late = new Date() > new Date(inst.deadline_at);
@@ -90,7 +121,7 @@ forms.post('/f/:token', async (c) => {
   if (!c.env.FORM_SIGNING_SECRET) return c.text('not configured', 503);
   const inst = await loadInstance(c.env, c.req.param('token'));
   if (!inst) return c.html(page('Link invalid or expired', '<h1>Link invalid or expired</h1>'), 404);
-  const fields = fieldsFor(inst.kind);
+  const fields = await dynamicFields(c.env, inst);
   if (!fields) return c.html(page('Unknown form', '<h1>Unknown form type</h1>'), 400);
 
   const body = await c.req.parseBody();
@@ -107,6 +138,25 @@ forms.post('/f/:token', async (c) => {
   }
 
   if (new Date() > new Date(inst.deadline_at)) payload._late = 'true';
+
+  // Open-bank mode: record the interviewer's problem pick on the session
+  // (+ interviewer exposure) before downstream effects run.
+  if (inst.kind === 'interviewer_report' && payload.problem_used) {
+    await c.env.DB.prepare(
+      'UPDATE sessions SET problem_id = ?1 WHERE id = ?2 AND problem_id IS NULL',
+    )
+      .bind(Number(payload.problem_used), inst.session_id)
+      .run();
+    await c.env.DB.prepare(
+      `INSERT INTO exposures (participant_id, problem_id, role, session_id)
+       SELECT interviewer_id, problem_id, 'interviewer', id FROM sessions
+       WHERE id = ?1 AND problem_id IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM exposures e WHERE e.session_id = ?1 AND e.role = 'interviewer')`,
+    )
+      .bind(inst.session_id)
+      .run();
+  }
+
   const firstSubmission = inst.submitted_at === null;
   await c.env.DB.prepare(
     `UPDATE form_instances SET payload = ?2, submitted_at = ?3 WHERE id = ?1`,
