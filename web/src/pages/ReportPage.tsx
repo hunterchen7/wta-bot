@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useBlocker, useParams, useSearchParams } from 'react-router-dom';
 import { publicRequest, SettingsSaveError } from '../api';
-import { PublicIntro, PublicShell } from '../components/PublicShell';
+import { PublicShell } from '../components/PublicShell';
 import { CodeEditor } from '../components/CodeEditor';
 import { VideoUploadField } from '../components/VideoUploadField';
 import { Button } from '../components/ui/button';
@@ -57,7 +57,7 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
   if (!data) return <ReportShell embedded={embedded}><div className="animate-pulse space-y-5"><div className="h-28 rounded-3xl bg-slate-200" /><div className="h-96 rounded-3xl bg-slate-200" /></div></ReportShell>;
 
   return <ReportShell embedded={embedded}>
-    <PublicIntro eyebrow={previewKind ? 'Read-only preview' : `Round ${data.round} report`} title={`${data.role === 'interviewer' ? 'Interviewer' : 'Interviewee'} report`} description={`${data.role === 'interviewer' ? 'Great job conducting the interview! Take a moment to review how your interviewee did.' : 'Great job finishing the interview! Take some time to reflect on your experience.'} Hi ${data.assigneeName ?? 'there'} — ${data.role === 'interviewer' ? `you interviewed ${data.partnerName ?? 'your partner'}` : `${data.partnerName ?? 'Your partner'} interviewed you`}${data.scheduledAt ? ` on ${formatDate(data.scheduledAt)}` : ''}; due ${formatDate(data.deadlineAt)}.`} />
+    <ReportIntro data={data} preview={Boolean(previewKind)} />
     {saved ? <div role="status" className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><div className="font-black">Report saved.</div><p className="mt-1 text-sm">Your credit and downstream notifications are being updated. You can keep this link and revise before the deadline.</p></div> : null}
     {data.submittedAt && !saved ? <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm font-semibold text-sky-900">Submitted {formatDate(data.submittedAt)}. Saving again replaces the prior answers.</div> : null}
     {data.overdue ? <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">This report is overdue. Submit it as soon as possible—credit remains on hold until it arrives.</div> : null}
@@ -68,6 +68,27 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     </form>
     {blocker.state === 'blocked' ? <LeaveDialog onStay={() => blocker.reset()} onLeave={() => blocker.proceed()} /> : null}
   </ReportShell>;
+}
+
+function ReportIntro({ data, preview }: { data: ReportData; preview: boolean }) {
+  const interviewer = data.role === 'interviewer';
+  return <header className="mb-8">
+    <div className="text-[0.68rem] font-black uppercase tracking-[0.2em] text-western-700">{preview ? 'Read-only preview' : `Round ${data.round} report`}</div>
+    <h1 className="mt-2 text-3xl font-black tracking-[-0.04em] text-slate-950 sm:text-5xl">{interviewer ? 'Interviewer' : 'Interviewee'} report</h1>
+    <p className="mt-3 max-w-2xl text-base leading-7 text-slate-600">Hi {data.assigneeName ?? 'there'}. {interviewer ? 'Review how the interview went and give your interviewee clear, useful feedback.' : 'Reflect on the interview while the details are fresh and tell us about your experience.'}</p>
+    <dl className="mt-5 grid overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(15,23,42,.025)] sm:grid-cols-3 dark:border-border dark:bg-card">
+      <ReportMeta label={interviewer ? 'Interviewee' : 'Interviewer'} value={data.partnerName ?? 'Your partner'} />
+      <ReportMeta label="Session" value={data.scheduledAt ? formatDate(data.scheduledAt) : 'Time not recorded'} dateTime={data.scheduledAt} />
+      <ReportMeta label={data.overdue ? 'Overdue since' : 'Report due'} value={formatDate(data.deadlineAt)} dateTime={data.deadlineAt} urgent={data.overdue} />
+    </dl>
+  </header>;
+}
+
+function ReportMeta({ label, value, dateTime, urgent = false }: { label: string; value: string; dateTime?: string | null; urgent?: boolean }) {
+  return <div className="border-b border-slate-100 px-4 py-3.5 last:border-b-0 sm:border-b-0 sm:border-r sm:last:border-r-0 dark:border-border">
+    <dt className={`text-[0.65rem] font-black uppercase tracking-[0.14em] ${urgent ? 'text-rose-600 dark:text-rose-400' : 'text-slate-400'}`}>{label}</dt>
+    <dd className={`mt-1 text-sm font-bold leading-5 ${urgent ? 'text-rose-800 dark:text-rose-300' : 'text-slate-800'}`}>{dateTime ? <time dateTime={dateTime}>{value}</time> : value}</dd>
+  </div>;
 }
 
 function ReportShell({ embedded, children }: { embedded: boolean; children: React.ReactNode }) {
