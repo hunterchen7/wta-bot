@@ -4,7 +4,7 @@ import { handleCommand } from '../handlers/commands';
 import { handleComponent, handleModal } from '../handlers/components';
 import { ephemeral } from './components';
 import { DiscordRest } from './rest';
-import { type Interaction, InteractionType, ResponseType } from './types';
+import { type Interaction, InteractionType, ResponseType, interactionUser } from './types';
 import { verifyDiscordRequest } from './verify';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -40,6 +40,13 @@ export async function handleInteraction(c: Ctx) {
         'This bot runs a private program for **Western Tech Alumni** and does not work in other servers. It will remove itself shortly. 👋',
       ),
     );
+  }
+
+  const user = interactionUser(interaction);
+  if (user) {
+    await c.env.DB.prepare(
+      "UPDATE participants SET discord_username = ?2, updated_at = datetime('now') WHERE discord_id = ?1",
+    ).bind(user.id, user.global_name ?? user.username).run();
   }
 
   switch (interaction.type) {

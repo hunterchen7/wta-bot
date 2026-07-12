@@ -29,8 +29,8 @@ export async function updateParticipantSettings(
   participantId: number,
   raw: ParticipantSettingsInput,
 ): Promise<ParticipantSettingsResult> {
-  const input = normalize(raw);
-  const fieldErrors = validate(input);
+  const input = normalizeParticipantSettings(raw);
+  const fieldErrors = validateParticipantSettings(input);
   if (Object.keys(fieldErrors).length > 0) {
     return { ok: false, status: 400, code: 'invalid', message: 'Check the highlighted profile fields.', fieldErrors };
   }
@@ -94,7 +94,7 @@ export async function updateParticipantSettings(
   return { ok: true };
 }
 
-function normalize(input: ParticipantSettingsInput): ParticipantSettingsInput {
+export function normalizeParticipantSettings(input: ParticipantSettingsInput): ParticipantSettingsInput {
   return {
     ...input,
     name: String(input.name ?? '').trim(),
@@ -113,7 +113,7 @@ function normalize(input: ParticipantSettingsInput): ParticipantSettingsInput {
   };
 }
 
-function validate(input: ParticipantSettingsInput): Record<string, string> {
+export function validateParticipantSettings(input: ParticipantSettingsInput): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!input.name) errors.name = 'Enter your full name.';
   else if (input.name.length > 100) errors.name = 'Full name must be 100 characters or fewer.';
@@ -135,7 +135,7 @@ function validate(input: ParticipantSettingsInput): Record<string, string> {
   return errors;
 }
 
-async function enqueueEmailConfirmation(env: Env, to: string, name: string) {
+export async function enqueueEmailConfirmation(env: Env, to: string, name: string) {
   await enqueue(env, 'email', {
     to,
     subject: "You're subscribed to WTA email reminders ✅",

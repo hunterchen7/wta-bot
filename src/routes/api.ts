@@ -66,6 +66,8 @@ api.get('/api/dashboard', async (c) => {
     viewer: { participantId: session.participantId, organizer: session.organizer },
     participant: {
       id: participant.id,
+      discordId: participant.discord_id,
+      discordUsername: participant.discord_username ?? '',
       name: participant.name ?? '',
       preferredEmail: participant.preferred_email ?? '',
       westernEmail: participant.western_email ?? '',

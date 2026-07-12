@@ -7,13 +7,9 @@ export type SettingKey =
   | 'announce_channel_id' // weekly opt-in + pairing announcements
   | 'organizer_channel_id' // digests, case files, enrollment feed
   | 'threads_channel_id' // parent channel for session threads
-  | 'start_here_channel_id' // verification panel lives here
-  | 'intro_channel_id' // optional: verified intros get posted here
-  | 'member_role_id' // granted by the verify gate
   | 'participant_role_id' // granted on completed enrollment
   | 'organizer_role_id' // dashboard organizer check + admin surfaces
   | 'commands_json' // syncCommands bookkeeping
-  | 'verify_panel_message_id'
   | 'category_id' // current year's category (bootstrap renames it on archive)
   | 'packet_mode'; // 'on' enables private T-24h interviewer packets (future feature; default off = open question bank)
 

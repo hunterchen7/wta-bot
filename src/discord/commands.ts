@@ -38,12 +38,6 @@ export const COMMANDS: Command[] = [
     options: [
       { type: SUB_COMMAND, name: 'no-show', description: 'Your partner missed a scheduled session' },
       { type: SUB_COMMAND, name: 'unresponsive', description: 'Your partner is not responding to scheduling' },
-      {
-        type: SUB_COMMAND,
-        name: 'issue',
-        description: 'Anything else — goes privately to the organizers',
-        options: [{ type: STRING, name: 'details', description: 'What happened?', required: true }],
-      },
     ],
   },
   { name: 'dashboard', description: 'Get a one-click sign-in link for the web dashboard' },
@@ -56,7 +50,6 @@ export const COMMANDS: Command[] = [
       { type: SUB_COMMAND, name: 'export', description: 'Download the roster as CSV' },
       { type: SUB_COMMAND, name: 'digest', description: 'Post the round digest now' },
       { type: SUB_COMMAND, name: 'eligible', description: 'List alumni-round eligible participants' },
-      { type: SUB_COMMAND, name: 'backfill', description: 'Grant the member role to all existing members' },
       {
         type: SUB_COMMAND,
         name: 'standing',
@@ -109,8 +102,6 @@ export const COMMANDS: Command[] = [
               { type: CHANNEL, name: 'announce', description: 'Opt-ins + pairing announcements' },
               { type: CHANNEL, name: 'organizer', description: 'Digests, case files, enrollment feed' },
               { type: CHANNEL, name: 'threads', description: 'Parent channel for session threads' },
-              { type: CHANNEL, name: 'start_here', description: 'Verification panel channel' },
-              { type: CHANNEL, name: 'intros', description: 'Where verified intros get posted (optional)' },
             ],
           },
           {
@@ -118,7 +109,6 @@ export const COMMANDS: Command[] = [
             name: 'roles',
             description: 'Roles the bot grants/checks',
             options: [
-              { type: ROLE, name: 'member', description: 'Granted by verification' },
               { type: ROLE, name: 'participant', description: 'Granted on enrollment' },
               { type: ROLE, name: 'organizer', description: 'Admin-command access' },
             ],
@@ -132,7 +122,6 @@ export const COMMANDS: Command[] = [
               { type: STRING, name: 'name', description: 'Cohort name' },
             ],
           },
-          { type: SUB_COMMAND, name: 'verify', description: 'Post the verification panel' },
           {
             type: SUB_COMMAND,
             name: 'bootstrap',

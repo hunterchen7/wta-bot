@@ -13,11 +13,11 @@ let sessionId: number;
 
 const post = (token: string, fields: Record<string, string>) =>
   app.request(
-    `/f/${token}`,
+    `/api/forms/${token}`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams(fields).toString(),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
     },
     env,
   );
@@ -31,7 +31,7 @@ const INTERVIEWEE_OK: Record<string, string> = {
   rating_communication: '4',
   rating_preparedness: '5',
   language: 'Python',
-  duration: '30-45 minutes',
+  duration: '20-30 minutes',
   video_url: 'https://zoom.example/rec/abc',
   code: 'def solve():\n    return 42',
   partner_feedback: 'Great hints, thanks!',
@@ -82,28 +82,26 @@ beforeAll(async () => {
 });
 
 describe('form rail', () => {
-  it('renders the interviewee form with session context', async () => {
-    const res = await app.request(`/f/${intervieweeToken}`, {}, env);
+  it('returns the interviewee form schema with session context', async () => {
+    const res = await app.request(`/api/forms/${intervieweeToken}`, {}, env);
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain('Round 3');
-    expect(html).toContain('Ivy Interviewer');
-    expect(html).toContain('Paste the code you wrote');
-    expect(html).toContain('session recording');
+    const form = await res.json<any>();
+    expect(form).toMatchObject({ round: 3, partnerName: 'Ivy Interviewer', role: 'interviewee' });
+    expect(form.fields.map((field: any) => field.label)).toEqual(expect.arrayContaining([
+      expect.stringContaining('Paste the code'), expect.stringContaining('session recording'),
+    ]));
   });
 
   it('rejects an incomplete submission with field errors', async () => {
     const res = await post(intervieweeToken, { attendance_self: 'yes' });
     expect(res.status).toBe(400);
-    const html = await res.text();
-    expect(html).toContain('Fix these');
-    expect(html).toContain('required');
+    expect(await res.json<any>()).toMatchObject({ error: 'invalid_report', fieldErrors: { attendance_partner: 'This field is required.' } });
   });
 
   it('accepts a full interviewee report and credits the side', async () => {
     const res = await post(intervieweeToken, INTERVIEWEE_OK);
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain('Report submitted');
+    expect(await res.json<any>()).toMatchObject({ ok: true, message: 'Report submitted.' });
     const s = await env.DB.prepare('SELECT interviewee_credited, state FROM sessions WHERE id = ?1')
       .bind(sessionId)
       .first<any>();
@@ -147,7 +145,7 @@ describe('form rail', () => {
 
   it('404s tokens pointing at deleted/missing instances', async () => {
     const ghost = await signFormToken(env.FORM_SIGNING_SECRET!, 99999, new Date(Date.now() + 60_000));
-    const res = await app.request(`/f/${ghost}`, {}, env);
+    const res = await app.request(`/api/forms/${ghost}`, {}, env);
     expect(res.status).toBe(404);
   });
 });

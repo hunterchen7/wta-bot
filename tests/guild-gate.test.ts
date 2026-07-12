@@ -26,18 +26,18 @@ afterEach(() => {
 describe('guild allowlist gate', () => {
   it('allows the home guild', async () => {
     const res = await sendInteraction(signer, joinFrom(HOME), { ALLOWED_GUILD_IDS: `${HOME}, 42` });
-    expect(((await res.json()) as any).type).toBe(9); // intake modal opens
+    expect(((await res.json()) as any).type).toBe(4); // enrollment link is issued
   });
 
   it('allows DMs regardless of allowlist', async () => {
     const dm = { ...joinFrom(undefined), member: undefined, user: { id: '555', username: 'u' } };
     const res = await sendInteraction(signer, dm, { ALLOWED_GUILD_IDS: HOME });
-    expect(((await res.json()) as any).type).toBe(9);
+    expect(((await res.json()) as any).type).toBe(4);
   });
 
   it('allows everything when unconfigured (pre-setup)', async () => {
     const res = await sendInteraction(signer, joinFrom(FOREIGN), { ALLOWED_GUILD_IDS: '' });
-    expect(((await res.json()) as any).type).toBe(9);
+    expect(((await res.json()) as any).type).toBe(4);
   });
 
   it('refuses foreign guilds, writes nothing, and leaves', async () => {

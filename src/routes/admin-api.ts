@@ -12,7 +12,6 @@ export const adminApi = new Hono<{ Bindings: Env }>();
 const participantStatuses = new Set(['active', 'paused', 'held', 'removed', 'completed']);
 const editableSettingKeys = new Set<SettingKey>([
   'announce_channel_id', 'organizer_channel_id', 'threads_channel_id',
-  'start_here_channel_id', 'intro_channel_id', 'member_role_id',
   'participant_role_id', 'organizer_role_id', 'packet_mode',
 ]);
 
@@ -66,7 +65,7 @@ adminApi.get('/api/admin/overview', async (c) => {
       ? c.env.DB.prepare('SELECT state, count(*) AS n FROM sessions WHERE week_id = ?1 GROUP BY state').bind(currentWeek.id).all<any>()
       : Promise.resolve({ results: [] as any[] }),
     count(c.env, 'SELECT count(*) AS n FROM form_instances WHERE submitted_at IS NULL'),
-    count(c.env, "SELECT count(*) AS n FROM incidents WHERE state = 'open'"),
+    count(c.env, "SELECT count(*) AS n FROM incidents WHERE state = 'open' AND kind != 'issue'"),
     count(c.env, "SELECT count(*) AS n FROM repair_queue WHERE state = 'open'"),
     count(c.env, "SELECT count(*) AS n FROM sessions WHERE review_state IN ('pending', 'flagged')"),
     count(c.env, 'SELECT count(*) AS n FROM outbox WHERE done_at IS NULL AND attempts < 5'),
@@ -97,7 +96,7 @@ adminApi.get('/api/admin/participants', async (c) => {
   const weeks = cohort ? await cohortWeeks(c.env, cohort.id) : [];
   const currentWeek = currentProgramWeek(weeks);
   const { results } = await c.env.DB.prepare(
-    `SELECT p.id, p.discord_id, p.name, p.preferred_email, p.western_email, p.year, p.program,
+    `SELECT p.id, p.discord_id, p.discord_username, p.name, p.preferred_email, p.western_email, p.year, p.program,
             p.status, p.email_ok, p.created_at,
             (SELECT count(*) FROM sessions s WHERE s.interviewer_id = p.id AND s.interviewer_credited = 1) AS interviewer_credits,
             (SELECT count(*) FROM sessions s WHERE s.interviewee_id = p.id AND s.interviewee_credited = 1) AS interviewee_credits,
@@ -138,7 +137,7 @@ adminApi.get('/api/admin/participants/:id', async (c) => {
     c.env.DB.prepare(
       `SELECT i.*, reporter.name AS reporter_name FROM incidents i
        LEFT JOIN participants reporter ON reporter.id = i.reporter_id
-       WHERE i.accused_id = ?1 OR i.reporter_id = ?1 ORDER BY i.id DESC`,
+       WHERE (i.accused_id = ?1 OR i.reporter_id = ?1) AND i.kind != 'issue' ORDER BY i.id DESC`,
     ).bind(id).all<any>(),
     c.env.DB.prepare(
       `SELECT a.*, actor.name AS actor_name FROM audit_log a LEFT JOIN participants actor ON actor.id = a.actor_participant_id

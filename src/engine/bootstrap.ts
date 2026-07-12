@@ -1,5 +1,4 @@
 import { getSettings, setSetting } from '../config';
-import { buttonRow } from '../discord/components';
 import { DiscordRest } from '../discord/rest';
 import type { Env } from '../env';
 
@@ -15,10 +14,10 @@ async function editOriginal(env: Env, interactionToken: string, content: string)
 }
 
 // Annual server bootstrap (/admin setup bootstrap year:N):
-//   creates the "WTA {year}" category + five program channels PRIVATE-FIRST
-//   (visible to organizers + the bot only, for testing), creates
-//   Member/Participant/Organizer roles if unconfigured, saves ids, posts the
-//   verify panel. Nothing pre-existing is touched.
+//   creates the "WTA {year}" category + program channels PRIVATE-FIRST
+//   (visible to organizers + the bot only for testing), then creates the
+//   Participant/Organizer roles if needed. Discord's native verification owns
+//   server entry; the bot only gates program participation.
 // /admin setup publish later flips the channels to their member-facing
 // permissions. Requires Manage Channels + Manage Roles on the bot role.
 
@@ -31,24 +30,15 @@ const BOT_INTERVIEWS = String(
   1024 + 65536 + 2048 + 34359738368 + 68719476736 + 274877906944 + 17179869184,
 ); // + create public/private threads
 
-type Roles = { memberRole: string; participantRole: string; organizerRole: string; botUser: string; everyone: string };
+type Roles = { participantRole: string; organizerRole: string; botUser: string; everyone: string };
 
 /** The live, member-facing permission profile for each channel. */
 function publicOverwrites(kind: string, r: Roles): unknown[] {
   const botAllow = r.botUser ? [{ id: r.botUser, type: 1, allow: kind === 'interviews' ? BOT_INTERVIEWS : VIEW_HIST_SEND }] : [];
   switch (kind) {
-    case 'start_here':
-      return [{ id: r.everyone, type: 0, allow: VIEW_HIST, deny: SEND }, ...botAllow];
     case 'announce':
       return [
-        { id: r.everyone, type: 0, deny: String(1024) },
-        { id: r.memberRole, type: 0, allow: VIEW_HIST, deny: SEND },
-        ...botAllow,
-      ];
-    case 'intros':
-      return [
-        { id: r.everyone, type: 0, deny: String(1024) },
-        { id: r.memberRole, type: 0, allow: VIEW_HIST_SEND },
+        { id: r.everyone, type: 0, allow: VIEW_HIST, deny: SEND },
         ...botAllow,
       ];
     case 'interviews':
@@ -78,16 +68,14 @@ function privateOverwrites(kind: string, r: Roles): unknown[] {
 }
 
 const CHANNEL_KINDS: Array<{ kind: string; name: string; settingKey: any }> = [
-  { kind: 'start_here', name: 'start-here', settingKey: 'start_here_channel_id' },
   { kind: 'announce', name: 'announcements', settingKey: 'announce_channel_id' },
-  { kind: 'intros', name: 'introductions', settingKey: 'intro_channel_id' },
   { kind: 'interviews', name: 'interviews', settingKey: 'threads_channel_id' },
   { kind: 'organizers', name: 'wta-organizers', settingKey: 'organizer_channel_id' },
 ];
 
 async function loadRoles(env: Env, rest: DiscordRest, guildId: string, createMissing: boolean): Promise<Roles> {
-  const cfg = await getSettings(env, ['member_role_id', 'participant_role_id', 'organizer_role_id']);
-  const ensure = async (key: 'member_role_id' | 'participant_role_id' | 'organizer_role_id', name: string) => {
+  const cfg = await getSettings(env, ['participant_role_id', 'organizer_role_id']);
+  const ensure = async (key: 'participant_role_id' | 'organizer_role_id', name: string) => {
     if (cfg[key]) return cfg[key]!;
     if (!createMissing) throw new Error(`missing role setting ${key} — run bootstrap first`);
     const role = await rest.request<{ id: string }>('POST', `/guilds/${guildId}/roles`, {
@@ -99,7 +87,6 @@ async function loadRoles(env: Env, rest: DiscordRest, guildId: string, createMis
     return role.id;
   };
   return {
-    memberRole: await ensure('member_role_id', 'Member'),
     participantRole: await ensure('participant_role_id', 'Participant'),
     organizerRole: await ensure('organizer_role_id', 'Organizer'),
     botUser: env.DISCORD_APP_ID ?? '',
@@ -139,20 +126,13 @@ export async function bootstrapGuild(
       created.push(`<#${channel.id}>`);
     }
 
-    const cfg = await getSettings(env, ['start_here_channel_id']);
-    await rest.send(cfg.start_here_channel_id!, {
-      content:
-        '**Welcome to Western Tech Alumni!** 👋\nTo keep bots out, click below and tell us who you are — takes 20 seconds and unlocks the server.',
-      components: [buttonRow([{ id: 'verify:start', label: "Verify — I'm a real person", style: 3, emoji: '✅' }])],
-    });
-
     await report(
       `🏗️ **WTA ${year} bootstrapped — in private/testing mode.**\n` +
         `• Category **WTA ${year}**: ${created.join(' ')}\n` +
         `• Visible to **organizers + the bot only** right now. Test freely.\n` +
-        `• Roles: <@&${roles.memberRole}> <@&${roles.participantRole}> <@&${roles.organizerRole}> (created only if missing)\n` +
+        `• Roles: <@&${roles.participantRole}> <@&${roles.organizerRole}> (created only if missing)\n` +
         `When you're ready to go live: \`/admin setup publish\` flips every channel to its member-facing permissions. ` +
-        `(Reminder: bot role above Member/Participant, Manage Nicknames on.)`,
+        `(Reminder: bot role above Participant, Manage Nicknames on. Discord native verification handles server access.)`,
     );
   } catch (err) {
     await report(
@@ -182,7 +162,7 @@ export async function publishGuild(env: Env, payload: { guildId: string; interac
       flipped.push(`<#${id}>`);
     }
     await report(
-      `📢 **Live!** ${flipped.join(' ')} now carry their member-facing permissions: everyone sees #start-here, Members read announcements + chat in introductions, Participants use interview threads, organizers keep their room.`,
+      `📢 **Live!** ${flipped.join(' ')} now carry their live permissions: everyone can read announcements, Participants use interview threads, and organizers keep their room. Discord native verification handles server entry.`,
     );
   } catch (err) {
     await report(`⚠️ Publish failed: \`${String(err).slice(0, 300)}\` — check the bot's Manage Channels permission and that bootstrap ran first.`);

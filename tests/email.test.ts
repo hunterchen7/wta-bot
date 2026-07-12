@@ -29,20 +29,16 @@ describe('email sending', () => {
   });
 });
 
-describe('/help and previews', () => {
-  it('renders the preview index and both report previews', async () => {
-    const index = await app.request('/preview', {}, env);
-    expect(index.status).toBe(200);
-    expect(await index.text()).toContain('Interviewer packet');
-
+describe('report preview API', () => {
+  it('returns both report schemas without creating form instances', async () => {
     for (const kind of ['interviewee_report', 'interviewer_report']) {
-      const res = await app.request(`/preview/form/${kind}`, {}, env);
+      const res = await app.request(`/api/public/previews/${kind}`, {}, env);
       expect(res.status).toBe(200);
-      const html = await res.text();
-      expect(html).toContain('PREVIEW');
-      expect(html).toContain('disabled');
+      const preview = await res.json<any>();
+      expect(preview).toMatchObject({ preview: true, kind, fields: expect.any(Array) });
+      expect(preview.fields.length).toBeGreaterThan(5);
     }
-    expect((await app.request('/preview/form/nope', {}, env)).status).toBe(404);
-    expect((await app.request('/preview/packet', {}, env)).status).toBe(200);
+    expect((await app.request('/api/public/previews/nope', {}, env)).status).toBe(404);
+    expect(await env.DB.prepare('SELECT count(*) AS n FROM form_instances').first()).toEqual({ n: 0 });
   });
 });

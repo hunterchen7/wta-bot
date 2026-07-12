@@ -1,4 +1,4 @@
-// End-to-end weekly cycle: enroll → setup → opt-in → match → schedule →
+// End-to-end weekly cycle: roster → setup → opt-in → match → schedule →
 // incident → strike ladder → repair queue. All through signed interactions
 // and the real engine, with Discord fetches stubbed.
 
@@ -13,14 +13,9 @@ import { asAdmin, asUser, makeSigner, sendInteraction, type Signer } from './hel
 
 const GUILD = '900100200';
 const OVERRIDES = { ALLOWED_GUILD_IDS: GUILD };
-
 const textField = (custom_id: string, value: string) => ({
   type: 18,
   component: { type: 4, custom_id, value },
-});
-const selectField = (custom_id: string, values: string[]) => ({
-  type: 18,
-  component: { type: 3, custom_id, values },
 });
 
 let signer: Signer;
@@ -29,67 +24,10 @@ beforeAll(async () => {
 });
 
 async function enroll(userId: string, name: string) {
-  await sendInteraction(
-    signer,
-    {
-      type: 5,
-      id: '1',
-      token: 't',
-      guild_id: GUILD,
-      data: {
-        custom_id: 'join:m1',
-        components: [
-          textField('name', name),
-          textField('preferred_email', `${name.toLowerCase()}@example.com`),
-          textField('western_email', `${name.toLowerCase()}@uwo.ca`),
-          textField('blurb', 'hi'),
-        ],
-      },
-      ...asUser(userId),
-    },
-    OVERRIDES,
-  );
-  await sendInteraction(
-    signer,
-    {
-      type: 5,
-      id: '1',
-      token: 't',
-      guild_id: GUILD,
-      data: {
-        custom_id: 'join:m2',
-        components: [
-          selectField('year', ['Third']),
-          selectField('program', ['Computer Science']),
-          selectField('opportunities', ['internships']),
-          selectField('prior_wta', ['no']),
-          selectField('experience_band', ['1-2']),
-        ],
-      },
-      ...asUser(userId),
-    },
-    OVERRIDES,
-  );
-  await sendInteraction(
-    signer,
-    {
-      type: 5,
-      id: '1',
-      token: 't',
-      guild_id: GUILD,
-      data: {
-        custom_id: 'join:m3',
-        components: [
-          selectField('topics', ['dsa']),
-          selectField('email_ok', ['no']),
-          textField('interests', ''),
-          textField('prior_feedback', ''),
-        ],
-      },
-      ...asUser(userId),
-    },
-    OVERRIDES,
-  );
+  await env.DB.prepare(
+    `INSERT INTO participants (discord_id, discord_username, name, preferred_email, western_email, year, program, opportunities, experience_band, topics, blurb, status)
+     VALUES (?1, ?2, ?3, ?4, ?5, 'Third', 'Computer Science', '["internships"]', '1-2', '["dsa"]', ?6, 'active')`,
+  ).bind(userId, name.toLowerCase(), name, `${name.toLowerCase()}@example.com`, `${name.toLowerCase()}@uwo.ca`, 'Profile complete. '.repeat(60)).run();
 }
 
 const button = (custom_id: string, userId: string, extra: Record<string, unknown> = {}) => ({

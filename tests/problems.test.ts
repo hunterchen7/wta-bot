@@ -85,18 +85,16 @@ describe('problem bank', () => {
     expect(payload.message.content).toContain('/p/');
   });
 
-  it('serves the packet page to the signed link and refuses garbage', async () => {
+  it('serves packet data to the signed React link and refuses garbage', async () => {
     const dm = await env.DB.prepare(
       "SELECT payload FROM outbox WHERE kind = 'dm' AND payload LIKE '%/p/%' ORDER BY id DESC LIMIT 1",
     ).first<any>();
     const url = new URL(JSON.parse(dm.payload).message.content.match(/https?:\/\/\S+\/p\/\S+/)![0]);
-    const res = await app.request(url.pathname, {}, env);
+    const res = await app.request(`/api/problems/${url.pathname.split('/').at(-1)}`, {}, env);
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain('Interviewer packet');
-    expect(html).toContain('For your eyes only');
+    expect(await res.json<any>()).toMatchObject({ mode: 'packet', problem: { title: expect.any(String) } });
 
-    expect((await app.request('/p/garbage', {}, env)).status).toBe(404);
+    expect((await app.request('/api/problems/garbage', {}, env)).status).toBe(404);
   });
 
   it('swap re-picks (interviewer only), avoiding the current problem', async () => {
@@ -109,12 +107,11 @@ describe('problem bank', () => {
     expect(after.problem_id).not.toBe(before.problem_id);
   });
 
-  it('serves the public /bank page with the current round set', async () => {
-    const res = await app.request('/bank', {}, env);
+  it('serves the public question-bank API with the current round set', async () => {
+    const res = await app.request('/api/public/bank', {}, env);
     expect(res.status).toBe(200);
-    const html = await res.text();
-    expect(html).toContain('question bank');
-    expect(html).toContain('Two Sum'); // round 1 is current relative to test clock? — falls back to a published set
+    const bank = await res.json<any>();
+    expect(bank.problems.map((problem: any) => problem.title)).toContain('Two Sum');
   });
 
   it('open-bank mode: interviewer report offers the round set and records the pick', async () => {
@@ -135,20 +132,21 @@ describe('problem bank', () => {
       .run();
     const token = await signFormToken(env.FORM_SIGNING_SECRET!, Number(fi.meta.last_row_id), new Date(Date.now() + 86400_000));
 
-    const res = await app.request(`/f/${token}`, {}, env);
-    const html = await res.text();
-    expect(html).toContain('Which problem from the bank did you use?');
-    expect(html).toContain('LRU Cache');
+    const res = await app.request(`/api/forms/${token}`, {}, env);
+    const form = await res.json<any>();
+    const problemField = form.fields.find((field: any) => field.id === 'problem_used');
+    expect(problemField.label).toContain('Which problem');
+    expect(problemField.options.map((option: any) => option.label)).toEqual(expect.arrayContaining([expect.stringContaining('LRU Cache')]));
 
     const set = await env.DB.prepare('SELECT problem_id FROM week_problem_sets WHERE week_id = ?1 LIMIT 1')
       .bind(weekIds[2])
       .first<any>();
     const submit = await app.request(
-      `/f/${token}`,
+      `/api/forms/${token}`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           attendance_self: 'yes',
           attendance_partner: 'yes',
           camera_self: 'yes',
@@ -160,7 +158,7 @@ describe('problem bank', () => {
           hints: 'few',
           verdict: 'pass',
           verdict_reason: 'Good.',
-        }).toString(),
+        }),
       },
       env,
     );

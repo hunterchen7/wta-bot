@@ -10,11 +10,9 @@ import { creditsOf, strikesOf } from '../engine/progress';
 import { activeCohort, cohortWeeks, createCohort } from '../engine/weeks';
 import type { Env } from '../env';
 import { signToken } from '../forms/token';
-import * as intake from '../intake';
 import { getParticipant, listParticipants, participantsToCsv } from '../participants';
 import { discordTime } from '../time';
 import { type Interaction, interactionUser, ResponseType } from '../discord/types';
-import { postVerifyPanel } from './components';
 import { isOrganizer } from './shared';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -37,21 +35,21 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
         '`/leave` — leave the program entirely (confirmable; partners get re-paired)',
         '`/cancel` — cancel one of your sessions with notice, so your partner gets re-paired',
         '`/report no-show` / `/report unresponsive` — your partner ghosted or won\'t schedule',
-        '`/report issue <details>` — anything else, privately to the organizers',
+        'For anything else, use your session thread or DM an organizer directly.',
         '`/dashboard` — one-click sign-in link for the web dashboard',
         '',
-        '**Buttons you\'ll meet:** round opt-in (I\'m in / double / standby / out) · session threads (Scheduled ✅ / Can\'t make it / Report no-show) · Verify (in #start-here)',
+        '**Buttons you\'ll meet:** round opt-in (I\'m in / double / standby / out) · session threads (Scheduled ✅ / Can\'t make it / Report no-show)',
         `**Web dashboard:** log in with your roster email at ${c.env.PUBLIC_ORIGIN ?? 'the bot site'}/login — progress, sessions, and your report forms in one place.`,
       ];
       if (await isOrganizer(c.env, interaction)) {
         lines.push(
           '',
           '**Organizer toolkit — everything lives under `/admin`:**',
-          '`/admin setup channels|roles|cohort|verify` — configure + launch',
+          '`/admin setup channels|roles|cohort` — configure + launch',
           '`/admin roster` · `/admin export` · `/admin standing @user` — who\'s where',
           '`/admin pair` · `/admin repair` — manual pairings and repair queueing',
           '`/admin excuse @user` · `/admin participant hold|release|remove @user`',
-          '`/admin problems add|list|setweek` · `/admin digest` · `/admin eligible` · `/admin backfill`',
+          '`/admin problems add|list|setweek` · `/admin digest` · `/admin eligible`',
           'Dashboard organizer pages: Roster, Round board, Reviews, Problems (`/dashboard` for a sign-in link).',
         );
       }
@@ -74,11 +72,20 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
           ephemeral('You were removed from this cohort. Talk to an organizer if you think that\'s a mistake.'),
         );
       }
-      // Resume where they left off; enrolled users get the edit menu.
-      if (!existing || !existing.name) return c.json(intake.modal1(existing));
-      if (existing.year === null) return c.json(intake.modal2(existing));
-      if (existing.topics === null) return c.json(intake.modal3(existing));
-      return c.json(intake.profileMenu(existing));
+      const secret = c.env.FORM_SIGNING_SECRET;
+      if (!secret) return c.json(ephemeral('Enrollment is not configured yet.'));
+      const username = [...new TextEncoder().encode(user.global_name ?? user.username)]
+        .map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      const token = await signToken(
+        secret,
+        `enroll:${user.id}:${interaction.guild_id ?? '0'}:${username}`,
+        new Date(Date.now() + 60 * 60_000),
+      );
+      const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
+      return c.json(ephemeral(
+        `${existing?.topics ? 'Edit your WTA profile' : 'Complete your WTA enrollment'} in the web app (link valid for 1 hour):\n${origin}/enroll/${token}\n\n` +
+        `This link is tied to **@${user.global_name ?? user.username}** and only visible to you.`,
+      ));
     }
 
     case 'status':
@@ -185,19 +192,6 @@ async function adminCommand(c: Ctx, interaction: Interaction) {
         ),
       );
     }
-    case 'backfill': {
-      const { getSettings: gs } = await import('../config');
-      const { member_role_id } = await gs(c.env, ['member_role_id']);
-      if (!interaction.guild_id || !member_role_id) {
-        return c.json(ephemeral('Set the member role first (`/admin setup roles`).'));
-      }
-      await enqueue(c.env, 'backfill', {
-        guildId: interaction.guild_id,
-        roleId: member_role_id,
-        interactionToken: interaction.token,
-      });
-      return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
-    }
     case 'standing':
       return standingCommand(c, interaction, s.options);
     case 'excuse':
@@ -303,19 +297,6 @@ async function reportCommand(c: Ctx, interaction: Interaction) {
   const isCancel = interaction.data?.name === 'cancel';
   const subcmd = isCancel ? 'cancel' : (sub(interaction)?.name ?? 'no-show');
 
-  if (subcmd === 'issue') {
-    const details = String(optVal(sub(interaction)?.options, 'details') ?? '').slice(0, 1500);
-    const { organizer_channel_id } = await getSettings(c.env, ['organizer_channel_id']);
-    if (organizer_channel_id) {
-      await enqueue(c.env, 'channel_msg', {
-        channelId: organizer_channel_id,
-        message: { content: `📨 **Issue report** from <@${user.id}>:\n> ${details}` },
-      });
-      return c.json(ephemeral('Sent privately to the organizers. Thanks for flagging it.'));
-    }
-    return c.json(ephemeral('Organizer channel isn\'t configured yet — DM an organizer directly.'));
-  }
-
   // Which session? In a session thread we can infer; otherwise pick the open one.
   const kind = subcmd === 'cancel' ? 'late_cancel' : subcmd === 'unresponsive' ? 'unresponsive' : 'ghost';
   const { results: candidates } = await c.env.DB.prepare(
@@ -380,8 +361,6 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
         ['announce_channel_id', optVal(opts, 'announce')],
         ['organizer_channel_id', optVal(opts, 'organizer')],
         ['threads_channel_id', optVal(opts, 'threads')],
-        ['start_here_channel_id', optVal(opts, 'start_here')],
-        ['intro_channel_id', optVal(opts, 'intros')],
       ];
       const saved: string[] = [];
       for (const [key, value] of mapping) {
@@ -394,7 +373,6 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
     }
     case 'roles': {
       const mapping: Array<[string, any]> = [
-        ['member_role_id', optVal(opts, 'member')],
         ['participant_role_id', optVal(opts, 'participant')],
         ['organizer_role_id', optVal(opts, 'organizer')],
       ];
@@ -425,10 +403,6 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
       );
       return c.json(ephemeral(`🚀 Cohort **${name}** is live. The cron takes it from here:\n${lines.join('\n')}`));
     }
-    case 'verify': {
-      const message = await postVerifyPanel(c, interaction);
-      return c.json(ephemeral(message));
-    }
     case 'bootstrap': {
       if (!interaction.guild_id) return c.json(ephemeral('Run this in the server.'));
       const year = Number(optVal(s.options, 'year') ?? new Date().getFullYear());
@@ -450,7 +424,7 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
       return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
     }
     default:
-      return c.json(ephemeral('Subcommands: `channels`, `roles`, `cohort`, `verify`, `bootstrap`, `publish`.'));
+      return c.json(ephemeral('Subcommands: `channels`, `roles`, `cohort`, `bootstrap`, `publish`.'));
   }
 }
 
@@ -464,7 +438,7 @@ async function standingCommand(c: Ctx, interaction: Interaction, opts: Opt[] | u
   const credits = await creditsOf(c.env, p.id);
   const strikes = await strikesOf(c.env, p.id);
   const { results: incidents } = await c.env.DB.prepare(
-    'SELECT kind, state, created_at FROM incidents WHERE accused_id = ?1 ORDER BY id DESC LIMIT 5',
+    "SELECT kind, state, created_at FROM incidents WHERE accused_id = ?1 AND kind != 'issue' ORDER BY id DESC LIMIT 5",
   )
     .bind(p.id)
     .all<any>();
@@ -488,7 +462,7 @@ async function excuseCommand(c: Ctx, interaction: Interaction, opts: Opt[] | und
     .first<{ id: number; discord_id: string }>();
   if (!p) return c.json(ephemeral('Not on the roster.'));
   const latest = await c.env.DB.prepare(
-    `SELECT id FROM incidents WHERE accused_id = ?1 AND state IN ('confirmed', 'open') ORDER BY id DESC LIMIT 1`,
+    `SELECT id FROM incidents WHERE accused_id = ?1 AND kind != 'issue' AND state IN ('confirmed', 'open') ORDER BY id DESC LIMIT 1`,
   )
     .bind(p.id)
     .first<{ id: number }>();

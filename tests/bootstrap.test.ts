@@ -30,7 +30,7 @@ const followupOf = (calls: Call[]) =>
   calls.filter((c) => c.url.includes('/webhooks/') && c.method === 'PATCH').map((c) => c.body.content);
 
 describe('annual bootstrap', () => {
-  it('creates roles/category/channels private-first, saves settings, posts panel + summary immediately', async () => {
+  it('creates program roles/category/channels private-first and leaves Discord verification native', async () => {
     // Pretend last year is configured — bootstrap must NOT touch it
     await env.DB.prepare(
       `INSERT INTO settings (key, value) VALUES
@@ -50,13 +50,13 @@ describe('annual bootstrap', () => {
     );
     expect(mutations).toHaveLength(0);
 
-    // three roles created (none were configured)
+    // only program roles are created; there is no bot-managed Member role
     const roles = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/guilds/G1/roles'));
-    expect(roles.map((r) => r.body.name).sort()).toEqual(['Member', 'Organizer', 'Participant']);
+    expect(roles.map((r) => r.body.name).sort()).toEqual(['Organizer', 'Participant']);
 
-    // category + five channels, all private-first
+    // category + three program channels, all private-first
     const channels = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/guilds/G1/channels'));
-    expect(channels).toHaveLength(6);
+    expect(channels).toHaveLength(4);
     expect(channels[0]!.body).toMatchObject({ name: 'WTA 2026', type: 4 });
     for (const ch of channels.slice(1)) {
       const everyone = ch.body.permission_overwrites.find((o: any) => o.id === 'G1');
@@ -66,19 +66,11 @@ describe('annual bootstrap', () => {
     // settings point at the new ids
     const { results } = await env.DB.prepare(
       `SELECT key, value FROM settings WHERE key IN
-       ('announce_channel_id','start_here_channel_id','threads_channel_id','organizer_channel_id','intro_channel_id','member_role_id','participant_role_id','organizer_role_id','category_id')`,
+       ('announce_channel_id','threads_channel_id','organizer_channel_id','participant_role_id','organizer_role_id','category_id')`,
     ).all<any>();
-    expect(results).toHaveLength(9);
+    expect(results).toHaveLength(6);
     for (const r of results) expect(String(r.value)).toMatch(/^id-/);
-
-    // verify panel posted directly into the new start-here
-    const startHere = (await env.DB.prepare(
-      "SELECT value FROM settings WHERE key = 'start_here_channel_id'",
-    ).first<any>())!.value;
-    const panel = calls.find(
-      (c) => c.method === 'POST' && c.url.endsWith(`/channels/${startHere}/messages`),
-    );
-    expect(JSON.stringify(panel?.body)).toContain('verify:start');
+    expect(calls.some((call) => JSON.stringify(call.body).includes('verify:start'))).toBe(false);
 
     // deferred response edited immediately with the summary
     const followups = followupOf(calls);
@@ -96,20 +88,18 @@ describe('annual bootstrap', () => {
 });
 
 describe('publish', () => {
-  it('flips every configured channel to member-facing permissions', async () => {
+  it('flips every configured program channel to live permissions', async () => {
     const calls = stubDiscord();
     await publishGuild(
       { ...env, DISCORD_TOKEN: 't', DISCORD_APP_ID: 'botid' } as any,
       { guildId: 'G1', interactionToken: 'ptok' },
     );
     const patches = calls.filter((c) => c.method === 'PATCH' && !c.url.includes('/webhooks/'));
-    expect(patches).toHaveLength(5);
+    expect(patches).toHaveLength(3);
 
-    const startHereId = (await env.DB.prepare(
-      "SELECT value FROM settings WHERE key = 'start_here_channel_id'",
-    ).first<any>())!.value;
-    const sh = patches.find((p) => p.url.endsWith(`/channels/${startHereId}`))!;
-    const everyone = sh.body.permission_overwrites.find((o: any) => o.id === 'G1');
+    const announcementsId = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'announce_channel_id'").first<any>())!.value;
+    const announcements = patches.find((patch) => patch.url.endsWith(`/channels/${announcementsId}`))!;
+    const everyone = announcements.body.permission_overwrites.find((overwrite: any) => overwrite.id === 'G1');
     expect(everyone.allow).toBe(String(1024 + 65536));
 
     expect(followupOf(calls).join('')).toContain('Live!');
