@@ -136,8 +136,13 @@ export const COMMANDS: Command[] = [
           {
             type: SUB_COMMAND,
             name: 'bootstrap',
-            description: "Build the year's channels + roles, archive last year's",
+            description: "Build the year's channels + roles (private-first, for testing)",
             options: [{ type: 4, name: 'year', description: 'Program year, e.g. 2026', required: true }],
+          },
+          {
+            type: SUB_COMMAND,
+            name: 'publish',
+            description: 'Go live: flip bootstrapped channels to member-facing permissions',
           },
         ],
       },

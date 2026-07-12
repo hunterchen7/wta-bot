@@ -439,8 +439,16 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
       });
       return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
     }
+    case 'publish': {
+      if (!interaction.guild_id) return c.json(ephemeral('Run this in the server.'));
+      await enqueue(c.env, 'guild_publish', {
+        guildId: interaction.guild_id,
+        interactionToken: interaction.token,
+      });
+      return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
+    }
     default:
-      return c.json(ephemeral('Subcommands: `channels`, `roles`, `cohort`, `verify`, `bootstrap`.'));
+      return c.json(ephemeral('Subcommands: `channels`, `roles`, `cohort`, `verify`, `bootstrap`, `publish`.'));
   }
 }
 

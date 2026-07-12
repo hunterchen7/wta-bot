@@ -67,9 +67,11 @@ interaction — no deploy.
    Manage Nicknames, drag it near the top, then run
    `/admin setup bootstrap year:2026`. The bot builds the "WTA 2026" category
    (start-here / announcements / introductions / interviews / wta-organizers)
-   with permissions baked in, creates missing roles, archives last year's
-   channels read-only, saves all ids, and posts the verify panel. Steps 1-3
-   below are the manual equivalent / for adjustments.
+   **private-first** — visible to organizers + the bot only, so you can test —
+   creates missing roles, saves all ids, and posts the verify panel. Nothing
+   pre-existing is touched (archive old years manually, or just leave them).
+   When testing's done, `/admin setup publish` flips every channel to its
+   member-facing permissions. Steps 1-3 below are the manual equivalent.
 1. `/admin setup channels announce:#... organizer:#... threads:#... start_here:#... intros:#...`
 2. `/admin setup roles member:@Member participant:@Participant organizer:@Organizer`
    (bot role must sit above these, with Manage Roles + Manage Nicknames on)

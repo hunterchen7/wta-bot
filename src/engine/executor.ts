@@ -59,6 +59,12 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       return;
     }
 
+    case 'guild_publish': {
+      const { publishGuild } = await import('./bootstrap');
+      await publishGuild(env, payload);
+      return;
+    }
+
     case 'backfill': {
       // One-time Member-role backfill before locking @everyone down.
       // Requires the Server Members intent (docs/SETUP.md §2).

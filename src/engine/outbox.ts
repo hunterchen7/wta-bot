@@ -14,7 +14,8 @@ export type OutboxKind =
   | 'email' // { to, subject, text }
   | 'followup' // { interactionToken, message } — edits a deferred response
   | 'backfill' // { guildId, roleId, interactionToken } — member-role backfill
-  | 'guild_setup'; // { guildId, year, interactionToken } — annual bootstrap
+  | 'guild_setup' // { guildId, year, interactionToken } — annual bootstrap (private-first)
+  | 'guild_publish'; // { guildId, interactionToken } — flip channels to live permissions
 
 export const MAX_ATTEMPTS = 5;
 
