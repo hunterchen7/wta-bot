@@ -33,7 +33,7 @@ export function VideoUploadField({ token, value, preview, invalid, onChange }: {
       const { analyzeVideo } = await import('../lib/video-optimizer');
       const result = await analyzeVideo(selected);
       setAnalysis(result);
-      if (result.shouldOptimize && !result.lowPowerDevice) await optimizeAndUpload(selected, result);
+      if (result.shouldOptimize) await optimizeAndUpload(selected, result);
       else await upload(selected);
     } catch {
       setAnalysis(null);
