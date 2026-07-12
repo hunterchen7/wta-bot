@@ -184,19 +184,6 @@ export const INTERVIEWER_FIELDS: Field[] = [
     help: 'Your interviewee will NOT see this. Include any special permissions you received or other discrepancies in the process.',
   },
   {
-    id: 'verdict',
-    label: 'Overall, would you pass this interviewee?',
-    type: 'radio',
-    required: true,
-    options: [
-      { value: 'pass', label: 'Pass — ready to move to the next level' },
-      { value: 'borderline', label: 'Borderline — could go either way' },
-      { value: 'fail', label: 'Not yet — needs more practice' },
-    ],
-    help: 'Recorded every round for signal, and binding in the final round — this verdict is half of the alumni-interview gate.',
-  },
-  { id: 'verdict_reason', label: 'What led you to that verdict?', type: 'textarea', required: true },
-  {
     id: 'strengths',
     label: 'What did your interviewee do well that they should keep doing?',
     type: 'textarea',
@@ -205,7 +192,7 @@ export const INTERVIEWER_FIELDS: Field[] = [
   },
   {
     id: 'improvements',
-    label: 'Any feedback for your interviewee? What should they work on before the real thing?',
+    label: 'What feedback would you give your interviewee? What should they continue practicing?',
     type: 'textarea',
     shared: true,
     help: 'Your interviewee WILL see this once both of you have submitted.',

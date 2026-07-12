@@ -16,7 +16,7 @@ const forms = {
   },
   interviewer_report: {
     label: 'Interviewer report',
-    description: 'Attendance, technical and behavioural rubric, code, verdict, and private or partner-visible feedback.',
+    description: 'Attendance, technical and behavioural rubric, code, and private or partner-visible feedback.',
     path: '/preview/form/interviewer_report',
   },
 } as const;

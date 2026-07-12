@@ -19,7 +19,7 @@ export function PreviewPage() {
       to: "/preview/form/interviewer_report",
       title: "Interviewer report",
       description:
-        "Technical and behavioural rubric, hints, verdict, code, and structured feedback.",
+        "Technical and behavioural rubric, hints, code, and structured feedback.",
     },
     {
       to: "/preview/packet",

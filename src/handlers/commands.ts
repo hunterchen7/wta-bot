@@ -201,7 +201,7 @@ async function adminCommand(c: Ctx, interaction: Interaction) {
         ephemeral(
           results.length
             ? `🏆 **Alumni-round eligible (${results.length}):**\n${results.map((r) => `• ${r.name ?? '?'} (<@${r.discord_id}>)`).join('\n')}`
-            : 'Nobody eligible yet — 6/6 credits + verified final-round pass required.',
+            : 'Nobody eligible yet — 6/6 credits + an approved final-round review required.',
         ),
       );
     }

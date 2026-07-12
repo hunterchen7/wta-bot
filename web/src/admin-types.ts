@@ -24,7 +24,7 @@ export type ParticipantDetail = { participant: Record<string, any>; sessions: Ar
 export type RoundSession = { id: number; interviewer_name: string; interviewee_name: string; state: string; scheduled_at: string | null; origin: string; reports_in: number; review_state: string; problem_title: string | null };
 export type RoundsData = { cohort: Cohort | null; weeks: Week[]; selectedWeek: Week | null; sessions: RoundSession[]; optins: Array<Record<string, any>>; repairs: Array<Record<string, any>> };
 
-export type ReviewRow = { id: number; review_state: string; state: string; round: number; interviewer_name: string; interviewee_name: string; interviewee_id: number; video_url: string | null; verdict: string | null; verdict_reason: string | null };
+export type ReviewRow = { id: number; review_state: string; state: string; round: number; interviewer_name: string; interviewee_name: string; interviewee_id: number; video_url: string | null };
 export type ReviewsData = { reviews: ReviewRow[] };
 
 export type ProblemRow = { id: number; source: string; number: number | null; title: string; url: string | null; difficulty: 'easy' | 'medium' | 'hard'; difficulty_rank: number | null; content_md: string; available_weeks: number[]; statement_md: string | null; solution_md: string | null; hints_md: string | null; active: number; uses: number; exposures: number };
@@ -38,7 +38,7 @@ export type ProblemsData = {
 export type AnalyticsData = {
   participants: CountRow[]; sessions: CountRow[];
   reports: Array<{ label: string; total: number; submitted: number }>;
-  verdicts: CountRow[];
+  reviews: CountRow[];
   problems: Array<{ id: number; title: string; difficulty: string; uses: number; avg_experience: number | null }>;
   rounds: Array<{ cohort: string; round: number; optins: number; sessions: number; completed: number }>;
 };

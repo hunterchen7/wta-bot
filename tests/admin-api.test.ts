@@ -50,7 +50,7 @@ beforeAll(async () => {
     `INSERT INTO form_instances (id, kind, session_id, assignee_id, token_hash, deadline_at, submitted_at, payload)
      VALUES
        (9401, 'interviewee_report', 9201, ?1, 'admin-api-ie', ?2, ?3, '{"video_url":"https://example.com/video","rating_experience":"4"}'),
-       (9402, 'interviewer_report', 9201, ?4, 'admin-api-ir', ?2, ?3, '{"verdict":"pass","verdict_reason":"Strong fundamentals"}')`,
+       (9402, 'interviewer_report', 9201, ?4, 'admin-api-ir', ?2, ?3, '{}')`,
   ).bind(STUDENT_ID, new Date(Date.now() + 86400_000).toISOString(), new Date().toISOString(), ADMIN_ID).run();
 });
 
@@ -140,7 +140,7 @@ describe('admin operational data', () => {
       `INSERT INTO optins (week_id, participant_id) VALUES (?1, ?2), (?1, ?3)`,
     ).bind(weekId, ADMIN_ID, STUDENT_ID).run();
     const analytics = await (await request('/api/admin/analytics')).json<any>();
-    expect(analytics.verdicts).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'pass' })]));
+    expect(analytics.reviews).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'pending' })]));
     expect(analytics.problems[0]).toMatchObject({ title: 'Two Sum', uses: 1 });
     expect(analytics.rounds).toEqual(expect.arrayContaining([
       expect.objectContaining({ round: 1, optins: 2, sessions: 1, completed: 1 }),

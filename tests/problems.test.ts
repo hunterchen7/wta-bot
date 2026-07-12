@@ -169,8 +169,6 @@ describe('problem bank', () => {
           rating_code_quality: '4',
           hints: 'few',
           duration: '20-30 minutes',
-          verdict: 'pass',
-          verdict_reason: 'Good.',
           code: 'function solve() { return 42; }',
           confirmation: 'yes',
         }),

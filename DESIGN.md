@@ -9,7 +9,7 @@ Items marked **[OPEN]** are defaults awaiting Hunter's confirmation. Everything 
 - A **cohort** runs 3 **rounds of 14 days each** (2026: R1 Jul 26–Aug 8, R2 Aug 9–22, R3 Aug 23–Sep 5 — rounds start Sundays; applications close Jul 23). Each **participant** targets 6 sessions: 3 as interviewer + 3 as interviewee, one of each per round. Rows in the `weeks` table are rounds; `idx` = round number.
 - A **session** is one directed interview: `interviewer → interviewee`. Weekly matching gives every active participant two *different* partners (one per role). Your interviewer and your interviewee in the same week are never the same person, and you never meet the same counterpart twice in a cohort (either direction, repairs included).
 - Missed weeks are made up by **doubling**: per-role deficits are tracked, and weekly demand per role is `min(1 + deficit, 2)`.
-- **Alumni-round eligibility** = 6/6 sessions completed **and the week-3 interview passed**, where "passed" has two parts: (a) the week-3 interviewer's report marks an explicit **pass verdict**, and (b) organizers verify the session recording. v1 automates the workflow around (b) — a review queue with video links and one-click verify/flag — while the watching stays human; §13 sketches the AI-assisted triage that replaces most watching later (deliberately low priority). Scheduling with actual alumni stays manual in v1. **[OPEN — confirm scope]**
+- **Alumni-round eligibility** = 6/6 sessions completed and an organizer-approved final-round review. The review queue provides the recording and verify/flag actions; the interviewer form keeps the original question-level rubric and does not ask for a fabricated overall pass/fail verdict. Scheduling with actual alumni stays manual in v1. **[OPEN — confirm scope]**
 - Roles: **Member** (verified human — see §14), **Participant** (enrolled student), **Organizer** (Discord role, gets admin commands + digest channel). Alumni-facing features are v2.
 
 ## 2. Round lifecycle (14 days)
@@ -61,7 +61,7 @@ Three incident kinds are tracked distinctly: **ghost** (confirmed time, didn't s
 - Each session spawns two **form instances** (one per side) at session start. Instance = `(kind, session, assignee, deadline, token, payload)`.
 - **Tokens:** HMAC-signed `instance_id + expiry`; the instance row is the source of truth (single-use semantics enforced server-side). The rendered page greets by name and shows full session context — no identity questions, no attendance-of-record questions duplicated from thread buttons (form keeps one attendance cross-check; mismatch between the two sides' reports auto-flags).
 - **Interviewee report keeps:** attendance cross-check, cameras, ratings (experience / interviewer communication / preparedness), language, duration, organizer-only note, partner-visible feedback, required code paste, and the **session recording link** (recordings were required last year; v1 = paste a link, since Zoom/Meet recordings already live in the cloud — direct upload to R2 is a later option **[OPEN — where do recordings live today, and who uploads: interviewee or interviewer?]**). Question-used is auto-known. Attestation replaced by a submit-confirmation screen.
-- **Interviewer report adds an explicit verdict** (pass / borderline / fail + justification), required every week for signal but **binding in week 3** — it's half the alumni gate. (Exact remaining fields still pending the legacy interviewer form. All three legacy forms are replicated: intake natively in Discord, both reports on the rail.)
+- **Interviewer report uses the original question-level technical and behavioural rubric.** It does not add an overall pass/fail verdict. Every final-round session enters the organizer review queue.
 - **Relay:** partner-visible feedback is DM'd to the partner once both reports are in, or at the deadline, whichever first. Organizer-only notes never relay.
 - **Reminder ladder per instance:** issued (thread + DM) → T−24h nudge if unfiled → overdue DM + digest line. `/status` lists owed forms with links.
 
@@ -125,7 +125,7 @@ One TypeScript **Cloudflare Worker** on Hunter's personal account:
 4. **M3** — form rail: tokens, interviewee/interviewer report templates, deadlines, reminder ladder, relay.
 5. **M4** — incidents: buttons, strikes, case files, holds, repair queue, standby.
 6. **M5** — problem bank: import, weekly sets, exposure ledger, packets, solution release; email channel + fallbacks.
-7. **M6** — polish: digests, grace window, eligibility flow (W3 verdict + recording **review queue** with verify/flag buttons), admin overrides end-to-end.
+7. **M6** — polish: digests, grace window, eligibility flow (final-round **review queue** with approve/flag buttons), admin overrides end-to-end.
 8. **M7 (deliberately last)** — AI-assisted W3 review triage; see §13.
 
 Deadline pending **[OPEN — cohort start date]**; M0–M2 before intake opens, M3–M4 before week 1, M5–M6 before week 2 at the latest.

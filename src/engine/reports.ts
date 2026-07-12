@@ -5,7 +5,7 @@ import { enqueue } from './outbox';
 import { creditsOf } from './progress';
 
 // Report-submission side effects (DESIGN §5): credit, attendance cross-check,
-// feedback relay, W3 verdict → review queue, eligibility.
+// feedback relay, final-round review queue, eligibility.
 
 type Instance = {
   id: number;
@@ -83,20 +83,20 @@ export async function onReportSubmitted(
     }
   }
 
-  // 5) W3 verdict: pass -> recording review queue; fail/borderline recorded.
+  // 5) Every final-round session enters the organizer review queue.
   if (instance.kind === 'interviewer_report') {
     const week = await env.DB.prepare(
       `SELECT w.idx, w.cohort_id, c.weeks_count FROM weeks w JOIN cohorts c ON c.id = w.cohort_id WHERE w.id = ?1`,
     )
       .bind(session.week_id)
       .first<{ idx: number; cohort_id: number; weeks_count: number }>();
-    if (week && week.idx === week.weeks_count && payload.verdict === 'pass') {
+    if (week && week.idx === week.weeks_count) {
       await env.DB.prepare("UPDATE sessions SET review_state = 'pending' WHERE id = ?1").bind(session.id).run();
       const { organizer_channel_id } = await getSettings(env, ['organizer_channel_id']);
       if (organizer_channel_id) {
         await enqueue(env, 'channel_msg', {
           channelId: organizer_channel_id,
-          message: { content: `🎬 R${week.idx} **pass verdict** on session #${session.id} — recording queued for review (dashboard → Reviews).` },
+          message: { content: `🎬 Final-round session #${session.id} is ready for organizer review (dashboard → Reviews).` },
         });
       }
     }
@@ -135,8 +135,8 @@ async function relayShared(
   }
 }
 
-/** Eligibility (DESIGN §1): 3+3 credits AND final-week interviewee session
- *  with a pass verdict AND its recording verified. Marks status=completed
+/** Eligibility (DESIGN §1): 3+3 credits AND an approved final-week review.
+ *  Marks status=completed
  *  and celebrates. */
 export async function maybeMarkEligible(env: Env, participantId: number): Promise<boolean> {
   const p = await env.DB.prepare('SELECT id, discord_id, name, status FROM participants WHERE id = ?1')
@@ -147,18 +147,17 @@ export async function maybeMarkEligible(env: Env, participantId: number): Promis
   const credits = await creditsOf(env, participantId);
   if (credits.interviewer < 3 || credits.interviewee < 3) return false;
 
-  const w3pass = await env.DB.prepare(
+  const approvedFinalReview = await env.DB.prepare(
     `SELECT s.id FROM sessions s
      JOIN weeks w ON w.id = s.week_id
      JOIN cohorts c ON c.id = w.cohort_id AND c.status = 'active' AND w.idx = c.weeks_count
      JOIN form_instances f ON f.session_id = s.id AND f.kind = 'interviewer_report' AND f.submitted_at IS NOT NULL
      WHERE s.interviewee_id = ?1 AND s.review_state = 'verified'
-       AND json_extract(f.payload, '$.verdict') = 'pass'
      LIMIT 1`,
   )
     .bind(participantId)
     .first();
-  if (!w3pass) return false;
+  if (!approvedFinalReview) return false;
 
   await env.DB.prepare("UPDATE participants SET status = 'completed' WHERE id = ?1").bind(participantId).run();
   await enqueue(env, 'dm', {
@@ -166,14 +165,14 @@ export async function maybeMarkEligible(env: Env, participantId: number): Promis
     fallbackKind: 'eligible',
     message: {
       content:
-        '🏆 **You did it — 6/6 interviews and a verified final-round pass.** You\'re now eligible for the alumni technical interview; organizers will reach out with next steps. Huge congrats!',
+        '🏆 **You did it — 6/6 interviews and an approved final-round review.** You\'re now eligible for the alumni technical interview; organizers will reach out with next steps. Huge congrats!',
     },
   });
   const { organizer_channel_id } = await getSettings(env, ['organizer_channel_id']);
   if (organizer_channel_id) {
     await enqueue(env, 'channel_msg', {
       channelId: organizer_channel_id,
-      message: { content: `🏆 **${p.name ?? p.discord_id}** (<@${p.discord_id}>) is **alumni-round eligible** — 6/6 + verified final-round pass.` },
+      message: { content: `🏆 **${p.name ?? p.discord_id}** (<@${p.discord_id}>) is **alumni-round eligible** — 6/6 + approved final-round review.` },
     });
   }
   return true;

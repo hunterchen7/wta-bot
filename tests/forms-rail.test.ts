@@ -5,7 +5,7 @@ import { signFormToken, signToken } from '../src/forms/token';
 import { app } from '../src/index';
 
 // Full form-rail flow against real D1: render, validate, submit, credit,
-// relay, verdict → review queue.
+// relay, final-round review queue.
 
 let interviewerToken: string;
 let intervieweeToken: string;
@@ -59,8 +59,6 @@ const INTERVIEWER_OK: Record<string, string> = {
   rating_code_quality: '3',
   hints: 'few',
   duration: '20-30 minutes',
-  verdict: 'pass',
-  verdict_reason: 'Solid problem decomposition, clean code.',
   strengths: 'Communicates the plan before coding.',
   improvements: 'Test edge cases before declaring done.',
   code: 'def solve():\n    return 42',
@@ -68,7 +66,7 @@ const INTERVIEWER_OK: Record<string, string> = {
 };
 
 beforeAll(async () => {
-  // Roster + final-week session (idx 3 of 3 -> verdict feeds the review queue)
+  // Roster + final-week session (idx 3 of 3 -> organizer review queue)
   await env.DB.prepare(
     `INSERT INTO participants (discord_id, discord_username, discord_nickname, name, preferred_email, topics, status)
      VALUES ('201', 'ivy.dev', 'Ivy', 'Ivy Interviewer', 'ivy@example.com', '["dsa"]', 'active'),
@@ -113,6 +111,13 @@ describe('form rail', () => {
     const fieldIds = form.fields.map((field: any) => field.id);
     expect(fieldIds).not.toContain('language');
     expect(fieldIds.indexOf('code')).toBe(fieldIds.indexOf('video_url') + 1);
+
+    const interviewerForm = await (await app.request(`/api/forms/${interviewerToken}`, {}, env)).json<any>();
+    const interviewerFields = interviewerForm.fields.map((field: any) => field.id);
+    expect(interviewerFields).not.toContain('verdict');
+    expect(interviewerFields).not.toContain('verdict_reason');
+    expect(interviewerForm.fields.find((field: any) => field.id === 'improvements')?.label)
+      .toBe('What feedback would you give your interviewee? What should they continue practicing?');
   });
 
   it('rejects an incomplete submission with field errors', async () => {
@@ -188,7 +193,7 @@ describe('form rail', () => {
       interviewer_credited: 1,
       interviewee_credited: 1,
       state: 'completed',
-      review_state: 'pending', // W3 pass verdict -> review queue
+      review_state: 'pending', // every final-round session enters review
     });
 
     // Shared feedback relayed both directions via outbox DMs
