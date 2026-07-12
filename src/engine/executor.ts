@@ -46,7 +46,14 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       return;
 
     case 'nickname':
-      await needRest().setNickname(payload.guildId, payload.userId, payload.nick);
+      {
+        const organizerRoleId = await getSetting(env, 'organizer_role_id');
+        if (organizerRoleId) {
+          const member = await needRest().getGuildMember(payload.guildId, payload.userId);
+          if (member.roles.includes(organizerRoleId)) return;
+        }
+        await needRest().setNickname(payload.guildId, payload.userId, payload.nick);
+      }
       return;
 
     case 'discord_identity_sync': {

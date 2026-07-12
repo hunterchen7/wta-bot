@@ -6,6 +6,7 @@ import type { Env } from '../env';
 import { fieldsFor } from '../forms/schema';
 import { verifyToken } from '../forms/token';
 import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
+import { isWhitelistedAdmin } from '../organizers';
 import { getParticipant, upsertParticipant } from '../participants';
 import {
   enqueueEmailConfirmation,
@@ -96,7 +97,8 @@ publicApi.post('/api/enrollment/:token', async (c) => {
     status: 'active',
   });
 
-  if (identity.guildId && input.name !== before?.name) {
+  const organizerEmail = isWhitelistedAdmin(c.env, before?.preferred_email) || isWhitelistedAdmin(c.env, input.preferredEmail);
+  if (identity.guildId && input.name !== before?.name && !organizerEmail) {
     await enqueue(c.env, 'nickname', { guildId: identity.guildId, userId: identity.discordId, nick: input.name.slice(0, 32) });
   }
   if (input.emailOk && (before?.email_ok !== 1 || before.preferred_email?.toLowerCase() !== input.preferredEmail)) {

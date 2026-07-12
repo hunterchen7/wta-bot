@@ -98,6 +98,18 @@ describe('outbox', () => {
     expect(ran).toBeGreaterThan(0);
   });
 
+  it('does not process dismissed deliveries', async () => {
+    await enqueue(env, 'dm', { tag: 'dismissed-delivery' });
+    await env.DB.prepare(
+      "UPDATE outbox SET dismissed_at = ?1 WHERE payload LIKE '%dismissed-delivery%'",
+    ).bind(new Date().toISOString()).run();
+    let ran = false;
+    await drainOutbox(env, (async (_e: unknown, _k: string, payload: any) => {
+      if (payload.tag === 'dismissed-delivery') ran = true;
+    }) as any, 50);
+    expect(ran).toBe(false);
+  });
+
   it('never double-sends under concurrent drains (atomic claim/lease)', async () => {
     // The opportunistic post-POST drain and the cron drain can run at the same
     // instant. Prove the atomic claim gives each row to exactly one drain.

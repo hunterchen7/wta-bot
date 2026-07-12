@@ -98,6 +98,18 @@ describe('participant dashboard API', () => {
     expect(JSON.parse(confirmation.payload).to).toBe('student.updated@example.com');
   });
 
+  it('does not try to manage an organizer’s Discord nickname', async () => {
+    const before = await env.DB.prepare("SELECT count(*) AS n FROM outbox WHERE kind = 'nickname' AND json_extract(payload, '$.userId') = '402'").first<{ n: number }>();
+    const save = await jsonPost('/api/settings', {
+      name: 'Organizer Updated', preferredEmail: 'org@example.com', westernEmail: 'org@uwo.ca', year: 'Fourth', program: 'Software Engineering', experience: '3-4',
+      opportunities: ['new_grad'], topics: ['system_design'], priorWta: false, emailOk: false,
+      blurb: 'I want to help participants practice realistic interviews and give precise feedback that makes each round more useful. '.repeat(12), interests: '', priorFeedback: '',
+    }, await cookieFor(ADMIN_ID, true), { DASHBOARD_ADMINS: 'org@example.com' });
+    expect(save.status).toBe(200);
+    const after = await env.DB.prepare("SELECT count(*) AS n FROM outbox WHERE kind = 'nickname' AND json_extract(payload, '$.userId') = '402'").first<{ n: number }>();
+    expect(after?.n).toBe(before?.n);
+  });
+
   it('keeps legacy dashboard bookmarks as redirects only', async () => {
     const routes: Array<[string, string]> = [['/dashboard', '/app'], ['/dashboard/settings', '/app/settings'], ['/dashboard/roster', '/app/admin/participants'], ['/dashboard/week', '/app/admin/rounds']];
     for (const [path, destination] of routes) {

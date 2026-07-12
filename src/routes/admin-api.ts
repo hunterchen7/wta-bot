@@ -69,8 +69,8 @@ adminApi.get('/api/admin/overview', async (c) => {
     count(c.env, "SELECT count(*) AS n FROM incidents WHERE state = 'open' AND kind != 'issue'"),
     count(c.env, "SELECT count(*) AS n FROM repair_queue WHERE state = 'open'"),
     count(c.env, "SELECT count(*) AS n FROM sessions WHERE review_state IN ('pending', 'flagged')"),
-    count(c.env, 'SELECT count(*) AS n FROM outbox WHERE done_at IS NULL AND attempts < 5'),
-    count(c.env, 'SELECT count(*) AS n FROM outbox WHERE done_at IS NULL AND attempts >= 5'),
+    count(c.env, 'SELECT count(*) AS n FROM outbox WHERE dismissed_at IS NULL AND done_at IS NULL AND attempts < 5'),
+    count(c.env, 'SELECT count(*) AS n FROM outbox WHERE dismissed_at IS NULL AND done_at IS NULL AND attempts >= 5'),
     c.env.DB.prepare(
       `SELECT a.*, p.name AS actor_name FROM audit_log a
        LEFT JOIN participants p ON p.id = a.actor_participant_id ORDER BY a.id DESC LIMIT 8`,
@@ -381,7 +381,7 @@ adminApi.get('/api/admin/operations', async (c) => {
   if (gate instanceof Response) return gate;
   const [outbox, notifications, jobs, auditRows] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT o.id, o.kind, o.payload, o.attempts, o.run_after, o.done_at, o.last_error, o.created_at,
+      `SELECT o.id, o.kind, o.payload, o.attempts, o.run_after, o.done_at, o.dismissed_at, o.last_error, o.created_at,
               (SELECT p.name FROM participants p
                WHERE p.discord_id = json_extract(o.payload, '$.userId')
                   OR lower(p.preferred_email) = lower(json_extract(o.payload, '$.to'))
@@ -400,11 +400,25 @@ adminApi.post('/api/admin/operations/outbox/:id/retry', async (c) => {
   if (gate instanceof Response) return gate;
   const id = Number(c.req.param('id'));
   const result = await c.env.DB.prepare(
-    `UPDATE outbox SET attempts = 0, last_error = NULL, run_after = ?2 WHERE id = ?1 AND done_at IS NULL`,
+    `UPDATE outbox SET attempts = 0, last_error = NULL, dismissed_at = NULL, run_after = ?2 WHERE id = ?1 AND done_at IS NULL`,
   ).bind(id, new Date().toISOString()).run();
   if (!result.meta.changes) return c.json({ error: 'not_found' }, 404);
   await audit(c.env, gate.participantId, 'outbox.retry', 'outbox', id);
   return c.json({ ok: true });
+});
+
+adminApi.post('/api/admin/operations/outbox/:id/dismiss', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const id = Number(c.req.param('id'));
+  const dismissedAt = new Date().toISOString();
+  const result = await c.env.DB.prepare(
+    `UPDATE outbox SET dismissed_at = ?2
+     WHERE id = ?1 AND dismissed_at IS NULL AND done_at IS NULL AND attempts >= 5`,
+  ).bind(id, dismissedAt).run();
+  if (!result.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await audit(c.env, gate.participantId, 'outbox.dismiss', 'outbox', id);
+  return c.json({ ok: true, dismissedAt });
 });
 
 adminApi.get('/api/admin/settings', async (c) => {

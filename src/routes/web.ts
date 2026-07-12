@@ -5,6 +5,7 @@ import { DiscordRest } from '../discord/rest';
 import { sendEmail } from '../email';
 import type { Env } from '../env';
 import { signToken, verifyToken } from '../forms/token';
+import { isWhitelistedAdmin } from '../organizers';
 
 // Authentication is the only browser concern that still needs a Worker route:
 // everything visible is rendered by the React app, while this module owns OTPs
@@ -146,10 +147,6 @@ async function setSessionCookie(c: any, participantId: number, organizer: boolea
     path: '/',
     maxAge: SESSION_DAYS * 86400,
   });
-}
-
-export function isWhitelistedAdmin(env: Env, email: string): boolean {
-  return (env.DASHBOARD_ADMINS ?? '').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean).includes(email.toLowerCase());
 }
 
 async function checkOrganizer(env: Env, discordId: string): Promise<boolean> {

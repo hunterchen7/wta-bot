@@ -78,7 +78,7 @@ export async function drainOutbox(
     `UPDATE outbox SET run_after = ?1
      WHERE id IN (
        SELECT id FROM outbox
-       WHERE done_at IS NULL AND attempts < ?2 AND run_after <= ?3
+       WHERE dismissed_at IS NULL AND done_at IS NULL AND attempts < ?2 AND run_after <= ?3
        ORDER BY id LIMIT ?4
      )
      RETURNING id, kind, payload, attempts`,
@@ -111,7 +111,7 @@ export async function drainOutbox(
 export async function deadLetters(env: Env, limit = 10) {
   const { results } = await env.DB.prepare(
     `SELECT id, kind, last_error FROM outbox
-     WHERE done_at IS NULL AND attempts >= ?1 ORDER BY id DESC LIMIT ?2`,
+     WHERE dismissed_at IS NULL AND done_at IS NULL AND attempts >= ?1 ORDER BY id DESC LIMIT ?2`,
   )
     .bind(MAX_ATTEMPTS, limit)
     .all<{ id: number; kind: string; last_error: string }>();

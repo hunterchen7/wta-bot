@@ -254,11 +254,16 @@ describe('admin mutations and audit history', () => {
         (9502, 'email', '{"to":"student@example.com","subject":"Round reminder"}', ?1, 0, NULL)`,
     ).bind(new Date(Date.now() + 86400_000).toISOString()).run();
     const operations = await (await request('/api/admin/operations')).json<any>();
-    expect(operations.outbox).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9501, attempts: 5, payload: '{}' })]));
+    expect(operations.outbox).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9501, attempts: 5, payload: '{}', dismissed_at: null })]));
     expect(operations.outbox).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9502, participant_name: 'Student Person' })]));
+
+    const dismiss = await request('/api/admin/operations/outbox/9501/dismiss', { method: 'POST', body: '{}' });
+    expect(dismiss.status).toBe(200);
+    expect(await env.DB.prepare('SELECT dismissed_at FROM outbox WHERE id = 9501').first()).toEqual({ dismissed_at: expect.any(String) });
+    expect((await (await request('/api/admin/overview')).json<any>()).queues.failedOutbox).toBe(0);
 
     const retry = await request('/api/admin/operations/outbox/9501/retry', { method: 'POST', body: '{}' });
     expect(retry.status).toBe(200);
-    expect(await env.DB.prepare('SELECT attempts, last_error FROM outbox WHERE id = 9501').first()).toEqual({ attempts: 0, last_error: null });
+    expect(await env.DB.prepare('SELECT attempts, last_error, dismissed_at FROM outbox WHERE id = 9501').first()).toEqual({ attempts: 0, last_error: null, dismissed_at: null });
   });
 });

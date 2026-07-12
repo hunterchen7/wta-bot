@@ -45,9 +45,9 @@ const problems: ProblemsData['problems'] = [
 
 const operations: OperationsData = {
   outbox: [
-    { id: 203, kind: 'email', payload: JSON.stringify({ to: 'maya@example.com', subject: 'Your WTA pairing' }), participant_name: 'Maya Singh', attempts: 5, run_after: now, done_at: null, last_error: 'Email binding rejected recipient', created_at: now },
-    { id: 202, kind: 'dm', payload: JSON.stringify({ userId: '100000000000000002', message: { content: 'Choose a session time.' } }), participant_name: 'Jordan Lee', attempts: 1, run_after: '2026-08-13T14:05:00.000Z', done_at: null, last_error: 'Discord API 429', created_at: now },
-    { id: 201, kind: 'channel_msg', payload: JSON.stringify({ channelId: '100000000000000099', message: { content: 'Round 2 is open.' } }), participant_name: null, attempts: 0, run_after: now, done_at: '2026-08-13T13:59:00.000Z', last_error: null, created_at: now },
+    { id: 203, kind: 'email', payload: JSON.stringify({ to: 'maya@example.com', subject: 'Your WTA pairing' }), participant_name: 'Maya Singh', attempts: 5, run_after: now, done_at: null, dismissed_at: null, last_error: 'Email binding rejected recipient', created_at: now },
+    { id: 202, kind: 'dm', payload: JSON.stringify({ userId: '100000000000000002', message: { content: 'Choose a session time.' } }), participant_name: 'Jordan Lee', attempts: 1, run_after: '2026-08-13T14:05:00.000Z', done_at: null, dismissed_at: null, last_error: 'Discord API 429', created_at: now },
+    { id: 201, kind: 'channel_msg', payload: JSON.stringify({ channelId: '100000000000000099', message: { content: 'Round 2 is open.' } }), participant_name: null, attempts: 0, run_after: now, done_at: '2026-08-13T13:59:00.000Z', dismissed_at: null, last_error: null, created_at: now },
   ],
   notifications: [{ id: 12, name: 'Maya Singh', channel: 'email', kind: 'pairing', status: 'sent', created_at: now }, { id: 11, name: 'Jordan Lee', channel: 'dm', kind: 'scheduling_nudge', status: 'sent', created_at: now }],
   jobs: [{ id: 3, job_key: 'round:2:nudge:1', ran_at: now }, { id: 2, job_key: 'round:2:match', ran_at: '2026-08-08T22:15:00.000Z' }],

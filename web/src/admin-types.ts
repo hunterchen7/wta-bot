@@ -44,7 +44,7 @@ export type AnalyticsData = {
   rounds: Array<{ cohort: string; round: number; optins: number; sessions: number; completed: number }>;
 };
 
-export type OutboxRow = { id: number; kind: string; payload: string; participant_name: string | null; attempts: number; run_after: string; done_at: string | null; last_error: string | null; created_at: string };
+export type OutboxRow = { id: number; kind: string; payload: string; participant_name: string | null; attempts: number; run_after: string; done_at: string | null; dismissed_at: string | null; last_error: string | null; created_at: string };
 export type AuditRow = { id: number; actor_participant_id: number | null; actor_name: string | null; action: string; target_type: string | null; target_id: string | null; detail: string | null; created_at: string };
 export type OperationsData = { outbox: OutboxRow[]; notifications: Array<Record<string, any>>; jobs: Array<Record<string, any>>; audit: AuditRow[] };
 
