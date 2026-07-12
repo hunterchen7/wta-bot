@@ -4,8 +4,29 @@ import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } f
 import { signToken } from '../forms/token';
 import { updateParticipantSettings, type ParticipantSettingsInput } from '../services/participant-settings';
 import { sessionFrom } from './web';
+import { activeCohort, cohortWeeks } from '../engine/weeks';
 
 export const api = new Hono<{ Bindings: Env }>();
+
+api.get('/api/practice', async (c) => {
+  const session = await sessionFrom(c);
+  if (!session) return c.json({ error: 'unauthorized' }, 401);
+  const cohort = await activeCohort(c.env);
+  if (!cohort) return c.json({ cohort: null, round: null, problems: [] });
+  const weeks = await cohortWeeks(c.env, cohort.id);
+  const now = Date.now();
+  const current = weeks.find((week) =>
+    now >= new Date(week.optin_opens_at).getTime()
+    && now <= new Date(week.grace_until ?? week.reports_due_at).getTime())
+    ?? weeks.find((week) => now < new Date(week.optin_opens_at).getTime())
+    ?? weeks.at(-1);
+  if (!current) return c.json({ cohort: { name: cohort.name }, round: null, problems: [] });
+  const { results } = await c.env.DB.prepare(
+    `SELECT number, title, url, difficulty FROM practice_problems
+     WHERE week_idx = ?1 AND active = 1 ORDER BY id`,
+  ).bind(current.idx).all<any>();
+  return c.json({ cohort: { name: cohort.name }, round: current.idx, problems: results });
+});
 
 api.get('/api/dashboard', async (c) => {
   const session = await sessionFrom(c);

@@ -24,6 +24,7 @@ const ProblemPage = lazy(() => import('./pages/ProblemPage').then((module) => ({
 const BankPage = lazy(() => import('./pages/BankPage').then((module) => ({ default: module.BankPage })));
 const PreviewPage = lazy(() => import('./pages/PreviewPage').then((module) => ({ default: module.PreviewPage })));
 const EnrollmentPage = lazy(() => import('./pages/EnrollmentPage').then((module) => ({ default: module.EnrollmentPage })));
+const PracticeProblemsPage = lazy(() => import('./pages/PracticeProblemsPage').then((module) => ({ default: module.PracticeProblemsPage })));
 const deferred = (page: ReactNode) => <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl bg-slate-200/70" />}>{page}</Suspense>;
 const publicDeferred = (page: ReactNode) => <Suspense fallback={<div className="min-h-screen animate-pulse bg-stone-50 p-6"><div className="mx-auto h-96 max-w-3xl rounded-3xl bg-slate-200/70" /></div>}>{page}</Suspense>;
 const titled = (title: string, page: ReactNode) => <><DocumentTitle title={title} />{page}</>;
@@ -46,6 +47,7 @@ const router = createBrowserRouter(
       element: <AppLayout />,
       children: [
         { index: true, element: <ProgressPage /> },
+        { path: 'practice', element: deferred(<PracticeProblemsPage />) },
         { path: 'settings', element: <SettingsPage /> },
         { path: 'admin', element: deferred(<OverviewPage />) },
         { path: 'admin/participants', element: deferred(<ParticipantsPage />) },

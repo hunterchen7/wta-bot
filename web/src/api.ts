@@ -44,6 +44,17 @@ export type DashboardData = {
   };
 };
 
+export type PracticeProblemsData = {
+  cohort: { name: string } | null;
+  round: number | null;
+  problems: Array<{
+    number: number | null;
+    title: string;
+    url: string;
+    difficulty: string;
+  }>;
+};
+
 export type SettingsPayload = Omit<ParticipantSettings, 'id' | 'status' | 'discordId' | 'discordUsername' | 'discordNickname'>;
 
 export class SettingsSaveError extends Error {
@@ -63,6 +74,27 @@ export async function getDashboard(): Promise<DashboardData> {
     throw new Error('Your session expired. Redirecting to login…');
   }
   if (!response.ok) throw new Error('Could not load your dashboard.');
+  return response.json();
+}
+
+export async function getPracticeProblems(): Promise<PracticeProblemsData> {
+  if (import.meta.env.DEV && demoEnabled()) {
+    return {
+      cohort: { name: 'Summer 2026' },
+      round: 1,
+      problems: [
+        { number: 739, title: 'Daily Temperatures', url: 'https://leetcode.com/problems/daily-temperatures/', difficulty: 'medium' },
+        { number: 11, title: 'Container With Most Water', url: 'https://leetcode.com/problems/container-with-most-water/description/', difficulty: 'medium' },
+        { number: 3070, title: 'Count Submatrices with Top-Left Element and Sum Less Than or Equal to K', url: 'https://leetcode.com/problems/count-submatrices-with-top-left-element-and-sum-less-than-k/description', difficulty: 'easy' },
+      ],
+    };
+  }
+  const response = await fetch('/api/practice', { headers: { Accept: 'application/json' } });
+  if (response.status === 401) {
+    window.location.assign('/login');
+    throw new Error('Your session expired. Redirecting to login…');
+  }
+  if (!response.ok) throw new Error('Could not load practice problems.');
   return response.json();
 }
 

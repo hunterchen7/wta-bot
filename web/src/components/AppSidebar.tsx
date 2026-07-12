@@ -16,6 +16,7 @@ type NavEntry = { label: string; to: string; icon: IconName; end?: boolean };
 
 const personalItems: NavEntry[] = [
   { label: 'My progress', to: '/app', icon: 'progress', end: true },
+  { label: 'Practice problems', to: '/app/practice', icon: 'problems' },
   { label: 'My settings', to: '/app/settings', icon: 'settings' },
 ];
 
