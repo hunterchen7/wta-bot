@@ -40,10 +40,14 @@ wrangler secret put FORM_SIGNING_SECRET   # openssl rand -hex 32
 
 ### Deploy
 
-```sh
-npm run migrate:remote   # apply migrations to the real D1
-npm run deploy           # deploys + provisions wta.hunterchen.ca
-```
+Deploys are CI-only: every push to `main` runs typecheck + tests, then applies
+D1 migrations and `wrangler deploy` (provisions `wta.hunterchen.ca`). See
+`.github/workflows/ci.yml`. One-time setup: create a Cloudflare API token
+(Workers Scripts:Edit + D1:Edit on the account, plus the `hunterchen.ca` zone)
+and add it as the `CLOUDFLARE_API_TOKEN` repo secret.
+
+Schema changes always go in a NEW `migrations/000N_*.sql` file — never edit an
+applied migration.
 
 ## Milestones
 

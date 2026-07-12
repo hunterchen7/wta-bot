@@ -2,6 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "wta-bot",
   "main": "src/index.ts",
+  "account_id": "e279bdf8038be9bfccc6dda153c9ac71",
   "compatibility_date": "2026-06-01",
   "observability": { "enabled": true },
 
