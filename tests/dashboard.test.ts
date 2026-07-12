@@ -134,10 +134,134 @@ describe('views + authorization', () => {
     const html = await home.text();
     expect(html).toContain('Stu Dent');
     expect(html).toContain('Interviewer');
+    expect(html).toContain('href="/dashboard/settings"');
     expect(html).not.toContain('href="/dashboard/roster"');
 
     const roster = await get('/dashboard/roster', cookie);
     expect(roster.status).toBe(403);
+  });
+
+  it('lets participants manage email reminders from settings', async () => {
+    const cookie = await cookieFor(1, false);
+    await env.DB.prepare('UPDATE participants SET email_ok = 0 WHERE id = 1').run();
+
+    const settings = await get('/dashboard/settings', cookie);
+    expect(settings.status).toBe(200);
+    const html = await settings.text();
+    expect(html).toContain('Email reminders');
+    expect(html).toContain('stu@example.com');
+    expect(html).toContain('Turn on email reminders');
+
+    const enable = await app.request(
+      '/dashboard/settings/email',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
+        body: 'enabled=1',
+      },
+      env,
+    );
+    expect(enable.status).toBe(302);
+    expect(enable.headers.get('location')).toBe('/dashboard/settings?saved=1');
+    const enabled = await env.DB.prepare('SELECT email_ok FROM participants WHERE id = 1').first<any>();
+    expect(enabled.email_ok).toBe(1);
+    const confirmation = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'email' ORDER BY id DESC LIMIT 1",
+    ).first<any>();
+    expect(JSON.parse(confirmation.payload)).toMatchObject({
+      to: 'stu@example.com',
+      subject: "You're subscribed to WTA email reminders ✅",
+    });
+
+    const disable = await app.request(
+      '/dashboard/settings/email',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
+        body: 'enabled=0',
+      },
+      env,
+    );
+    expect(disable.status).toBe(302);
+    const disabled = await env.DB.prepare('SELECT email_ok FROM participants WHERE id = 1').first<any>();
+    expect(disabled.email_ok).toBe(0);
+  });
+
+  it('protects settings and rejects invalid preference values', async () => {
+    const anonymous = await get('/dashboard/settings');
+    expect(anonymous.status).toBe(302);
+    expect(anonymous.headers.get('location')).toBe('/login');
+
+    const invalid = await app.request(
+      '/dashboard/settings/email',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Cookie: await cookieFor(1, false),
+        },
+        body: 'enabled=maybe',
+      },
+      env,
+    );
+    expect(invalid.status).toBe(400);
+  });
+
+  it('lets participants update their own profile from settings', async () => {
+    const cookie = await cookieFor(1, false);
+    const body = new URLSearchParams({
+      name: 'Student Updated',
+      preferred_email: 'student.updated@example.com',
+      western_email: 'supdated@uwo.ca',
+      year: 'Fourth',
+      program: 'Computer Science',
+      experience_band: '3-4',
+      prior_wta: '1',
+      blurb: 'word '.repeat(170),
+      interests: 'System design and networking',
+      prior_feedback: 'More mock interviews',
+    });
+    body.append('opportunities', 'internships');
+    body.append('opportunities', 'new_grad');
+    body.append('topics', 'dsa');
+    body.append('topics', 'system_design');
+
+    const save = await app.request(
+      '/dashboard/settings/profile',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Cookie: cookie },
+        body: body.toString(),
+      },
+      env,
+    );
+    expect(save.status).toBe(302);
+    expect(save.headers.get('location')).toBe('/dashboard/settings?profile=saved');
+
+    const participant = await env.DB.prepare('SELECT * FROM participants WHERE id = 1').first<any>();
+    expect(participant).toMatchObject({
+      name: 'Student Updated',
+      preferred_email: 'student.updated@example.com',
+      western_email: 'supdated@uwo.ca',
+      year: 'Fourth',
+      program: 'Computer Science',
+      prior_wta: 1,
+      experience_band: '3-4',
+      interests: 'System design and networking',
+    });
+    expect(JSON.parse(participant.opportunities)).toEqual(['internships', 'new_grad']);
+    expect(JSON.parse(participant.topics)).toEqual(['dsa', 'system_design']);
+    const organizer = await env.DB.prepare('SELECT name, preferred_email FROM participants WHERE id = 2').first<any>();
+    expect(organizer).toEqual({ name: 'Orga Nizer', preferred_email: 'org@example.com' });
+    const nickname = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'nickname' ORDER BY id DESC LIMIT 1",
+    ).first<any>();
+    expect(JSON.parse(nickname.payload)).toMatchObject({ userId: '401', nick: 'Student Updated' });
+
+    // Keep shared fixtures stable for the remaining dashboard tests.
+    await env.DB.prepare(
+      "UPDATE participants SET name = 'Stu Dent', preferred_email = 'stu@example.com' WHERE id = 1",
+    ).run();
   });
 
   it('organizers get roster, week board, reviews, problems', async () => {

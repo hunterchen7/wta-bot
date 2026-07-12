@@ -26,13 +26,13 @@ export const BLURB_MIN_WORDS = 150;
 export const wordCount = (s: string | null | undefined) =>
   (s ?? '').trim().split(/\s+/).filter(Boolean).length;
 
-const YEARS = ['First', 'Second', 'Third', 'Fourth', 'Fifth or greater'];
-const PROGRAMS = ['Computer Science', 'Software Engineering', 'Data Science', 'Other'];
-const OPPORTUNITIES = [
+export const YEARS = ['First', 'Second', 'Third', 'Fourth', 'Fifth or greater'];
+export const PROGRAMS = ['Computer Science', 'Software Engineering', 'Data Science', 'Other'];
+export const OPPORTUNITIES = [
   { label: 'Internships', value: 'internships' },
   { label: 'New Grad', value: 'new_grad' },
 ];
-const EXPERIENCE = ['0', '1-2', '3-4', '5+'];
+export const EXPERIENCE = ['0', '1-2', '3-4', '5+'];
 export const TOPICS = [
   { label: 'Building a strong technical resume', value: 'resume' },
   { label: 'Data Structures & Algorithms interviews', value: 'dsa' },

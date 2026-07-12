@@ -3,6 +3,7 @@ import { getCookie, setCookie } from 'hono/cookie';
 import { getSetting, getSettings } from '../config';
 import { DiscordRest } from '../discord/rest';
 import { sendEmail } from '../email';
+import { enqueue } from '../engine/outbox';
 import { maybeMarkEligible } from '../engine/reports';
 import { creditsOf, strikesOf } from '../engine/progress';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
@@ -10,6 +11,7 @@ import type { Env } from '../env';
 import { esc, page } from '../forms/render';
 import { signToken, verifyToken } from '../forms/token';
 import { discordTime, formatToronto } from '../time';
+import { BLURB_MIN_CHARS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
 
 // Authenticated dashboard (DESIGN task: email-code login). Students see their
 // own progress; organizers additionally get roster / week board / reviews /
@@ -43,6 +45,7 @@ async function sessionFrom(c: any): Promise<SessionUser | null> {
 const nav = (user: SessionUser) =>
   `<nav class="top">
     <a href="/dashboard">My progress</a>
+    <a href="/dashboard/settings">Settings</a>
     ${user.organizer ? `<a href="/dashboard/roster">Roster</a><a href="/dashboard/week">Round board</a><a href="/dashboard/reviews">Reviews</a><a href="/dashboard/problems">Problems</a>` : ''}
     <form method="POST" action="/logout" style="margin-left:auto"><button class="btn ghost" style="padding:.2rem .8rem">Log out</button></form>
   </nav>`;
@@ -303,6 +306,210 @@ web.post('/logout', (c) => {
   setCookie(c, COOKIE, '', { httpOnly: true, secure: true, sameSite: 'Lax', path: '/', maxAge: 0 });
   return c.redirect('/login');
 });
+
+// ---------------------------------------------------------------------------
+// Participant settings
+
+web.get('/dashboard/settings', async (c) => {
+  const user = await sessionFrom(c);
+  if (!user) return c.redirect('/login');
+  const p = await c.env.DB.prepare('SELECT * FROM participants WHERE id = ?1')
+    .bind(user.participantId)
+    .first<any>();
+  if (!p) return c.redirect('/login');
+
+  const saved = c.req.query('saved') === '1';
+  const profileSaved = c.req.query('profile') === 'saved';
+  const noEmail = c.req.query('error') === 'no-email';
+  const enabled = p.email_ok === 1;
+  const notice = profileSaved
+    ? '<div class="ok">Profile saved.</div>'
+    : saved
+    ? `<div class="ok">Email reminders are now <b>${enabled ? 'on' : 'off'}</b>.</div>`
+    : noEmail
+      ? '<div class="err">Add a preferred email through <code>/join</code> in Discord before enabling email reminders.</div>'
+      : '';
+  const jsonList = (raw: string | null): string[] => {
+    try {
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+  const opportunities = new Set(jsonList(p.opportunities));
+  const topics = new Set(jsonList(p.topics));
+  const options = (values: string[], selected: string | null) =>
+    values.map((value) => `<option value="${esc(value)}" ${value === selected ? 'selected' : ''}>${esc(value)}</option>`).join('');
+  const body = `
+    ${nav(user)}
+    <h1>Settings</h1>
+    <p class="sub">Manage how WTA contacts you. These choices do not change your round participation.</p>
+    ${notice}
+    <div class="card">
+      <h2 style="margin-top:0">Email reminders</h2>
+      <p><b>${enabled ? 'On 📧' : 'Off'}</b></p>
+      <p class="sub">${
+        p.preferred_email
+          ? `Optional pairing announcements, opt-in reminders, and overdue-report alerts go to <b>${esc(p.preferred_email)}</b> alongside Discord.`
+          : 'No preferred email is saved. Add one in the profile section below first.'
+      }</p>
+      <form method="POST" action="/dashboard/settings/email">
+        <input type="hidden" name="enabled" value="${enabled ? '0' : '1'}">
+        <button type="submit" ${!enabled && !p.preferred_email ? 'disabled' : ''}>${enabled ? 'Turn off email reminders' : 'Turn on email reminders'}</button>
+      </form>
+      <p class="help">If Discord cannot deliver an important DM, the bot may still use your saved email as a delivery fallback. You can change the address in the profile section below.</p>
+    </div>
+    <div class="card">
+      <h2 style="margin-top:0">Your profile</h2>
+      <p class="sub">These are the same answers used by <code>/join</code>. Your Discord account, participation status, credits, and strikes cannot be changed here.</p>
+      <form method="POST" action="/dashboard/settings/profile">
+        <label class="f" for="name">Full name</label>
+        <input type="text" id="name" name="name" required maxlength="100" value="${esc(p.name ?? '')}">
+        <label class="f" for="preferred_email">Preferred email</label>
+        <div class="help">Used to log into this dashboard and for email reminders.</div>
+        <input type="email" id="preferred_email" name="preferred_email" required maxlength="200" value="${esc(p.preferred_email ?? '')}">
+        <label class="f" for="western_email">Western email</label>
+        <input type="email" id="western_email" name="western_email" required maxlength="200" value="${esc(p.western_email ?? '')}">
+        <label class="f" for="year">Incoming year</label>
+        <select id="year" name="year" required><option value="">— pick one —</option>${options(YEARS, p.year)}</select>
+        <label class="f" for="program">Program</label>
+        <select id="program" name="program" required><option value="">— pick one —</option>${options(PROGRAMS, p.program)}</select>
+        <label class="f">What are you looking for?</label>
+        <div class="opts">${OPPORTUNITIES.map((o) => `<label><input type="checkbox" name="opportunities" value="${esc(o.value)}" ${opportunities.has(o.value) ? 'checked' : ''}> ${esc(o.label)}</label>`).join('')}</div>
+        <label class="f" for="experience_band">Technical interviews done so far</label>
+        <select id="experience_band" name="experience_band" required><option value="">— pick one —</option>${options(EXPERIENCE, p.experience_band)}</select>
+        <label class="f"><input type="checkbox" name="prior_wta" value="1" ${p.prior_wta ? 'checked' : ''}> I participated in WTA before</label>
+        <label class="f">Topics that would help you most</label>
+        <div class="opts">${TOPICS.map((o) => `<label><input type="checkbox" name="topics" value="${esc(o.value)}" ${topics.has(o.value) ? 'checked' : ''}> ${esc(o.label)}</label>`).join('')}</div>
+        <label class="f" for="blurb">Dream company and role — what and why?</label>
+        <div class="help">At least about 150–200 words.</div>
+        <textarea id="blurb" name="blurb" required minlength="${BLURB_MIN_CHARS}" maxlength="2000">${esc(p.blurb ?? '')}</textarea>
+        <label class="f" for="interests">Anything else you want to learn?</label>
+        <textarea id="interests" name="interests" maxlength="1000">${esc(p.interests ?? '')}</textarea>
+        <label class="f" for="prior_feedback">Feedback from last year</label>
+        <textarea id="prior_feedback" name="prior_feedback" maxlength="1000">${esc(p.prior_feedback ?? '')}</textarea>
+        <p style="margin-top:1.2rem"><button type="submit">Save profile</button></p>
+      </form>
+    </div>`;
+  return c.html(page('Settings', body));
+});
+
+web.post('/dashboard/settings/profile', async (c) => {
+  const user = await sessionFrom(c);
+  if (!user) return c.redirect('/login');
+  const body = await c.req.parseBody({ all: true });
+  const text = (key: string) => {
+    const value = body[key];
+    return String(Array.isArray(value) ? value[0] ?? '' : value ?? '').trim();
+  };
+  const list = (key: string) => {
+    const value = body[key];
+    return (Array.isArray(value) ? value : value === undefined ? [] : [value]).map(String);
+  };
+
+  const name = text('name');
+  const preferredEmail = text('preferred_email').toLowerCase();
+  const westernEmail = text('western_email').toLowerCase();
+  const year = text('year');
+  const program = text('program');
+  const experience = text('experience_band');
+  const opportunities = list('opportunities');
+  const topics = list('topics');
+  const blurb = text('blurb');
+  const interests = text('interests');
+  const priorFeedback = text('prior_feedback');
+  const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+  const allowed = (values: string[], choices: Array<{ value: string }>) =>
+    values.length > 0 && values.every((value) => choices.some((choice) => choice.value === value));
+
+  if (
+    !name || name.length > 100 ||
+    !validEmail(preferredEmail) || preferredEmail.length > 200 ||
+    !validEmail(westernEmail) || westernEmail.length > 200 ||
+    !YEARS.includes(year) || !PROGRAMS.includes(program) || !EXPERIENCE.includes(experience) ||
+    !allowed(opportunities, OPPORTUNITIES) || !allowed(topics, TOPICS) ||
+    blurb.length < BLURB_MIN_CHARS || blurb.length > 2000 ||
+    interests.length > 1000 || priorFeedback.length > 1000
+  ) {
+    return c.html(page('Invalid profile', `${nav(user)}<h1>Check your answers</h1><div class="err">One or more profile fields were missing or invalid. Go back and try again.</div><p><a class="btn ghost" href="/dashboard/settings">Back to settings</a></p>`), 400);
+  }
+
+  const current = await c.env.DB.prepare(
+    'SELECT discord_id, name, preferred_email, email_ok FROM participants WHERE id = ?1',
+  )
+    .bind(user.participantId)
+    .first<{ discord_id: string; name: string | null; preferred_email: string | null; email_ok: number }>();
+  if (!current) return c.redirect('/login');
+  const duplicate = await c.env.DB.prepare(
+    'SELECT id FROM participants WHERE lower(preferred_email) = ?1 AND id <> ?2 LIMIT 1',
+  )
+    .bind(preferredEmail, user.participantId)
+    .first();
+  if (duplicate) {
+    return c.html(page('Email already used', `${nav(user)}<h1>Email already used</h1><div class="err">That preferred email belongs to another WTA profile.</div><p><a class="btn ghost" href="/dashboard/settings">Back to settings</a></p>`), 409);
+  }
+
+  await c.env.DB.prepare(
+    `UPDATE participants SET name = ?1, preferred_email = ?2, western_email = ?3,
+       year = ?4, program = ?5, opportunities = ?6, prior_wta = ?7,
+       experience_band = ?8, topics = ?9, blurb = ?10, interests = ?11,
+       prior_feedback = ?12, updated_at = datetime('now') WHERE id = ?13`,
+  )
+    .bind(
+      name, preferredEmail, westernEmail, year, program, JSON.stringify(opportunities),
+      text('prior_wta') === '1' ? 1 : 0, experience, JSON.stringify(topics), blurb,
+      interests || null, priorFeedback || null, user.participantId,
+    )
+    .run();
+
+  if (name !== current.name) {
+    const guildId = c.env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
+    if (guildId) await enqueue(c.env, 'nickname', { guildId, userId: current.discord_id, nick: name.slice(0, 32) });
+  }
+  if (current.email_ok === 1 && preferredEmail !== current.preferred_email?.toLowerCase()) {
+    await enqueueEmailConfirmation(c.env, preferredEmail, name);
+  }
+  return c.redirect('/dashboard/settings?profile=saved');
+});
+
+web.post('/dashboard/settings/email', async (c) => {
+  const user = await sessionFrom(c);
+  if (!user) return c.redirect('/login');
+  const body = await c.req.parseBody();
+  const raw = String(body.enabled ?? '');
+  if (raw !== '0' && raw !== '1') return c.text('invalid email preference', 400);
+
+  const p = await c.env.DB.prepare(
+    'SELECT name, preferred_email, email_ok FROM participants WHERE id = ?1',
+  )
+    .bind(user.participantId)
+    .first<{ name: string | null; preferred_email: string | null; email_ok: number }>();
+  if (!p) return c.redirect('/login');
+  const enabled = raw === '1';
+  if (enabled && !p.preferred_email) return c.redirect('/dashboard/settings?error=no-email');
+
+  await c.env.DB.prepare(
+    "UPDATE participants SET email_ok = ?1, updated_at = datetime('now') WHERE id = ?2",
+  )
+    .bind(enabled ? 1 : 0, user.participantId)
+    .run();
+
+  if (enabled && p.email_ok !== 1) {
+    await enqueueEmailConfirmation(c.env, p.preferred_email!, p.name);
+  }
+  return c.redirect('/dashboard/settings?saved=1');
+});
+
+async function enqueueEmailConfirmation(env: Env, to: string, name: string | null) {
+  await enqueue(env, 'email', {
+    to,
+    subject: "You're subscribed to WTA email reminders ✅",
+    text:
+      `Hi ${name ?? 'there'},\n\n` +
+      `This confirms you've opted into Western Tech Alumni email reminders — pairings, deadlines, and important program updates will land here alongside Discord.\n\n` +
+      `You can change this any time from your WTA dashboard settings.\n\n— Western Tech Alumni`,
+  });
+}
 
 /** Primary organizer gate for the web: a simple email whitelist (var
  *  DASHBOARD_ADMINS). The Discord-role check below is the fallback. */
