@@ -70,7 +70,7 @@ export const INTERVIEWEE_FIELDS: Field[] = [
     label: 'Add your session recording',
     type: 'url',
     required: true,
-    help: 'Upload the recording directly, or use an existing Zoom, Meet, or Drive link. Files are inspected and, when useful, gently optimized on your device before upload.',
+    help: 'Upload the recording directly, or use an existing Zoom, Meet, or Drive link.',
   },
   {
     id: 'org_note',
