@@ -62,7 +62,9 @@ Rules of the road:
    Threads, Send Messages in Threads, Manage Threads, Embed Links, Attach
    Files, Mention Everyone *(optional)*, Manage Roles *(optional — needed for
    the verification gate / participant roles; bot's role must sit above those
-   roles in the server's role list)*.
+   roles in the server's role list)*, Manage Nicknames *(optional — lets intake
+   set members' server nicknames to their entered real names; same hierarchy
+   rule, and no bot can ever change the guild owner's nickname)*.
    Open the generated URL and add the bot to your server(s).
 
 ## 3. Cloudflare

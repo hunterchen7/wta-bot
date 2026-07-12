@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { app } from '../src/index';
 import { asAdmin, asUser, makeSigner, sendInteraction, type Signer } from './helpers';
 
@@ -147,6 +147,71 @@ describe('/join intake flow', () => {
     );
     const partial = await sendInteraction(signer, command('status', asUser(FRESH)));
     expect(((await partial.json()) as any).data.content).toContain('incomplete');
+  });
+});
+
+describe('nickname sync', () => {
+  function stubDiscord() {
+    const calls: Array<{ method?: string; url: string; body?: string }> = [];
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url.startsWith('https://discord.com/')) {
+        calls.push({ method: init?.method, url, body: init?.body as string });
+        return Promise.resolve(new Response('{}', { status: 200 }));
+      }
+      return realFetch(input as any, init);
+    });
+    return calls;
+  }
+
+  it('sets the server nickname to the entered name (truncated to 32)', async () => {
+    const calls = stubDiscord();
+    const longName = 'A'.repeat(40);
+    await sendInteraction(
+      signer,
+      {
+        ...modalSubmit(
+          'join:m1',
+          [
+            textField('name', longName),
+            textField('preferred_email', 'n@example.com'),
+            textField('western_email', 'n@uwo.ca'),
+            textField('blurb', 'x'),
+          ],
+          '424242',
+        ),
+        guild_id: '777000111',
+      },
+      { DISCORD_TOKEN: 'test-token' },
+    );
+    await vi.waitFor(() => {
+      const patch = calls.find((c) => c.method === 'PATCH');
+      expect(patch?.url).toBe('https://discord.com/api/v10/guilds/777000111/members/424242');
+      expect(JSON.parse(patch!.body!)).toEqual({ nick: 'A'.repeat(32) });
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it('skips nickname sync in DMs', async () => {
+    const calls = stubDiscord();
+    await sendInteraction(
+      signer,
+      modalSubmit(
+        'join:m1',
+        [
+          textField('name', 'DM Person'),
+          textField('preferred_email', 'd@example.com'),
+          textField('western_email', 'd@uwo.ca'),
+          textField('blurb', 'x'),
+        ],
+        '535353',
+      ),
+      { DISCORD_TOKEN: 'test-token' },
+    );
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls.filter((c) => c.method === 'PATCH')).toHaveLength(0);
+    vi.unstubAllGlobals();
   });
 });
 

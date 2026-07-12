@@ -55,6 +55,7 @@ Three incident kinds, tracked distinctly: **ghost** (confirmed time, didn't show
 - Modal 2 (via Continue button): program, opportunities (intern/new-grad), prior WTA, # technical interviews, topics (checkboxes), email-reminders opt-in (checkbox, default off → `email_ok`).
 - Optional modal 3 behind "add more": open-ended interests, prior-year feedback.
 - Re-running `/join` prefills current answers (self-serve edits). Discord username + "I joined the Discord" fields are obsolete — identity comes from the interaction.
+- **Nickname sync:** on name entry (and edits), the bot sets the member's server nickname to their entered name (truncated to 32). Fire-and-forget — never blocks intake. Needs **Manage Nicknames** + role hierarchy; Discord never allows changing the guild *owner's* nickname.
 
 **External form rail** — for anything richer than a modal (post-interview reports with code paste; later: alumni pages, availability grids):
 - One **template per form kind**, versioned: `interviewee_report`, `interviewer_report` **[OPEN — interviewer form fields pending access/paste]**, future kinds. "Week N" is a column, not a new form.

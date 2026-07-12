@@ -127,6 +127,25 @@ async function handleComponent(c: Ctx, interaction: Interaction) {
   }
 }
 
+/** Nice touch: server nickname follows the entered real name. Fire-and-forget —
+ *  never blocks or fails intake (missing Manage Nicknames, hierarchy, or the
+ *  guild-owner immunity just log). Skipped in DMs. */
+function syncNickname(c: Ctx, interaction: Interaction, userId: string, name: string) {
+  const token = c.env.DISCORD_TOKEN;
+  const guildId = interaction.guild_id;
+  if (!token || !guildId) return;
+  const nick = name.trim().slice(0, 32); // Discord nickname cap
+  if (!nick) return;
+  const run = new DiscordRest(token)
+    .setNickname(guildId, userId, nick)
+    .catch((err) => console.error('nickname sync failed (non-fatal):', err));
+  try {
+    c.executionCtx.waitUntil(run);
+  } catch {
+    // no execution context (tests) — the promise still runs
+  }
+}
+
 function guildAllowed(env: Env, interaction: Interaction): boolean {
   const raw = env.ALLOWED_GUILD_IDS?.trim();
   if (!raw) return true; // unconfigured (pre-setup) — allow
@@ -154,9 +173,12 @@ async function handleModalSubmit(c: Ctx, interaction: Interaction) {
   const values = collectModalValues(interaction.data?.components);
 
   switch (interaction.data?.custom_id) {
-    case intake.IDS.modal1:
-      await upsertParticipant(c.env, user.id, intake.parseModal1(values));
+    case intake.IDS.modal1: {
+      const fields = intake.parseModal1(values);
+      await upsertParticipant(c.env, user.id, fields);
+      if (fields.name) syncNickname(c, interaction, user.id, fields.name);
       return c.json(intake.afterModal1());
+    }
     case intake.IDS.modal2:
       await upsertParticipant(c.env, user.id, intake.parseModal2(values));
       return c.json(intake.afterModal2());

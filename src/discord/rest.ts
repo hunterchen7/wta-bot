@@ -35,4 +35,10 @@ export class DiscordRest {
   async leaveGuild(guildId: string) {
     return this.request('DELETE', `/users/@me/guilds/${guildId}`);
   }
+
+  /** Set a member's server nickname. Requires Manage Nicknames + role
+   *  hierarchy; always fails for the guild owner (Discord restriction). */
+  async setNickname(guildId: string, userId: string, nick: string) {
+    return this.request('PATCH', `/guilds/${guildId}/members/${userId}`, { nick });
+  }
 }
