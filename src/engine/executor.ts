@@ -32,13 +32,12 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
 
     case 'thread_create': {
       const r = needRest();
-      const thread = await r.createThread(payload.channelId, payload.name);
+      const thread = await r.createSessionThread(payload.channelId, payload.name, payload.starter);
       if (payload.sessionId) {
         await env.DB.prepare('UPDATE sessions SET thread_id = ?1 WHERE id = ?2')
           .bind(thread.id, payload.sessionId)
           .run();
       }
-      await r.send(thread.id, payload.starter);
       return;
     }
 

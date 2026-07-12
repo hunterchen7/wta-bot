@@ -52,27 +52,40 @@ export class DiscordRest {
     return this.request('PATCH', `/channels/${channelId}/messages/${messageId}`, message);
   }
 
-  /** Create a thread (private where allowed; falls back to public). Mentioning
-   *  users in the first message auto-adds them to a private thread. */
-  async createThread(channelId: string, name: string, opts: { private?: boolean } = {}) {
-    try {
-      return await this.request<{ id: string }>('POST', `/channels/${channelId}/threads`, {
+  /** Create a session space and post its starter, adapting to the channel:
+   *  - Forum/media channel -> one post per pairing (visible to whoever sees
+   *    the forum; posts cannot be private — Discord limitation).
+   *  - Text channel -> private thread (only the pinged pair + staff with
+   *    Manage Threads), falling back to a public thread if gated.
+   *  Mentioning users in the starter is what pulls them into the thread. */
+  async createSessionThread(channelId: string, name: string, starter: MessagePayload) {
+    const channel = await this.request<{ type: number }>('GET', `/channels/${channelId}`);
+    if (channel.type === 15 || channel.type === 16) {
+      // Forum/media: the starter message is part of post creation.
+      return this.request<{ id: string }>('POST', `/channels/${channelId}/threads`, {
         name: name.slice(0, 100),
-        type: opts.private === false ? 11 : 12, // 12 private, 11 public
+        auto_archive_duration: 10080,
+        message: starter,
+      });
+    }
+    let thread: { id: string };
+    try {
+      thread = await this.request<{ id: string }>('POST', `/channels/${channelId}/threads`, {
+        name: name.slice(0, 100),
+        type: 12, // private
         invitable: true,
         auto_archive_duration: 10080, // 7 days
       });
-    } catch (err) {
-      if (opts.private !== false) {
-        // Private threads can be gated by server features — fall back to public.
-        return this.request<{ id: string }>('POST', `/channels/${channelId}/threads`, {
-          name: name.slice(0, 100),
-          type: 11,
-          auto_archive_duration: 10080,
-        });
-      }
-      throw err;
+    } catch {
+      // Private threads can be gated by server features — fall back to public.
+      thread = await this.request<{ id: string }>('POST', `/channels/${channelId}/threads`, {
+        name: name.slice(0, 100),
+        type: 11,
+        auto_archive_duration: 10080,
+      });
     }
+    await this.send(thread.id, starter);
+    return thread;
   }
 
   async addRole(guildId: string, userId: string, roleId: string) {

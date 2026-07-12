@@ -51,6 +51,10 @@ interaction — no deploy.
 ## Discord-side settings that matter
 
 - Bot role must sit **above** the Member/Participant roles (role granting).
+- The **threads channel** can be a text channel (private threads: only the
+  pair + anyone with **Manage Threads** — give organizers that permission) or
+  a **forum channel** (one post per pairing; visible to everyone who sees the
+  forum — no privacy, but a tidy browsable board). The bot adapts automatically.
 - **Server Members Intent** (dev portal) must be ON for `/verify backfill`.
 - If the interactions endpoint ever shows as failing in the portal, the Worker
   is down or the public key changed — check `/health`, then secrets.
