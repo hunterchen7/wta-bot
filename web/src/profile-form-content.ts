@@ -6,22 +6,21 @@ export const profileFormContent = {
   sections: {
     profile: {
       title: "Profile",
-      description:
-        "Used for your dashboard, program messages, matching, and organizer records.",
+      description: "Keep your name and contact details up to date.",
     },
     goals: {
       title: "Goals",
       description:
-        "Choose everything that applies; these answers help shape matching and workshops.",
+        "Choose everything that applies so we can plan relevant interview practice and workshops.",
     },
     context: {
-      title: "Context",
+      title: "More about you",
       description:
-        "Give organizers enough signal to understand your goals and design useful sessions.",
+        "Tell us what you want to learn and the kind of work you hope to do.",
     },
     notifications: {
-      title: "Email reminders",
-      description: "Discord remains the primary channel.",
+      title: "Notifications",
+      description: "Discord is the main place for program updates. Email reminders are optional.",
     },
   },
   fields: {
@@ -50,9 +49,9 @@ export const profileFormContent = {
   },
   selectPlaceholder: "Choose…",
   emailOptIn: {
-    label: "Email me program reminders",
+    label: "Send me email reminders",
     description:
-      "Pairings, opt-in reminders, and overdue-report alerts. Saving an opt-in sends a confirmation email.",
+      "Get an email when pairings are ready, weekly participation opens, or a report is overdue. You'll receive a confirmation email when you turn this on.",
   },
 } as const;
 

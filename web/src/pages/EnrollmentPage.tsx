@@ -174,7 +174,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
             ? "Update your WTA profile."
             : "Tell us what you want to practice."
         }
-        description="This profile guides matching and program content. Every change stays local until you save at the bottom."
+        description="Tell us about your goals and experience so we can plan useful interview practice and workshops."
       />
       {preview ? (
         <div className="mb-6 rounded-2xl border border-western-200 bg-western-50 p-4 text-sm font-semibold text-western-900">
