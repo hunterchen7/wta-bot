@@ -13,24 +13,20 @@ export function PracticeProblemsPage() {
   useEffect(load, []);
   if (!data && !error) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? 'No practice data returned.'} onRetry={load} />;
-  const rounds = data.organizer
-    ? [...new Set(data.problems.map((problem) => problem.round))]
-    : data.round ? [data.round] : [];
+  const rounds = data.rounds.filter((round) => data.problems.some((problem) => problem.round === round.round));
   return <div className="space-y-7">
     <PageIntro
       eyebrow="Personal"
-      title={data.organizer ? 'All practice problems' : data.round ? `Round ${data.round} practice` : 'Practice problems'}
-      description={data.organizer
-        ? 'Organizer view of every published practice set. Participants only see the set for their current round.'
-        : data.cohort
-        ? `${data.cohort.name}. These problems reinforce the skills used this round and are separate from the interview question pool.`
-        : 'Practice problems for the current program round.'}
+      title="Practice problems"
+      description={data.cohort
+        ? `${data.cohort.name}. Every practice set stays visible so you can prepare ahead or revisit earlier material.`
+        : 'Practice sets are separate from the private interview question pool.'}
     />
     {data.problems.length ? <div className="space-y-8">
-      {rounds.map((round) => <section key={round}>
-        {data.organizer ? <div className="mb-4 flex items-center gap-3"><h2 className="text-lg font-black text-foreground">Technical Round {round}</h2>{round === data.round ? <Badge value="Current" /> : null}</div> : null}
+      {rounds.map((period) => <section key={period.round}>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><div className="flex items-center gap-3"><h2 className="text-lg font-black text-foreground">Prep for Technical Round {period.round}</h2>{period.round === data.currentRound ? <Badge value="Current" /> : null}</div><p className="mt-1 text-sm text-muted-foreground">{period.programWeeks.length ? `Program Weeks ${period.programWeeks.join('–')}` : 'Technical round'}{period.startsOn && period.endsOn ? ` · ${formatDay(period.startsOn)}–${formatDay(period.endsOn)}` : ''}</p></div></div>
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {data.problems.filter((problem) => problem.round === round).map((problem) => <a
+      {data.problems.filter((problem) => problem.round === period.round).map((problem) => <a
         key={`${problem.number}-${problem.title}`}
         href={problem.url}
         target="_blank"
@@ -47,8 +43,10 @@ export function PracticeProblemsPage() {
         </div>
       </section>)}
     </div> : <Panel><EmptyState
-      title={data.round ? `No practice problems for round ${data.round}` : 'No active round yet'}
-      description={data.round ? 'Organizers have not published practice problems for this round yet.' : 'Practice problems will appear when the cohort begins.'}
+      title="No practice problems published"
+      description="Organizers have not added any practice sets yet."
     /></Panel>}
   </div>;
 }
+
+const formatDay = (value: string) => new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }).format(new Date(`${value}T12:00:00Z`));

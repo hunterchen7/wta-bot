@@ -54,9 +54,9 @@ export type ProgramWeek = {
 };
 
 export type PracticeProblemsData = {
-  organizer: boolean;
   cohort: { name: string } | null;
-  round: number | null;
+  currentRound: number | null;
+  rounds: Array<{ round: number; programWeeks: number[]; startsOn: string | null; endsOn: string | null }>;
   problems: Array<{
     round: number;
     number: number | null;
@@ -91,9 +91,13 @@ export async function getDashboard(): Promise<DashboardData> {
 export async function getPracticeProblems(): Promise<PracticeProblemsData> {
   if (import.meta.env.DEV && demoEnabled()) {
     return {
-      organizer: true,
       cohort: { name: 'Summer 2026' },
-      round: 1,
+      currentRound: 1,
+      rounds: [
+        { round: 1, programWeeks: [2, 3], startsOn: '2026-07-26', endsOn: '2026-08-08' },
+        { round: 2, programWeeks: [4, 5], startsOn: '2026-08-09', endsOn: '2026-08-22' },
+        { round: 3, programWeeks: [6, 7], startsOn: '2026-08-23', endsOn: '2026-09-05' },
+      ],
       problems: [
         { round: 1, number: 739, title: 'Daily Temperatures', url: 'https://leetcode.com/problems/daily-temperatures/', difficulty: 'medium' },
         { round: 1, number: 11, title: 'Container With Most Water', url: 'https://leetcode.com/problems/container-with-most-water/description/', difficulty: 'medium' },

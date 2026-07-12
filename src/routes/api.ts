@@ -4,37 +4,37 @@ import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } f
 import { signToken } from '../forms/token';
 import { updateParticipantSettings, type ParticipantSettingsInput } from '../services/participant-settings';
 import { sessionFrom } from './web';
-import { activeCohort, cohortWeeks } from '../engine/weeks';
-import { currentProgramPhase } from '../program-calendar';
+import { activeCohort } from '../engine/weeks';
+import { currentProgramPhase, programTimeline } from '../program-calendar';
 
 export const api = new Hono<{ Bindings: Env }>();
 
 api.get('/api/practice', async (c) => {
   const session = await sessionFrom(c);
   if (!session) return c.json({ error: 'unauthorized' }, 401);
-  const cohort = await activeCohort(c.env);
-  const weeks = cohort ? await cohortWeeks(c.env, cohort.id) : [];
-  const now = Date.now();
-  const current = weeks.find((week) =>
-    now >= new Date(week.match_at).getTime()
-    && now <= new Date(week.grace_until ?? week.reports_due_at).getTime())
-    ?? null;
-  if (session.organizer) {
-    const { results } = await c.env.DB.prepare(
-      `SELECT week_idx AS round, number, title, url, difficulty FROM practice_problems
-       WHERE active = 1 ORDER BY week_idx, id`,
-    ).all<any>();
-    const upcoming = current ?? weeks.find((week) => now < new Date(week.match_at).getTime()) ?? weeks.at(-1);
-    return c.json({ organizer: true, cohort: cohort ? { name: cohort.name } : null, round: upcoming?.idx ?? null, problems: results });
-  }
-  if (!cohort || !current) {
-    return c.json({ organizer: false, cohort: cohort ? { name: cohort.name } : null, round: null, problems: [] });
-  }
-  const { results } = await c.env.DB.prepare(
+  const [cohort, problems] = await Promise.all([
+    activeCohort(c.env),
+    c.env.DB.prepare(
     `SELECT week_idx AS round, number, title, url, difficulty FROM practice_problems
-     WHERE week_idx = ?1 AND active = 1 ORDER BY id`,
-  ).bind(current.idx).all<any>();
-  return c.json({ organizer: false, cohort: { name: cohort.name }, round: current.idx, problems: results });
+     WHERE active = 1 ORDER BY week_idx, id`,
+    ).all<any>(),
+  ]);
+  const timeline = cohort ? programTimeline(cohort.start_date) : [];
+  const rounds = [1, 2, 3].map((round) => {
+    const programWeeks = timeline.filter((week) => week.technicalRound === round);
+    return {
+      round,
+      programWeeks: programWeeks.map((week) => week.index),
+      startsOn: programWeeks[0]?.startsOn ?? null,
+      endsOn: programWeeks.at(-1)?.endsOn ?? null,
+    };
+  });
+  return c.json({
+    cohort: cohort ? { name: cohort.name } : null,
+    currentRound: cohort ? currentProgramPhase(cohort)?.technicalRound ?? null : null,
+    rounds,
+    problems: problems.results,
+  });
 });
 
 api.get('/api/dashboard', async (c) => {
