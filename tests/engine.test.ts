@@ -11,7 +11,7 @@ describe('round anchors (14-day rounds)', () => {
     const a = weekAnchors(start, 1);
     expect(a.optin_opens_at.toISOString()).toBe('2026-09-11T20:00:00.000Z'); // D-3 16:00 EDT
     expect(a.optin_closes_at.toISOString()).toBe('2026-09-13T22:00:00.000Z'); // D-1 18:00
-    expect(a.match_at.toISOString()).toBe('2026-09-13T22:15:00.000Z');
+    expect(a.match_at.toISOString()).toBe('2026-09-14T23:00:00.000Z');
     expect(a.reports_due_at.toISOString()).toBe('2026-09-28T03:59:00.000Z'); // D+13 23:59 EDT
     expect(a.nudge2_at.getTime()).toBeGreaterThan(a.nudge_at.getTime()); // two nudges per round
   });
@@ -20,10 +20,10 @@ describe('round anchors (14-day rounds)', () => {
     const summer: [number, number, number] = [2026, 7, 26];
     const r1 = weekAnchors(summer, 1);
     expect(r1.optin_opens_at.toISOString()).toBe('2026-07-23T20:00:00.000Z'); // Thu 16:00
-    expect(r1.match_at.toISOString()).toBe('2026-07-25T22:15:00.000Z'); // Sat 18:15
+    expect(r1.match_at.toISOString()).toBe('2026-07-26T23:00:00.000Z'); // Sun 19:00
     expect(r1.reports_due_at.toISOString()).toBe('2026-08-09T03:59:00.000Z'); // Aug 8 23:59 EDT
     const r3 = weekAnchors(summer, 3);
-    expect(r3.match_at.toISOString()).toBe('2026-08-22T22:15:00.000Z'); // eve of Aug 23
+    expect(r3.match_at.toISOString()).toBe('2026-08-23T23:00:00.000Z'); // Sun 19:00
   });
 
   it('round 3 lands four weeks later with a grace window', () => {

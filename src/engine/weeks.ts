@@ -40,7 +40,7 @@ export function weekAnchors(roundOneStart: [number, number, number], idx: number
     optin_opens_at: at(-3, 16), // 3 days before the round, 16:00
     optin_remind_at: at(-2, 18), // non-responder reminder
     optin_closes_at: at(-1, 18), // eve of the round, 18:00
-    match_at: at(-1, 18, 15), // pairings drop 15 min later
+    match_at: at(0, 19), // opening Sunday: pairings + round questions release
     nudge_at: at(3, 18), // mid-week-1 unscheduled nudge
     nudge2_at: at(10, 18), // mid-week-2 unscheduled nudge
     reports_due_at: at(ROUND_DAYS - 1, 23, 59), // final day of the round

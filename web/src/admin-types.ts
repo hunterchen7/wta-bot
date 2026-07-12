@@ -1,10 +1,12 @@
 export type CountRow = { label?: string; state?: string; status?: string; value?: number; n?: number };
 export type Cohort = { id: number; name: string; start_date: string; weeks_count: number; status: string };
 export type Week = { id: number; cohort_id: number; idx: number; optin_opens_at: string; optin_closes_at: string; match_at: string; reports_due_at: string; grace_until: string | null };
+export type ProgramWeek = { index: number; startsOn: string; endsOn: string; title: string; technicalRound: number | null };
 
 export type OverviewData = {
   cohort: Cohort | null;
   currentWeek: Week | null;
+  programWeek: ProgramWeek | null;
   participantStatuses: Array<{ status: string; n: number }>;
   activeParticipants: number;
   matchingReady: boolean;
@@ -47,4 +49,4 @@ export type OutboxRow = { id: number; kind: string; payload: string; participant
 export type AuditRow = { id: number; actor_participant_id: number | null; actor_name: string | null; action: string; target_type: string | null; target_id: string | null; detail: string | null; created_at: string };
 export type OperationsData = { outbox: OutboxRow[]; notifications: Array<Record<string, any>>; jobs: Array<Record<string, any>>; audit: AuditRow[] };
 
-export type AdminSettingsData = { settings: Record<string, string>; cohorts: Cohort[]; activeParticipants: number; minimumMatchingPool: number };
+export type AdminSettingsData = { settings: Record<string, string>; cohorts: Cohort[]; timeline: ProgramWeek[]; programWeek: ProgramWeek | null; activeParticipants: number; minimumMatchingPool: number };

@@ -23,6 +23,7 @@ export type ParticipantSettings = {
 
 export type DashboardData = {
   viewer: { participantId: number; organizer: boolean };
+  programWeek: ProgramWeek | null;
   participant: ParticipantSettings;
   progress: { interviewer: number; interviewee: number; strikes: number };
   sessions: Array<{
@@ -44,10 +45,20 @@ export type DashboardData = {
   };
 };
 
+export type ProgramWeek = {
+  index: number;
+  startsOn: string;
+  endsOn: string;
+  title: string;
+  technicalRound: number | null;
+};
+
 export type PracticeProblemsData = {
+  organizer: boolean;
   cohort: { name: string } | null;
   round: number | null;
   problems: Array<{
+    round: number;
     number: number | null;
     title: string;
     url: string;
@@ -80,12 +91,14 @@ export async function getDashboard(): Promise<DashboardData> {
 export async function getPracticeProblems(): Promise<PracticeProblemsData> {
   if (import.meta.env.DEV && demoEnabled()) {
     return {
+      organizer: true,
       cohort: { name: 'Summer 2026' },
       round: 1,
       problems: [
-        { number: 739, title: 'Daily Temperatures', url: 'https://leetcode.com/problems/daily-temperatures/', difficulty: 'medium' },
-        { number: 11, title: 'Container With Most Water', url: 'https://leetcode.com/problems/container-with-most-water/description/', difficulty: 'medium' },
-        { number: 3070, title: 'Count Submatrices with Top-Left Element and Sum Less Than or Equal to K', url: 'https://leetcode.com/problems/count-submatrices-with-top-left-element-and-sum-less-than-k/description', difficulty: 'easy' },
+        { round: 1, number: 739, title: 'Daily Temperatures', url: 'https://leetcode.com/problems/daily-temperatures/', difficulty: 'medium' },
+        { round: 1, number: 11, title: 'Container With Most Water', url: 'https://leetcode.com/problems/container-with-most-water/description/', difficulty: 'medium' },
+        { round: 1, number: 3070, title: 'Count Submatrices with Top-Left Element and Sum Less Than or Equal to K', url: 'https://leetcode.com/problems/count-submatrices-with-top-left-element-and-sum-less-than-k/description', difficulty: 'easy' },
+        { round: 2, number: 875, title: 'Koko Eating Bananas', url: 'https://leetcode.com/problems/koko-eating-bananas/', difficulty: 'medium' },
       ],
     };
   }

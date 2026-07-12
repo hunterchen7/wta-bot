@@ -2,6 +2,7 @@ import type { DashboardData } from './api';
 
 export const demoDashboard: DashboardData = {
   viewer: { participantId: 1, organizer: true },
+  programWeek: { index: 4, startsOn: '2026-08-09', endsOn: '2026-08-15', title: 'Technical Round 2', technicalRound: 2 },
   participant: {
     id: 1,
     discordId: '100001',

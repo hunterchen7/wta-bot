@@ -7,6 +7,7 @@ import type { Env } from '../env';
 import { fieldsFor } from '../forms/schema';
 import { listParticipants, participantsToCsv } from '../participants';
 import { composeQuestionMarkdown, normalizeAvailableWeeks, parseQuestionMarkdown } from '../question-markdown';
+import { currentProgramPhase, programTimeline } from '../program-calendar';
 import { generateProblemSet, ProblemSetError, problemBankWorkspace, replaceProblemSet } from '../services/problem-sets';
 import { sessionFrom, type SessionUser } from './web';
 
@@ -169,6 +170,7 @@ adminApi.get('/api/admin/overview', async (c) => {
   return c.json({
     cohort,
     currentWeek,
+    programWeek: cohort ? currentProgramPhase(cohort) : null,
     participantStatuses: statuses.results,
     activeParticipants: matchingParticipants,
     matchingReady: matchingParticipants >= 3,
@@ -545,7 +547,15 @@ adminApi.get('/api/admin/settings', async (c) => {
     c.env.DB.prepare('SELECT * FROM cohorts ORDER BY id DESC').all<any>(),
     count(c.env, "SELECT count(*) AS n FROM participants WHERE status = 'active' AND pairing_excluded = 0"),
   ]);
-  return c.json({ settings, cohorts: cohorts.results, activeParticipants: rosterSize, minimumMatchingPool: 3 });
+  const active = cohorts.results.find((cohort) => cohort.status === 'active');
+  return c.json({
+    settings,
+    cohorts: cohorts.results,
+    timeline: active ? programTimeline(active.start_date) : [],
+    programWeek: active ? currentProgramPhase(active) : null,
+    activeParticipants: rosterSize,
+    minimumMatchingPool: 3,
+  });
 });
 
 adminApi.post('/api/admin/settings', async (c) => {

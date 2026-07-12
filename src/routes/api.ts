@@ -5,6 +5,7 @@ import { signToken } from '../forms/token';
 import { updateParticipantSettings, type ParticipantSettingsInput } from '../services/participant-settings';
 import { sessionFrom } from './web';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
+import { currentProgramPhase } from '../program-calendar';
 
 export const api = new Hono<{ Bindings: Env }>();
 
@@ -12,20 +13,28 @@ api.get('/api/practice', async (c) => {
   const session = await sessionFrom(c);
   if (!session) return c.json({ error: 'unauthorized' }, 401);
   const cohort = await activeCohort(c.env);
-  if (!cohort) return c.json({ cohort: null, round: null, problems: [] });
-  const weeks = await cohortWeeks(c.env, cohort.id);
+  const weeks = cohort ? await cohortWeeks(c.env, cohort.id) : [];
   const now = Date.now();
   const current = weeks.find((week) =>
-    now >= new Date(week.optin_opens_at).getTime()
+    now >= new Date(week.match_at).getTime()
     && now <= new Date(week.grace_until ?? week.reports_due_at).getTime())
-    ?? weeks.find((week) => now < new Date(week.optin_opens_at).getTime())
-    ?? weeks.at(-1);
-  if (!current) return c.json({ cohort: { name: cohort.name }, round: null, problems: [] });
+    ?? null;
+  if (session.organizer) {
+    const { results } = await c.env.DB.prepare(
+      `SELECT week_idx AS round, number, title, url, difficulty FROM practice_problems
+       WHERE active = 1 ORDER BY week_idx, id`,
+    ).all<any>();
+    const upcoming = current ?? weeks.find((week) => now < new Date(week.match_at).getTime()) ?? weeks.at(-1);
+    return c.json({ organizer: true, cohort: cohort ? { name: cohort.name } : null, round: upcoming?.idx ?? null, problems: results });
+  }
+  if (!cohort || !current) {
+    return c.json({ organizer: false, cohort: cohort ? { name: cohort.name } : null, round: null, problems: [] });
+  }
   const { results } = await c.env.DB.prepare(
-    `SELECT number, title, url, difficulty FROM practice_problems
+    `SELECT week_idx AS round, number, title, url, difficulty FROM practice_problems
      WHERE week_idx = ?1 AND active = 1 ORDER BY id`,
   ).bind(current.idx).all<any>();
-  return c.json({ cohort: { name: cohort.name }, round: current.idx, problems: results });
+  return c.json({ organizer: false, cohort: { name: cohort.name }, round: current.idx, problems: results });
 });
 
 api.get('/api/dashboard', async (c) => {
@@ -60,11 +69,13 @@ api.get('/api/dashboard', async (c) => {
   )
     .bind(session.participantId)
     .all<any>();
+  const cohortPromise = activeCohort(c.env);
 
-  const [participant, sessionsResult, owedResult] = await Promise.all([
+  const [participant, sessionsResult, owedResult, cohort] = await Promise.all([
     participantPromise,
     sessionsPromise,
     owedPromise,
+    cohortPromise,
   ]);
   if (!participant) return c.json({ error: 'not_found' }, 404);
 
@@ -86,6 +97,7 @@ api.get('/api/dashboard', async (c) => {
 
   return c.json({
     viewer: { participantId: session.participantId, organizer: session.organizer },
+    programWeek: cohort ? currentProgramPhase(cohort) : null,
     participant: {
       id: participant.id,
       discordId: participant.discord_id,

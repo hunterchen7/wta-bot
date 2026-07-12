@@ -17,7 +17,7 @@ const participants = names.map((name, index) => ({
 }));
 
 const overview: OverviewData = {
-  cohort, currentWeek: weeks[1]!, activeParticipants: 10, matchingReady: true,
+  cohort, currentWeek: weeks[1]!, programWeek: { index: 4, startsOn: '2026-08-09', endsOn: '2026-08-15', title: 'Technical Round 2', technicalRound: 2 }, activeParticipants: 10, matchingReady: true,
   participantStatuses: [{ status: 'active', n: 10 }, { status: 'held', n: 1 }, { status: 'paused', n: 1 }],
   sessionStates: [{ state: 'completed', n: 7 }, { state: 'scheduled', n: 8 }, { state: 'pending_schedule', n: 3 }, { state: 'broken', n: 1 }],
   queues: { openForms: 4, incidents: 2, repairs: 1, reviews: 3, pendingOutbox: 6, failedOutbox: 1 },
@@ -72,6 +72,16 @@ export async function adminDemoRequest(path: string, init?: RequestInit): Promis
   if (path === '/problems') return { problems, sets: problems.filter((problem) => problem.available_weeks.includes(2)).map((problem) => ({ week_id: 2, round: 2, cohort_name: cohort.name, problem_id: problem.id, title: problem.title })), cohort, weeks } satisfies ProblemsData;
   if (path === '/analytics') return { participants: overview.participantStatuses.map((row) => ({ label: row.status, value: row.n })), sessions: overview.sessionStates.map((row) => ({ label: row.state, value: row.n })), reports: [{ label: 'interviewee_report', total: 18, submitted: 15 }, { label: 'interviewer_report', total: 18, submitted: 14 }], reviews: [{ label: 'verified', value: 9 }, { label: 'pending', value: 3 }, { label: 'flagged', value: 2 }], problems: problems.map((problem) => ({ id: problem.id, title: problem.title, difficulty: problem.difficulty, uses: problem.uses, avg_experience: problem.uses ? 4.2 - problem.id * .2 : null })), rounds: [{ cohort: cohort.name, round: 1, optins: 12, sessions: 20, completed: 18 }, { cohort: cohort.name, round: 2, optins: 10, sessions: 19, completed: 7 }, { cohort: cohort.name, round: 3, optins: 0, sessions: 0, completed: 0 }] } satisfies AnalyticsData;
   if (path === '/operations') return operations;
-  if (path === '/settings') return { settings: { announce_channel_id: '10829384012', organizer_channel_id: '10829384013', threads_channel_id: '10829384014', organizer_role_id: '10829384099', participant_role_id: '10829384098', packet_mode: 'off' }, cohorts: [cohort, { id: 0, name: 'Summer 2025', start_date: '2025-07-20', weeks_count: 3, status: 'done' }], activeParticipants: 10, minimumMatchingPool: 3 } satisfies AdminSettingsData;
+  if (path === '/settings') return { settings: { announce_channel_id: '10829384012', organizer_channel_id: '10829384013', threads_channel_id: '10829384014', organizer_role_id: '10829384099', participant_role_id: '10829384098', packet_mode: 'off' }, cohorts: [cohort, { id: 0, name: 'Summer 2025', start_date: '2025-07-20', weeks_count: 3, status: 'done' }], timeline: [
+    { index: 0, startsOn: '2026-07-12', endsOn: '2026-07-18', title: 'Word-of-mouth marketing', technicalRound: null },
+    { index: 1, startsOn: '2026-07-19', endsOn: '2026-07-25', title: 'Preparing for applicants', technicalRound: null },
+    { index: 2, startsOn: '2026-07-26', endsOn: '2026-08-01', title: 'Intro call + Technical Round 1', technicalRound: 1 },
+    { index: 3, startsOn: '2026-08-02', endsOn: '2026-08-08', title: 'Resume lesson + roast sessions', technicalRound: 1 },
+    { index: 4, startsOn: '2026-08-09', endsOn: '2026-08-15', title: 'Technical Round 2', technicalRound: 2 },
+    { index: 5, startsOn: '2026-08-16', endsOn: '2026-08-22', title: 'Behavioral lesson', technicalRound: 2 },
+    { index: 6, startsOn: '2026-08-23', endsOn: '2026-08-29', title: 'Technical Round 3', technicalRound: 3 },
+    { index: 7, startsOn: '2026-08-30', endsOn: '2026-09-05', title: 'Review footage + draft list', technicalRound: 3 },
+    { index: 8, startsOn: '2026-09-06', endsOn: '2026-09-12', title: 'Referrals + alumni coordination', technicalRound: null },
+  ], programWeek: { index: 4, startsOn: '2026-08-09', endsOn: '2026-08-15', title: 'Technical Round 2', technicalRound: 2 }, activeParticipants: 10, minimumMatchingPool: 3 } satisfies AdminSettingsData;
   throw new Error(`No demo response for ${path}`);
 }

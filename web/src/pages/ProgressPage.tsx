@@ -10,7 +10,7 @@ const stateStyles: Record<string, string> = {
 
 export function ProgressPage() {
   const { data } = useDashboard();
-  const { participant, progress, sessions, owedReports } = data;
+  const { participant, progress, sessions, owedReports, programWeek } = data;
 
   return (
     <div className="space-y-8">
@@ -24,6 +24,12 @@ export function ProgressPage() {
           <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-800">Server nickname: {participant.discordNickname || 'Not synced'}</span><span className="rounded-full border border-indigo-200 bg-white px-4 py-2 text-sm font-bold text-indigo-800">Discord: {participant.discordUsername ? `@${participant.discordUsername}` : participant.discordId}</span><span className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold capitalize text-slate-700 shadow-sm">{participant.status}</span></div>
         </div>
       </section>
+
+      {programWeek ? <section className="rounded-3xl border border-western-200 bg-western-50/70 p-5 dark:border-western-800 dark:bg-western-950/30">
+        <div className="text-xs font-black uppercase tracking-[0.16em] text-western-700 dark:text-western-300">Program week {programWeek.index}</div>
+        <div className="mt-1 text-lg font-black text-slate-950 dark:text-foreground">{programWeek.title}</div>
+        <div className="mt-1 text-sm text-slate-600 dark:text-muted-foreground">{formatDay(programWeek.startsOn)}–{formatDay(programWeek.endsOn)}{programWeek.technicalRound ? ` · Technical Round ${programWeek.technicalRound} questions are active` : ''}</div>
+      </section> : null}
 
       {owedReports.length ? (
         <section className="rounded-3xl border border-amber-200 bg-amber-50 p-5 shadow-sm">
@@ -90,3 +96,4 @@ function ProgressCard({ label: text, value }: { label: string; value: number }) 
 
 const label = (value: string) => value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
 const formatDate = (value: string) => new Intl.DateTimeFormat('en-CA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Toronto' }).format(new Date(value));
+const formatDay = (value: string) => new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', timeZone: 'America/Toronto' }).format(new Date(`${value}T12:00:00Z`));

@@ -23,7 +23,7 @@ export function OverviewPage() {
 
     {!data.cohort ? <Panel><div className="p-5"><h2 className="font-black text-slate-950">No active cohort</h2><p className="mt-1 text-sm text-slate-500">Create a cohort calendar in Program settings before opening enrollment.</p><Link to="/app/admin/settings" className="mt-3 inline-flex rounded-lg bg-western-700 px-3.5 py-2 text-sm font-bold text-white">Configure cohort</Link></div></Panel> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Active participants" value={data.activeParticipants} note={data.matchingReady ? 'Matching pool is viable' : 'At least 3 are needed to match'} tone={data.matchingReady ? 'good' : 'warn'} />
-      <Metric label="Current round" value={data.currentWeek ? `R${data.currentWeek.idx}` : '—'} note={data.currentWeek ? `Reports due ${formatDate(data.currentWeek.reports_due_at, false)}` : 'No round selected'} />
+      <Metric label="Program week" value={data.programWeek ? `Week ${data.programWeek.index}` : '—'} note={data.programWeek?.title ?? 'No active program week'} />
       <Metric label="Session completion" value={totalSessions ? `${Math.round(completed / totalSessions * 100)}%` : '—'} note={`${completed} of ${totalSessions} sessions`} tone={completed === totalSessions && totalSessions ? 'good' : 'default'} />
       <Metric label="Needs attention" value={attention} note="Across operational queues" tone={attention ? 'warn' : 'good'} />
     </div>}
