@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useId, useMemo, useState, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 import type { OperationsData, OutboxRow } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { Badge, Button, EmptyState, ErrorState, formatDate, LoadingState, PageIntro, Panel, tableClass, tdClass, thClass, Tabs } from '../../components/AdminUI';
@@ -19,15 +20,16 @@ export function OperationsPage() {
 function OutboxPanel({ rows, retrying, onRetry }: { rows: OutboxRow[]; retrying: number | null; onRetry: (row: OutboxRow) => Promise<void> }) {
   const ordered = [...rows].sort((a, b) => deliveryRank(deliveryState(a)) - deliveryRank(deliveryState(b)) || b.id - a.id);
   return <Panel className="flex h-full min-h-0 flex-col" title="Delivery queue" description="Failed and waiting work appears first. Completed deliveries remain here as recent history.">
-    {ordered.length ? <ScrollArea className="min-h-0 flex-1 overscroll-contain"><div className="divide-y divide-slate-100">{ordered.map((row) => <DeliveryRow key={row.id} row={row} retrying={retrying === row.id} onRetry={onRetry} />)}</div></ScrollArea> : <EmptyState title="No delivery history" description="Messages, emails, and Discord updates will appear here when the system queues them." />}
+    {ordered.length ? <ScrollArea className="min-h-0 flex-1 overscroll-contain"><div className="divide-y divide-slate-100 [overflow-anchor:none]">{ordered.map((row) => <DeliveryRow key={row.id} row={row} retrying={retrying === row.id} onRetry={onRetry} />)}</div></ScrollArea> : <EmptyState title="No delivery history" description="Messages, emails, and Discord updates will appear here when the system queues them." />}
   </Panel>;
 }
 
 function DeliveryRow({ row, retrying, onRetry }: { row: OutboxRow; retrying: boolean; onRetry: (row: OutboxRow) => Promise<void> }) {
   const state = deliveryState(row); const task = deliveryTask(row); const explanation = deliveryExplanation(row, state);
-  return <article className={`grid gap-4 p-4 xl:grid-cols-[minmax(12rem,.85fr)_minmax(18rem,1.4fr)_auto] xl:items-center ${state === 'failed' ? 'bg-rose-50/40' : ''}`}>
+  const [detailsOpen, setDetailsOpen] = useState(false); const detailsId = useId();
+  return <article className={`grid gap-4 p-4 xl:grid-cols-[minmax(12rem,.85fr)_minmax(18rem,1.4fr)_auto] xl:items-start ${state === 'failed' ? 'bg-rose-50/40' : ''}`}>
     <div className="min-w-0"><div className="flex items-center gap-2"><h3 className="truncate text-sm font-bold text-slate-900">{task.label}</h3><Badge value={state} /></div><div className="mt-1 text-xs text-slate-500">{task.target}</div><div className="mt-1 font-mono text-[0.65rem] text-slate-400">Queue item #{row.id}</div></div>
-    <div className="min-w-0"><div className={`text-xs font-semibold ${state === 'failed' ? 'text-rose-800' : 'text-slate-700'}`}>{explanation.summary}</div><p className="mt-1 text-xs leading-5 text-slate-500">{explanation.next}</p>{row.last_error ? <details className="mt-1.5 text-[0.68rem] text-slate-500"><summary className="w-fit font-semibold text-slate-600">Technical details</summary><code className="mt-1 block whitespace-pre-wrap break-words rounded bg-slate-100 p-2">{row.last_error}</code></details> : null}</div>
+    <div className="min-w-0"><div className={`text-xs font-semibold ${state === 'failed' ? 'text-rose-800' : 'text-slate-700'}`}>{explanation.summary}</div><p className="mt-1 text-xs leading-5 text-slate-500">{explanation.next}</p>{row.last_error ? <div className="mt-1.5 text-[0.68rem] text-slate-500"><button type="button" aria-expanded={detailsOpen} aria-controls={detailsId} className="flex w-fit items-center gap-1 font-semibold text-slate-600 hover:text-slate-900" onClick={() => setDetailsOpen((open) => !open)}>Technical details <ChevronDown aria-hidden="true" className={`size-3 transition-transform duration-200 motion-reduce:transition-none ${detailsOpen ? 'rotate-180' : ''}`} /></button><div id={detailsId} aria-hidden={!detailsOpen} className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none ${detailsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}><div className="min-h-0 overflow-hidden"><code className="mt-1 block whitespace-pre-wrap break-words rounded bg-slate-100 p-2">{row.last_error}</code></div></div></div> : null}</div>
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 pt-3 xl:block xl:min-w-44 xl:border-0 xl:pt-0 xl:text-right"><div><div className="text-xs font-semibold text-slate-700">{state === 'sent' ? `Delivered ${formatDate(row.done_at)}` : state === 'failed' ? 'Automatic retries stopped' : `Next attempt ${formatDate(row.run_after)}`}</div><div className="mt-1 text-[0.68rem] text-slate-400">{row.attempts ? `${row.attempts} failed ${row.attempts === 1 ? 'attempt' : 'attempts'}` : 'No failed attempts'}</div></div>{state === 'failed' ? <Button className="xl:mt-3" variant="secondary" disabled={retrying} onClick={() => void onRetry(row)}>{retrying ? 'Retrying…' : 'Retry now'}</Button> : null}</div>
   </article>;
 }
