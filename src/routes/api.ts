@@ -15,7 +15,7 @@ api.get('/api/practice', async (c) => {
   const [cohort, problems] = await Promise.all([
     activeCohort(c.env),
     c.env.DB.prepare(
-    `SELECT week_idx AS round, number, title, url, difficulty FROM practice_problems
+    `SELECT id, week_idx AS round, number, title, url, difficulty, content_md AS content FROM practice_problems
      WHERE active = 1 ORDER BY week_idx, id`,
     ).all<any>(),
   ]);

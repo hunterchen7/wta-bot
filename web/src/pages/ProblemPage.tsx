@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { publicRequest } from '../api';
+import { MarkdownContent } from '../components/MarkdownContent';
 import { PublicIntro, PublicShell } from '../components/PublicShell';
 
 type ProblemData = { mode: 'packet' | 'solution'; round: number; scheduledAt: string | null; intervieweeName: string | null; problem: { number: number | null; title: string; url: string | null; difficulty: string; statement: string | null; hints: string | null; solution: string | null } };
@@ -17,11 +18,41 @@ export function ProblemPage({ preview = false }: { preview?: boolean }) {
     <PublicIntro eyebrow={preview ? 'Read-only preview' : `Round ${data.round}`} title={data.mode === 'packet' ? 'Interviewer packet' : 'Solution notes'} description={`${problem.number ? `#${problem.number} · ` : ''}${problem.title} · ${problem.difficulty}${data.intervieweeName ? ` · interviewing ${data.intervieweeName}` : ''}`} />
     {preview ? <Notice tone="western">Preview mode. Live packets are private, signed, and expire automatically.</Notice> : null}
     {data.mode === 'packet' ? <Notice tone="amber">For your eyes only. Do not share this page with the interviewee before the session.</Notice> : null}
-    {problem.url ? <a href={problem.url} target="_blank" rel="noreferrer" className="mb-6 inline-flex rounded-xl bg-western-700 px-4 py-2.5 text-sm font-black text-white hover:bg-western-800">Open original problem ↗</a> : null}
     <div className="space-y-5">{problem.statement ? <Content title="Statement" value={problem.statement} /> : null}{problem.hints ? <Content title="Hint ladder" value={problem.hints} /> : null}<Content title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} /></div>
+    {problem.url ? <div className="mt-6 text-sm text-muted-foreground">Want the original platform? <a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">View the source problem ↗</a></div> : null}
   </PublicShell>;
 }
 
-function Content({ title, value }: { title: string; value: string }) { return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><h2 className="border-b border-slate-100 px-5 py-4 text-sm font-black text-slate-950">{title}</h2><pre className="whitespace-pre-wrap p-5 font-sans text-sm leading-7 text-slate-700">{value}</pre></section>; }
+function Content({ title, value }: { title: string; value: string }) { return <section className="overflow-hidden rounded-2xl border border-border bg-card"><h2 className="border-b border-border px-5 py-4 text-sm font-black text-foreground">{title}</h2><MarkdownContent className="p-5 sm:p-6">{value}</MarkdownContent></section>; }
 function Notice({ children, tone }: { children: React.ReactNode; tone: 'amber' | 'western' }) { return <div className={`mb-6 rounded-2xl border p-4 text-sm font-semibold ${tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-western-200 bg-western-50 text-western-900'}`}>{children}</div>; }
-const previewPacket: ProblemData = { mode: 'packet', round: 2, scheduledAt: '2026-08-12T23:30:00.000Z', intervieweeName: 'Jordan Example', problem: { number: 56, title: 'Merge Intervals', url: 'https://leetcode.com/problems/merge-intervals/', difficulty: 'medium', statement: 'Given an array of intervals, merge all overlapping intervals.', hints: '1. What happens if you sort first?\n2. When do two intervals overlap?\n3. Keep one current merged interval.', solution: 'Sort by start time. Sweep once, extending the current interval while the next start is within its end. O(n log n).' } };
+const previewPacket: ProblemData = { mode: 'packet', round: 2, scheduledAt: '2026-08-12T23:30:00.000Z', intervieweeName: 'Jordan Example', problem: { number: 56, title: 'Merge Intervals', url: 'https://leetcode.com/problems/merge-intervals/', difficulty: 'medium', statement: `You are given a collection of closed intervals, where each interval is represented as \`[start, end]\`. Combine every group of intervals that overlap and return the non-overlapping intervals that cover the same ranges.
+
+### Example
+
+\`\`\`text
+Input:  [[1, 3], [2, 6], [8, 10], [15, 18]]
+Output: [[1, 6], [8, 10], [15, 18]]
+\`\`\`
+
+The first two intervals overlap, so they become \`[1, 6]\`. The remaining intervals stay separate.
+
+### Constraints
+
+- The input contains at least one interval.
+- Every interval has exactly two endpoints.
+- For each interval, \`start <= end\`.
+- The intervals may arrive in any order.`, hints: `1. **Ordering:** What useful property do you gain by sorting intervals by their start value?
+2. **Overlap check:** After sorting, compare the next interval's start with the end of the interval you are currently building.
+3. **Single sweep:** Keep one current merged interval. Extend its end on overlap; otherwise, save it and begin a new one.`, solution: `Sort all intervals by their start value. Initialize the result with the first interval, then visit each remaining interval once.
+
+- If the next start is less than or equal to the current end, the intervals overlap. Update the current end to the larger of the two ends.
+- Otherwise, the current interval is complete. Append it and begin a new current interval.
+
+### Why it works
+
+After sorting, no later interval can begin before the one currently being considered. That means an interval only needs to be compared with the latest merged range: if they do not overlap, it cannot overlap any earlier completed range either.
+
+### Complexity
+
+- **Time:** \`O(n log n)\` for sorting, followed by an \`O(n)\` scan.
+- **Extra space:** \`O(n)\` for the returned intervals; the sweep itself uses constant auxiliary space.` } };
