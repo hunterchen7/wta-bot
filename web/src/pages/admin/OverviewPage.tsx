@@ -30,7 +30,7 @@ export function OverviewPage() {
       <Panel title="Action required" description="Queues are ordered by operational impact.">
         <div className="divide-y divide-slate-100">{queueLinks.map(([key, label, href]) => {
           const value = data.queues[key];
-          return <Link key={key} to={href} className="group flex items-center gap-4 px-5 py-4 hover:bg-slate-50/80"><span className={`grid size-9 shrink-0 place-items-center rounded-xl text-sm font-black tabular-nums ${value ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>{value}</span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-900">{label}</span><span className="block text-xs text-slate-500">{value ? 'Open the queue and resolve' : 'Nothing waiting'}</span></span><span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600">→</span></Link>;
+          return <Link key={key} to={href} className="group flex items-center gap-4 px-5 py-4 hover:bg-slate-50/80 dark:hover:bg-white/5"><span className={`grid size-9 shrink-0 place-items-center rounded-xl text-sm font-black tabular-nums ${value ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-700'}`}>{value}</span><span className="min-w-0 flex-1"><span className="block text-sm font-bold text-slate-900">{label}</span><span className="block text-xs text-slate-500">{value ? 'Open the queue and resolve' : 'Nothing waiting'}</span></span><span className="text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-600">→</span></Link>;
         })}</div>
       </Panel>
       <Panel title="Round health" description={data.currentWeek ? `Round ${data.currentWeek.idx} session states` : 'No current round'}>
