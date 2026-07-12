@@ -140,7 +140,7 @@ describe('/join intake flow', () => {
     ).first<{ n: number }>();
     expect(confirms?.n).toBe(1);
 
-    // standalone edit of part 3 keeping email on: saves, no duplicate confirm
+    // standalone edit of part 3 keeping email on: saves + re-confirms by email
     const editSave = await sendInteraction(
       signer,
       modalSubmit('join:m3e', [
@@ -156,7 +156,7 @@ describe('/join intake flow', () => {
     const confirms2 = await env.DB.prepare(
       "SELECT count(*) AS n FROM outbox WHERE kind = 'email' AND payload LIKE '%subscribed%'",
     ).first<{ n: number }>();
-    expect(confirms2?.n).toBe(1);
+    expect(confirms2?.n).toBe(2); // every opted-in save re-confirms
   });
 
   it('warns on short dream-company blurbs but still saves', async () => {
@@ -257,7 +257,7 @@ describe('nickname sync', () => {
 
 describe('/export', () => {
   it('denies non-organizers', async () => {
-    const res = await sendInteraction(signer, command('export', asUser(USER)));
+    const res = await sendInteraction(signer, { type: 2, id: '1', token: 't', data: { name: 'admin', options: [{ name: 'export', type: 1 }] }, ...asUser(USER) });
     expect(((await res.json()) as any).data.content).toContain('Organizers only');
   });
 
@@ -276,7 +276,7 @@ describe('/export', () => {
       ),
     );
 
-    const res = await sendInteraction(signer, command('export', asAdmin('999')));
+    const res = await sendInteraction(signer, { type: 2, id: '1', token: 't', data: { name: 'admin', options: [{ name: 'export', type: 1 }] }, ...asAdmin('999') });
     const content = ((await res.json()) as any).data.content as string;
     const url = content.match(/https?:\/\/\S+/)?.[0];
     expect(url).toBeTruthy();
@@ -298,7 +298,7 @@ describe('/export', () => {
 
 describe('/roster', () => {
   it('denies non-organizers and summarizes for organizers', async () => {
-    const denied = await sendInteraction(signer, command('roster', asUser('1')));
+    const denied = await sendInteraction(signer, { type: 2, id: '1', token: 't', data: { name: 'admin', options: [{ name: 'roster', type: 1 }] }, ...asUser('1') });
     expect(((await denied.json()) as any).data.content).toContain('Organizers only');
 
     await sendInteraction(
@@ -315,7 +315,7 @@ describe('/roster', () => {
       ),
     );
 
-    const res = await sendInteraction(signer, command('roster', asAdmin('999')));
+    const res = await sendInteraction(signer, { type: 2, id: '1', token: 't', data: { name: 'admin', options: [{ name: 'roster', type: 1 }] }, ...asAdmin('999') });
     const content = ((await res.json()) as any).data.content as string;
     expect(content).toContain('Enrollment');
     expect(content).toMatch(/\d+ signed up/);

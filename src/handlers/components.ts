@@ -153,10 +153,12 @@ export async function handleModal(c: Ctx, interaction: Interaction) {
       return c.json(isEdit ? intake.afterEdit() : intake.afterModal2());
     }
 
-    // step 3 — email opt-in confirmation on the 0 -> 1 transition only
+    // step 3 — every save with email reminders ON re-confirms by email
+    // (Hunter's call: each opt-in save = a confirmation, doubling as a check
+    // that the address still works).
     const fields = intake.parseModal3(values);
     await upsertParticipant(c.env, user.id, fields);
-    if (fields.email_ok === 1 && (before?.email_ok ?? 0) === 0) {
+    if (fields.email_ok === 1) {
       const email = before?.preferred_email ?? (await getParticipant(c.env, user.id))?.preferred_email;
       if (email) await sendOptInConfirm(c.env, email, before?.name ?? null);
     }

@@ -19,7 +19,7 @@ import { isOrganizer } from './shared';
 
 type Ctx = Context<{ Bindings: Env }>;
 
-type Opt = { name: string; value?: string | number | boolean; options?: Opt[] };
+type Opt = { name: string; type?: number; value?: string | number | boolean; options?: Opt[] };
 const sub = (i: Interaction): Opt | undefined => (i.data?.options as Opt[] | undefined)?.[0];
 const optVal = (opts: Opt[] | undefined, name: string) => opts?.find((o) => o.name === name)?.value;
 
@@ -38,6 +38,7 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
         '`/cancel` — cancel one of your sessions with notice, so your partner gets re-paired',
         '`/report no-show` / `/report unresponsive` — your partner ghosted or won\'t schedule',
         '`/report issue <details>` — anything else, privately to the organizers',
+        '`/dashboard` — one-click sign-in link for the web dashboard',
         '',
         '**Buttons you\'ll meet:** round opt-in (I\'m in / double / standby / out) · session threads (Scheduled ✅ / Can\'t make it / Report no-show) · Verify (in #start-here)',
         `**Web dashboard:** log in with your roster email at ${c.env.PUBLIC_ORIGIN ?? 'the bot site'}/login — progress, sessions, and your report forms in one place.`,
@@ -45,14 +46,13 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
       if (await isOrganizer(c.env, interaction)) {
         lines.push(
           '',
-          '**Organizer commands:**',
-          '`/setup channels|roles|cohort|verify` — configure the server + launch a cohort',
-          '`/verify backfill` — grant the member role to all existing members',
-          '`/problems add|list|setweek` — manage the problem bank (content editing: dashboard → Problems)',
-          '`/roster` · `/export` — enrollment summary / full CSV',
-          '`/standing @user` · `/excuse @user` · `/participant hold|release|remove @user`',
-          '`/digest` — post the round digest now · `/eligible` — alumni-round list',
-          'Dashboard organizer pages: Roster, Round board, Reviews, Problems.',
+          '**Organizer toolkit — everything lives under `/admin`:**',
+          '`/admin setup channels|roles|cohort|verify` — configure + launch',
+          '`/admin roster` · `/admin export` · `/admin standing @user` — who\'s where',
+          '`/admin pair` · `/admin repair` — manual pairings and repair queueing',
+          '`/admin excuse @user` · `/admin participant hold|release|remove @user`',
+          '`/admin problems add|list|setweek` · `/admin digest` · `/admin eligible` · `/admin backfill`',
+          'Dashboard organizer pages: Roster, Round board, Reviews, Problems (`/dashboard` for a sign-in link).',
         );
       }
       return c.json(ephemeral(lines.join('\n')));
@@ -104,58 +104,61 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
     case 'report':
       return reportCommand(c, interaction);
 
+    case 'dashboard':
+      return dashboardCommand(c, interaction);
+
+    case 'admin':
+      return adminCommand(c, interaction);
+
+    default:
+      return c.json(ephemeral('Unknown command.'));
+  }
+}
+
+// --------------------------------------------------------------------------
+
+async function dashboardCommand(c: Ctx, interaction: Interaction) {
+  const user = interactionUser(interaction)!;
+  const p = await getParticipant(c.env, user.id);
+  if (!p) return c.json(ephemeral('Enroll first with `/join`, then I can sign you in.'));
+  const secret = c.env.FORM_SIGNING_SECRET;
+  if (!secret) return c.json(ephemeral('Dashboard not configured.'));
+  const organizer = await isOrganizer(c.env, interaction);
+  const token = await signToken(secret, `magic:${p.id}:${organizer ? 1 : 0}`, new Date(Date.now() + 10 * 60_000));
+  const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
+  return c.json(
+    ephemeral(
+      `🔐 Your personal sign-in link (valid 10 minutes, only visible to you):\n${origin}/auth/${token}\n` +
+        (organizer ? 'You\'ll land with organizer access.' : 'You\'ll land on your progress page.'),
+    ),
+  );
+}
+
+const ADMIN_GROUPS = new Set(['setup', 'participant', 'problems']);
+
+async function adminCommand(c: Ctx, interaction: Interaction) {
+  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
+  const level1 = (interaction.data?.options as Opt[] | undefined)?.[0];
+  if (!level1) return c.json(ephemeral('Pick a subcommand.'));
+  const group = ADMIN_GROUPS.has(level1.name) ? level1.name : null;
+  const s = group ? level1.options?.[0] : level1;
+  if (!s) return c.json(ephemeral('Pick a subcommand.'));
+
+  if (group === 'setup') return setupCommand(c, interaction, s);
+  if (group === 'participant') return participantCommand(c, interaction, s);
+  if (group === 'problems') return problemsCommand(c, interaction, s);
+
+  switch (s.name) {
     case 'roster':
       return rosterCommand(c, interaction);
-
     case 'export': {
-      if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
       const secret = c.env.FORM_SIGNING_SECRET;
       if (!secret) return c.json(ephemeral('Form rail not configured (FORM_SIGNING_SECRET).'));
       const token = await signToken(secret, 'export:participants', new Date(Date.now() + 10 * 60_000));
       const origin = new URL(c.req.url).origin;
       return c.json(ephemeral(`Roster CSV (link valid 10 minutes):\n${origin}/export/${token}`));
     }
-
-    case 'setup':
-      return setupCommand(c, interaction);
-
-    case 'verify':
-      return verifyCommand(c, interaction);
-
-    case 'standing':
-      return standingCommand(c, interaction);
-
-    case 'excuse':
-      return excuseCommand(c, interaction);
-
-    case 'participant':
-      return participantCommand(c, interaction);
-
-    case 'pair':
-      return pairCommand(c, interaction);
-
-    case 'repair':
-      return repairCommand(c, interaction);
-
-    case 'problems':
-      return problemsCommand(c, interaction);
-
-    case 'eligible': {
-      if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-      const { results } = await c.env.DB.prepare(
-        "SELECT name, discord_id FROM participants WHERE status = 'completed' ORDER BY id",
-      ).all<{ name: string | null; discord_id: string }>();
-      return c.json(
-        ephemeral(
-          results.length
-            ? `🏆 **Alumni-round eligible (${results.length}):**\n${results.map((r) => `• ${r.name ?? '?'} (<@${r.discord_id}>)`).join('\n')}`
-            : 'Nobody eligible yet — 6/6 credits + verified W3 pass required.',
-        ),
-      );
-    }
-
     case 'digest': {
-      if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
       const cohort = await activeCohort(c.env);
       if (!cohort) return c.json(ephemeral('No active cohort.'));
       const weeks = await cohortWeeks(c.env, cohort.id);
@@ -165,13 +168,43 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
       await weeklyDigest(c.env, current);
       return c.json(ephemeral(`Digest for round ${current.idx} queued to the organizer channel.`));
     }
-
+    case 'eligible': {
+      const { results } = await c.env.DB.prepare(
+        "SELECT name, discord_id FROM participants WHERE status = 'completed' ORDER BY id",
+      ).all<{ name: string | null; discord_id: string }>();
+      return c.json(
+        ephemeral(
+          results.length
+            ? `🏆 **Alumni-round eligible (${results.length}):**\n${results.map((r) => `• ${r.name ?? '?'} (<@${r.discord_id}>)`).join('\n')}`
+            : 'Nobody eligible yet — 6/6 credits + verified final-round pass required.',
+        ),
+      );
+    }
+    case 'backfill': {
+      const { getSettings: gs } = await import('../config');
+      const { member_role_id } = await gs(c.env, ['member_role_id']);
+      if (!interaction.guild_id || !member_role_id) {
+        return c.json(ephemeral('Set the member role first (`/admin setup roles`).'));
+      }
+      await enqueue(c.env, 'backfill', {
+        guildId: interaction.guild_id,
+        roleId: member_role_id,
+        interactionToken: interaction.token,
+      });
+      return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
+    }
+    case 'standing':
+      return standingCommand(c, interaction, s.options);
+    case 'excuse':
+      return excuseCommand(c, interaction, s.options);
+    case 'pair':
+      return pairCommand(c, interaction, s.options);
+    case 'repair':
+      return repairCommand(c, interaction, s.options);
     default:
-      return c.json(ephemeral('Unknown command.'));
+      return c.json(ephemeral('Unknown admin subcommand.'));
   }
 }
-
-// --------------------------------------------------------------------------
 
 async function statusCommand(c: Ctx, interaction: Interaction) {
   const user = interactionUser(interaction)!;
@@ -333,9 +366,7 @@ async function rosterCommand(c: Ctx, interaction: Interaction) {
   );
 }
 
-async function setupCommand(c: Ctx, interaction: Interaction) {
-  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-  const s = sub(interaction);
+async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
   const opts = s?.options;
 
   switch (s?.name) {
@@ -398,28 +429,9 @@ async function setupCommand(c: Ctx, interaction: Interaction) {
   }
 }
 
-async function verifyCommand(c: Ctx, interaction: Interaction) {
-  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-  const s = sub(interaction);
-  if (s?.name !== 'backfill') return c.json(ephemeral('Subcommand: `backfill`.'));
-  const { member_role_id } = await getSettings(c.env, ['member_role_id']);
-  if (!interaction.guild_id || !member_role_id) {
-    return c.json(ephemeral('Set the member role first (`/setup roles`).'));
-  }
-  await enqueue(c.env, 'backfill', {
-    guildId: interaction.guild_id,
-    roleId: member_role_id,
-    interactionToken: interaction.token,
-  });
-  return c.json({
-    type: ResponseType.DEFERRED_CHANNEL_MESSAGE,
-    data: { flags: 64 },
-  });
-}
 
-async function standingCommand(c: Ctx, interaction: Interaction) {
-  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-  const target = String(optVal(interaction.data?.options as Opt[], 'user') ?? '');
+async function standingCommand(c: Ctx, interaction: Interaction, opts: Opt[] | undefined) {
+  const target = String(optVal(opts, 'user') ?? '');
   const p = await c.env.DB.prepare('SELECT * FROM participants WHERE discord_id = ?1')
     .bind(target)
     .first<any>();
@@ -444,9 +456,8 @@ async function standingCommand(c: Ctx, interaction: Interaction) {
   );
 }
 
-async function excuseCommand(c: Ctx, interaction: Interaction) {
-  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-  const target = String(optVal(interaction.data?.options as Opt[], 'user') ?? '');
+async function excuseCommand(c: Ctx, interaction: Interaction, opts: Opt[] | undefined) {
+  const target = String(optVal(opts, 'user') ?? '');
   const p = await c.env.DB.prepare('SELECT id, discord_id FROM participants WHERE discord_id = ?1')
     .bind(target)
     .first<{ id: number; discord_id: string }>();
@@ -479,9 +490,7 @@ async function currentWeek(c: Ctx): Promise<any | null> {
   );
 }
 
-async function pairCommand(c: Ctx, interaction: Interaction) {
-  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-  const opts = interaction.data?.options as Opt[] | undefined;
+async function pairCommand(c: Ctx, interaction: Interaction, opts: Opt[] | undefined) {
   const interviewerDiscord = String(optVal(opts, 'interviewer') ?? '');
   const intervieweeDiscord = String(optVal(opts, 'interviewee') ?? '');
   if (interviewerDiscord === intervieweeDiscord) return c.json(ephemeral('Two different people, please.'));
@@ -508,9 +517,7 @@ async function pairCommand(c: Ctx, interaction: Interaction) {
   );
 }
 
-async function repairCommand(c: Ctx, interaction: Interaction) {
-  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-  const opts = interaction.data?.options as Opt[] | undefined;
+async function repairCommand(c: Ctx, interaction: Interaction, opts: Opt[] | undefined) {
   const target = String(optVal(opts, 'user') ?? '');
   const need = String(optVal(opts, 'need') ?? '');
   if (need !== 'interviewer' && need !== 'interviewee') return c.json(ephemeral('Pick what they need.'));
@@ -529,9 +536,7 @@ async function repairCommand(c: Ctx, interaction: Interaction) {
   );
 }
 
-async function problemsCommand(c: Ctx, interaction: Interaction) {
-  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-  const s = sub(interaction);
+async function problemsCommand(c: Ctx, interaction: Interaction, s: Opt) {
   const opts = s?.options;
 
   switch (s?.name) {
@@ -595,9 +600,7 @@ async function problemsCommand(c: Ctx, interaction: Interaction) {
   }
 }
 
-async function participantCommand(c: Ctx, interaction: Interaction) {
-  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
-  const s = sub(interaction);
+async function participantCommand(c: Ctx, interaction: Interaction, s: Opt) {
   const target = String(optVal(s?.options, 'user') ?? '');
   const p = await c.env.DB.prepare('SELECT id, discord_id, status FROM participants WHERE discord_id = ?1')
     .bind(target)

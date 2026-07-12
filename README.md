@@ -62,15 +62,14 @@ applied migration.
 
 ## Commands
 
-**Everyone:** `/help` (this list, in Discord) · `/join` — enroll or edit your
-profile · `/status` — progress, sessions, owed forms · `/optout` — sit out the
-current round · `/cancel` — cancel a session with notice · `/report
-no-show|unresponsive|issue` — problems, straight to the pipeline/organizers.
+**Everyone (8):** `/help` · `/join` (enroll or edit) · `/status` · `/optout`
+(skip a round) · `/leave` (leave the program, confirmable) · `/cancel` ·
+`/report no-show|unresponsive|issue` · `/dashboard` (one-click web sign-in link).
 
-**Organizers** (Manage Server or the Organizer role): `/setup
-channels|roles|cohort|verify` · `/verify backfill` · `/problems
-add|list|setweek` · `/roster` · `/export` · `/standing @user` · `/excuse
-@user` · `/participant hold|release|remove @user` · `/digest` · `/eligible`.
+**Organizers — everything under one command:** `/admin` with subcommands:
+`setup channels|roles|cohort|verify` · `roster` · `export` · `standing` ·
+`excuse` · `pair` · `repair` · `participant hold|release|remove` ·
+`problems add|list|setweek` · `digest` · `eligible` · `backfill`.
 
 **Buttons:** round opt-in (in / double / standby / out) · session threads
 (Scheduled ✅ / Can't make it / Report no-show) · Verify panel · case files

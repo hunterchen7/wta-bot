@@ -59,16 +59,16 @@ interaction — no deploy.
 
 **One-time setup (organizer, in Discord):**
 
-1. `/setup channels announce:#... organizer:#... threads:#... start_here:#... intros:#...`
-2. `/setup roles member:@Member participant:@Participant organizer:@Organizer`
+1. `/admin setup channels announce:#... organizer:#... threads:#... start_here:#... intros:#...`
+2. `/admin setup roles member:@Member participant:@Participant organizer:@Organizer`
    (bot role must sit above these, with Manage Roles + Manage Nicknames on)
-3. `/setup verify` → panel appears in #start-here; `/verify backfill` once
+3. `/admin setup verify` → panel appears in #start-here; `/admin backfill` once
    (needs Server Members intent toggled on); then lock `@everyone` to #start-here.
-4. Load the bank: `/problems add` per problem (solution notes pasted in the
-   dashboard → Problems), then `/problems setweek 1..3`. Sets are **public**:
+4. Load the bank: `/admin problems add` per problem (solution notes pasted in the
+   dashboard → Problems), then `/admin problems setweek 1..3`. Sets are **public**:
    `/bank` + the pairing announcement; interviewers record their pick on the
    report. (Private T-24h packets exist but are off — `settings.packet_mode`.)
-5. `/setup cohort start_date:YYYY-MM-DD name:"Summer 2026"` — round 1's first
+5. `/admin setup cohort start_date:YYYY-MM-DD name:"Summer 2026"` — round 1's first
    day, any weekday (2026: `2026-07-26`). **That's the last manual step.** The
    cron runs everything else.
 
@@ -84,13 +84,14 @@ then standby volunteers); anything unrepaired simply becomes next week's
 deficit and the demand math offers a catch-up double.
 
 **Humans in the loop:** case files (strike 2) land in the organizer channel
-with Remove / Excuse / Keep buttons; `/excuse @user` clears good-reason cases;
+with Remove / Excuse / Keep buttons; `/admin excuse @user` clears good-reason cases;
 W3 pass verdicts wait in dashboard → Reviews for a recording **verify/flag**;
 verify + 6/6 fires eligibility automatically.
 
-**Admin reference:** `/roster` `/standing` `/excuse` `/participant hold|release|remove`
-`/digest` `/eligible` `/export` `/problems` `/setup` — plus the dashboard
-(`/login` with your roster email) for roster, week board, reviews, problems.
+**Admin reference:** everything under `/admin` (roster, export, standing,
+excuse, pair, repair, participant, problems, digest, eligible, setup,
+backfill) — plus the dashboard: `/dashboard` in Discord for a one-click
+sign-in link, or `/login` with your roster email.
 
 ## Web dashboard
 

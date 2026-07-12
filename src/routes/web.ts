@@ -151,7 +151,8 @@ web.get('/login', (c) =>
          <label class="f" for="email">Email</label>
          <input type="email" id="email" name="email" required placeholder="you@example.com">
          <p style="margin-top:1rem"><button type="submit">Send code</button></p>
-       </form>`,
+       </form>
+       <p class="sub">⚡ Faster: run <code>/dashboard</code> in the Discord server for a one-click sign-in link — no code needed.</p>`,
     ),
   ),
 );
@@ -264,6 +265,30 @@ web.post('/login/code', async (c) => {
     `sess:${p.id}:${organizer ? 1 : 0}`,
     new Date(Date.now() + SESSION_DAYS * 86400_000),
   );
+  setCookie(c, COOKIE, token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'Lax',
+    path: '/',
+    maxAge: SESSION_DAYS * 86400,
+  });
+  return c.redirect('/dashboard');
+});
+
+// One-click sign-in from Discord: /dashboard mints a short-lived signed link
+// whose organizer flag was decided by the Discord role/permission check.
+web.get('/auth/:token', async (c) => {
+  const secret = c.env.FORM_SIGNING_SECRET;
+  if (!secret) return c.text('not configured', 503);
+  const verified = await verifyToken(secret, c.req.param('token'));
+  const m = verified && /^magic:(\d+):([01])$/.exec(verified.subject);
+  if (!m) {
+    return c.html(
+      page('Link expired', '<h1>Sign-in link expired</h1><p class="sub">They last 10 minutes — run <code>/dashboard</code> in Discord for a fresh one.</p>'),
+      401,
+    );
+  }
+  const token = await signToken(secret, `sess:${m[1]}:${m[2]}`, new Date(Date.now() + SESSION_DAYS * 86400_000));
   setCookie(c, COOKIE, token, {
     httpOnly: true,
     secure: true,

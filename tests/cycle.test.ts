@@ -123,14 +123,20 @@ describe('full weekly cycle', () => {
         token: 't',
         guild_id: GUILD,
         data: {
-          name: 'setup',
+          name: 'admin',
           options: [
             {
-              name: 'cohort',
-              type: 1,
+              name: 'setup',
+              type: 2,
               options: [
-                { name: 'start_date', type: 3, value: '2026-09-14' },
-                { name: 'name', type: 3, value: 'Fall 2026' },
+                {
+                  name: 'cohort',
+                  type: 1,
+                  options: [
+                    { name: 'start_date', type: 3, value: '2026-09-14' },
+                    { name: 'name', type: 3, value: 'Fall 2026' },
+                  ],
+                },
               ],
             },
           ],
@@ -287,7 +293,7 @@ describe('full weekly cycle', () => {
       id: '1',
       token: 't',
       guild_id: GUILD,
-      data: { name, options },
+      data: { name: 'admin', options: [{ name, type: 1, options }] },
       ...asAdmin('999'),
     });
 
