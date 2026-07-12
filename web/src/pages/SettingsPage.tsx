@@ -410,10 +410,10 @@ function Field({
       <span className="mb-2 block text-sm font-bold text-slate-700">
         {label}
       </span>
-      {help ? (
-        <span className="mb-2 block text-xs text-slate-500">{help}</span>
-      ) : null}
       {children}
+      {help ? (
+        <span className="mt-2 block text-xs leading-5 text-slate-500">{help}</span>
+      ) : null}
       {error ? (
         <span
           role="alert"
