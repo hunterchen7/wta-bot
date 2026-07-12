@@ -1,5 +1,5 @@
 import type { Env } from '../env';
-import { BLURB_MIN_CHARS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
+import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS, wordCount } from '../intake';
 import { enqueue } from '../engine/outbox';
 
 export type ParticipantSettingsInput = {
@@ -128,7 +128,8 @@ export function validateParticipantSettings(input: ParticipantSettingsInput): Re
   else if (!input.opportunities.every((value) => OPPORTUNITIES.some((choice) => choice.value === value))) errors.opportunities = 'One of the selected opportunity types is invalid.';
   if (input.topics.length === 0) errors.topics = 'Choose at least one topic.';
   else if (!input.topics.every((value) => TOPICS.some((choice) => choice.value === value))) errors.topics = 'One of the selected topics is invalid.';
-  if (input.blurb.length < BLURB_MIN_CHARS) errors.blurb = `Dream company and role response must be at least ${BLURB_MIN_CHARS} characters.`;
+  const blurbWords = wordCount(input.blurb);
+  if (blurbWords < BLURB_MIN_WORDS) errors.blurb = `Dream company and role response must be at least ${BLURB_MIN_WORDS} words (currently ${blurbWords}).`;
   else if (input.blurb.length > 2000) errors.blurb = 'Dream company and role response must be 2,000 characters or fewer.';
   if (input.interests.length > 1000) errors.interests = 'Learning interests must be 1,000 characters or fewer.';
   if (input.priorFeedback.length > 1000) errors.priorFeedback = 'Prior feedback must be 1,000 characters or fewer.';

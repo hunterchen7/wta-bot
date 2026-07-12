@@ -76,6 +76,7 @@ describe('participant dashboard API', () => {
     expect(invalid.status).toBe(400);
     const errors = (await invalid.json<any>()).fieldErrors;
     expect(errors).toMatchObject({ name: expect.any(String), preferredEmail: expect.any(String), opportunities: expect.any(String), topics: expect.any(String), blurb: expect.any(String) });
+    expect(errors.blurb).toContain('currently 0');
 
     const save = await jsonPost('/api/settings', { name: 'Student Updated', preferredEmail: 'student.updated@example.com', westernEmail: 'stu@uwo.ca', year: 'Fourth', program: 'Data Science', experience: '3-4', opportunities: ['internships', 'new_grad'], topics: ['dsa', 'practice'], priorWta: true, emailOk: true, blurb: 'I want to build reliable systems and learn how great engineering teams work. '.repeat(15), interests: 'Distributed systems', priorFeedback: 'More structured feedback' }, cookie);
     expect(save.status).toBe(200);

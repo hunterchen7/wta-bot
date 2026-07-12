@@ -5,7 +5,7 @@ import { activeCohort, cohortWeeks } from '../engine/weeks';
 import type { Env } from '../env';
 import { fieldsFor } from '../forms/schema';
 import { verifyToken } from '../forms/token';
-import { BLURB_MIN_CHARS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
+import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
 import { getParticipant, upsertParticipant } from '../participants';
 import {
   enqueueEmailConfirmation,
@@ -55,7 +55,7 @@ publicApi.get('/api/enrollment/:token', async (c) => {
     discord: { id: identity.discordId, username: participant?.discord_username ?? identity.username ?? null },
     profile: participant ? profileFromParticipant(participant) : null,
     options: enrollmentOptions,
-    minimumBlurbCharacters: BLURB_MIN_CHARS,
+    minimumBlurbWords: BLURB_MIN_WORDS,
   });
 });
 

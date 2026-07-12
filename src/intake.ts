@@ -1,7 +1,10 @@
 // Enrollment choices are shared by the public React form, participant settings,
 // and server-side validation. Discord `/join` only mints a signed web link.
 
-export const BLURB_MIN_CHARS = 800;
+export const BLURB_MIN_WORDS = 100;
+
+export const wordCount = (value: string | null | undefined) =>
+  (value ?? '').trim().split(/\s+/).filter(Boolean).length;
 
 export const YEARS = ['First', 'Second', 'Third', 'Fourth', 'Fifth or greater'];
 export const PROGRAMS = ['Computer Science', 'Software Engineering', 'Data Science', 'Other'];

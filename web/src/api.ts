@@ -70,7 +70,8 @@ export async function saveSettings(payload: SettingsPayload): Promise<void> {
     const fieldErrors: Record<string, string> = {};
     if (payload.opportunities.length === 0) fieldErrors.opportunities = 'Choose at least one opportunity type.';
     if (payload.topics.length === 0) fieldErrors.topics = 'Choose at least one topic.';
-    if (payload.blurb.trim().length < 800) fieldErrors.blurb = 'Dream company and role response must be at least 800 characters.';
+    const blurbWords = payload.blurb.trim().split(/\s+/).filter(Boolean).length;
+    if (blurbWords < 100) fieldErrors.blurb = `Dream company and role response must be at least 100 words (currently ${blurbWords}).`;
     if (Object.keys(fieldErrors).length) throw new SettingsSaveError('Check the highlighted profile fields.', fieldErrors);
     return;
   }

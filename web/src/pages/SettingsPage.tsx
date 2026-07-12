@@ -94,7 +94,7 @@ export function SettingsPage() {
           <label className="mt-6 flex items-center gap-3 text-sm font-semibold text-slate-700"><input type="checkbox" checked={form.priorWta} onChange={(event) => set('priorWta', event.target.checked)} className="size-5 accent-emerald-600" /> I participated in WTA before</label>
 
           <div className="mt-6 space-y-5">
-            <Field label="Dream company and role — what and why?" help="At least about 150–200 words." error={fieldErrors.blurb}><textarea name="blurb" aria-invalid={Boolean(fieldErrors.blurb)} required minLength={800} maxLength={2000} rows={8} value={form.blurb} onChange={(event) => set('blurb', event.target.value)} className={fieldClass(fieldErrors.blurb)} /></Field>
+            <Field label="Imagine your ideal role after graduation. Where would you work, what would you build, and why?" help={`Describe the organization, team, problems, skills, and motivation that make the role compelling to you. ${wordCount(form.blurb)} / 100 minimum words.`} error={fieldErrors.blurb}><textarea name="blurb" aria-invalid={Boolean(fieldErrors.blurb)} required maxLength={2000} rows={8} value={form.blurb} onChange={(event) => set('blurb', event.target.value)} className={fieldClass(fieldErrors.blurb)} /></Field>
             <Field label="Anything else you want to learn?" error={fieldErrors.interests}><textarea name="interests" aria-invalid={Boolean(fieldErrors.interests)} maxLength={1000} rows={4} value={form.interests} onChange={(event) => set('interests', event.target.value)} className={fieldClass(fieldErrors.interests)} /></Field>
             <Field label="Feedback from last year" error={fieldErrors.priorFeedback}><textarea name="priorFeedback" aria-invalid={Boolean(fieldErrors.priorFeedback)} maxLength={1000} rows={4} value={form.priorFeedback} onChange={(event) => set('priorFeedback', event.target.value)} className={fieldClass(fieldErrors.priorFeedback)} /></Field>
           </div>
@@ -137,6 +137,7 @@ function ChoiceGroup({ field, title, choices, selected, error, onToggle }: { fie
 const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500';
 const fieldClass = (error?: string) => `${inputClass} ${error ? 'border-rose-400 bg-rose-50/30 focus:border-rose-500' : ''}`;
 const omit = (values: Record<string, string>, key: PropertyKey) => Object.fromEntries(Object.entries(values).filter(([entry]) => entry !== key));
+const wordCount = (value: string) => value.trim().split(/\s+/).filter(Boolean).length;
 
 const fromParticipant = (participant: ReturnType<typeof useDashboard>['data']['participant']): SettingsPayload => ({
   name: participant.name,

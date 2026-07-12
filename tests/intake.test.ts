@@ -45,14 +45,14 @@ describe('web enrollment cutover', () => {
   it('loads linked Discord identity and reports exact validation errors', async () => {
     const load = await app.request(`/api/enrollment/${enrollmentToken}`, {}, env);
     expect(load.status).toBe(200);
-    expect(await load.json<any>()).toMatchObject({ discord: { id: USER, username: 'test.student' }, profile: null });
+    expect(await load.json<any>()).toMatchObject({ discord: { id: USER, username: 'test.student' }, profile: null, minimumBlurbWords: 100 });
 
     const invalid = await app.request(`/api/enrollment/${enrollmentToken}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ ...validProfile, name: '', opportunities: [], blurb: 'short' }),
     }, env);
     expect(invalid.status).toBe(400);
-    expect(await invalid.json<any>()).toMatchObject({ fieldErrors: { name: expect.any(String), opportunities: expect.any(String), blurb: expect.any(String) } });
+    expect(await invalid.json<any>()).toMatchObject({ fieldErrors: { name: expect.any(String), opportunities: expect.any(String), blurb: expect.stringContaining('currently 1') } });
     expect(await env.DB.prepare('SELECT id FROM participants WHERE discord_id = ?1').bind(USER).first()).toBeNull();
   });
 
