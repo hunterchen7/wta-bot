@@ -2,7 +2,12 @@
 
 Discord bot for the Western Tech Alumni mock-interview program. One Cloudflare
 Worker serves the Discord interactions endpoint, the external form rail, and
-the interviewer packet pages, backed by D1. See [DESIGN.md](DESIGN.md).
+the interviewer packet pages, backed by D1.
+
+**Docs:** [DESIGN.md](DESIGN.md) (what & why) ·
+[docs/SETUP.md](docs/SETUP.md) (from-zero install: Discord app, Cloudflare,
+local dev, troubleshooting) · [docs/OPERATIONS.md](docs/OPERATIONS.md)
+(runbook: deploys, secrets, data, recovery).
 
 ## Stack
 
