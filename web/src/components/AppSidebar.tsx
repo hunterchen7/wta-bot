@@ -67,7 +67,7 @@ function SidebarContents({ data, collapsed, mobile, onCollapse, onCloseMobile }:
     <>
       <div className={`flex h-18 shrink-0 items-center border-b border-white/10 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
         <NavLink to="/app" className="flex min-w-0 items-center gap-3 font-black tracking-tight text-white" onClick={onCloseMobile}>
-          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-emerald-400 text-sm text-slate-950 shadow-lg shadow-emerald-500/15">WTA</span>
+          <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-western-400 text-sm text-slate-950 shadow-lg shadow-western-500/15">WTA</span>
           {!collapsed ? <span className="truncate">Mock Interviews</span> : null}
         </NavLink>
         {mobile ? <button aria-label="Close navigation" className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white" onClick={onCloseMobile}><Icon name="close" /></button> : !collapsed ? <button aria-label="Collapse sidebar" className="rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white" onClick={onCollapse}><Icon name="collapse" /></button> : null}
@@ -98,10 +98,10 @@ function SidebarLink({ item, collapsed, onNavigate }: { item: NavEntry; collapse
   const location = useLocation();
   const active = item.end ? location.pathname === item.to : location.pathname === item.to || location.pathname.startsWith(`${item.to}/`);
   const preload = () => preloadAdminRoute(item.to);
-  return <Link to={item.to} aria-current={active ? 'page' : undefined} title={collapsed ? item.label : undefined} onPointerEnter={preload} onPointerDown={preload} onFocus={preload} onClick={onNavigate} className={`mb-1 flex h-11 items-center rounded-xl text-sm font-semibold transition ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${active ? 'bg-emerald-400/15 text-emerald-300' : 'text-slate-400 hover:bg-white/7 hover:text-white'}`}><Icon name={item.icon} className="size-5 shrink-0" />{!collapsed ? <span className="truncate">{item.label}</span> : null}</Link>;
+  return <Link to={item.to} aria-current={active ? 'page' : undefined} title={collapsed ? item.label : undefined} onPointerEnter={preload} onPointerDown={preload} onFocus={preload} onClick={onNavigate} className={`mb-1 flex h-11 items-center rounded-xl text-sm font-semibold transition ${collapsed ? 'justify-center px-2' : 'gap-3 px-3'} ${active ? 'bg-western-400/15 text-western-300' : 'text-slate-400 hover:bg-white/7 hover:text-white'}`}><Icon name={item.icon} className="size-5 shrink-0" />{!collapsed ? <span className="truncate">{item.label}</span> : null}</Link>;
 }
 
 function Avatar({ name }: { name: string }) {
   const value = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || '?';
-  return <span className="grid size-10 shrink-0 place-items-center rounded-full bg-slate-800 text-xs font-black text-emerald-300">{value}</span>;
+  return <span className="grid size-10 shrink-0 place-items-center rounded-full bg-slate-800 text-xs font-black text-western-300">{value}</span>;
 }

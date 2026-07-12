@@ -32,7 +32,7 @@ export function FormsPage() {
     <PageIntro title="Forms" description="Inspect the exact participant-facing reports. These previews use the live form schemas and never write program data." actions={<Button asChild variant="outline"><a href={form.path} target="_blank" rel="noreferrer">Open full preview ↗</a></Button>} />
     <div className="flex shrink-0"><Tabs value={kind} onChange={(value) => setKind(value as FormKind)} items={formEntries.map(([value, item]) => ({ value, label: item.label }))} /></div>
     <Panel className="flex min-h-0 flex-1 flex-col" title={form.label} description={form.description}>
-      <div className="relative min-h-0 flex-1 overflow-hidden bg-[#f7f7f5] dark:bg-background" aria-busy={loading[kind]}>
+      <div className="relative min-h-0 flex-1 overflow-hidden bg-background dark:bg-background" aria-busy={loading[kind]}>
         {formEntries.map(([value, item]) => <iframe
           key={value}
           title={`${item.label} interactive preview`}
@@ -40,7 +40,7 @@ export function FormsPage() {
           tabIndex={value === kind ? 0 : -1}
           aria-hidden={value === kind ? undefined : true}
           onLoad={() => setLoading((current) => current[value] ? { ...current, [value]: false } : current)}
-          className={`absolute inset-0 size-full bg-[#f7f7f5] transition-opacity duration-150 dark:bg-background ${value === kind ? 'z-10 opacity-100' : 'pointer-events-none opacity-0'}`}
+          className={`absolute inset-0 size-full bg-background transition-opacity duration-150 dark:bg-background ${value === kind ? 'z-10 opacity-100' : 'pointer-events-none opacity-0'}`}
         />)}
         {loading[kind] ? <PreviewSkeleton /> : null}
       </div>
@@ -49,7 +49,7 @@ export function FormsPage() {
 }
 
 function PreviewSkeleton() {
-  return <div aria-label="Loading form preview" className="absolute inset-0 z-20 overflow-hidden bg-[#f7f7f5] p-6 dark:bg-background">
+  return <div aria-label="Loading form preview" className="absolute inset-0 z-20 overflow-hidden bg-background p-6 dark:bg-background">
     <div className="mx-auto max-w-3xl animate-pulse space-y-5">
       <div className="space-y-2"><Skeleton className="h-3 w-28" /><Skeleton className="h-8 w-72 max-w-full" /><Skeleton className="h-4 w-full max-w-xl" /></div>
       <Skeleton className="h-20 rounded-2xl" />

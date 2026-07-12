@@ -15,13 +15,13 @@ export function ProblemPage({ preview = false }: { preview?: boolean }) {
   const problem = data.problem;
   return <PublicShell narrow>
     <PublicIntro eyebrow={preview ? 'Read-only preview' : `Round ${data.round}`} title={data.mode === 'packet' ? 'Interviewer packet' : 'Solution notes'} description={`${problem.number ? `#${problem.number} · ` : ''}${problem.title} · ${problem.difficulty}${data.intervieweeName ? ` · interviewing ${data.intervieweeName}` : ''}`} />
-    {preview ? <Notice tone="violet">Preview mode. Live packets are private, signed, and expire automatically.</Notice> : null}
+    {preview ? <Notice tone="western">Preview mode. Live packets are private, signed, and expire automatically.</Notice> : null}
     {data.mode === 'packet' ? <Notice tone="amber">For your eyes only. Do not share this page with the interviewee before the session.</Notice> : null}
-    {problem.url ? <a href={problem.url} target="_blank" rel="noreferrer" className="mb-6 inline-flex rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white hover:bg-slate-800">Open original problem ↗</a> : null}
+    {problem.url ? <a href={problem.url} target="_blank" rel="noreferrer" className="mb-6 inline-flex rounded-xl bg-western-700 px-4 py-2.5 text-sm font-black text-white hover:bg-western-800">Open original problem ↗</a> : null}
     <div className="space-y-5">{problem.statement ? <Content title="Statement" value={problem.statement} /> : null}{problem.hints ? <Content title="Hint ladder" value={problem.hints} /> : null}<Content title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} /></div>
   </PublicShell>;
 }
 
 function Content({ title, value }: { title: string; value: string }) { return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white"><h2 className="border-b border-slate-100 px-5 py-4 text-sm font-black text-slate-950">{title}</h2><pre className="whitespace-pre-wrap p-5 font-sans text-sm leading-7 text-slate-700">{value}</pre></section>; }
-function Notice({ children, tone }: { children: React.ReactNode; tone: 'amber' | 'violet' }) { return <div className={`mb-6 rounded-2xl border p-4 text-sm font-semibold ${tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-violet-200 bg-violet-50 text-violet-900'}`}>{children}</div>; }
+function Notice({ children, tone }: { children: React.ReactNode; tone: 'amber' | 'western' }) { return <div className={`mb-6 rounded-2xl border p-4 text-sm font-semibold ${tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-western-200 bg-western-50 text-western-900'}`}>{children}</div>; }
 const previewPacket: ProblemData = { mode: 'packet', round: 2, scheduledAt: '2026-08-12T23:30:00.000Z', intervieweeName: 'Jordan Example', problem: { number: 56, title: 'Merge Intervals', url: 'https://leetcode.com/problems/merge-intervals/', difficulty: 'medium', statement: 'Given an array of intervals, merge all overlapping intervals.', hints: '1. What happens if you sort first?\n2. When do two intervals overlap?\n3. Keep one current merged interval.', solution: 'Sort by start time. Sweep once, extending the current interval while the next start is within its end. O(n log n).' } };
