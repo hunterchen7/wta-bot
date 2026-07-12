@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import { getDashboard, logout, type DashboardData } from './api';
 import { AppSidebar } from './components/AppSidebar';
 import { Icon } from './components/Icon';
+import { ThemeToggle } from './components/ThemeToggle';
 import { DashboardContext } from './dashboard-context';
 
 export function AppLayout() {
@@ -36,13 +37,14 @@ export function AppLayout() {
 
   return (
     <DashboardContext.Provider value={{ data, refresh }}>
-      <div className={`min-h-screen bg-[#f7f7f5] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(.22,1,.36,1)] md:grid ${sidebarCollapsed ? 'md:grid-cols-[5rem_minmax(0,1fr)]' : 'md:grid-cols-[16rem_minmax(0,1fr)]'}`}>
+      <div className={`min-h-screen bg-[#f7f7f5] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(.22,1,.36,1)] dark:bg-background md:grid ${sidebarCollapsed ? 'md:grid-cols-[5rem_minmax(0,1fr)]' : 'md:grid-cols-[16rem_minmax(0,1fr)]'}`}>
         <AppSidebar data={data} collapsed={sidebarCollapsed} mobileOpen={mobileOpen} onCollapse={toggleSidebar} onCloseMobile={() => setMobileOpen(false)} />
         <div className="min-w-0">
-          <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl sm:px-6">
+          <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl dark:border-border dark:bg-background/90 sm:px-6">
             <button aria-label="Open navigation" className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-sm md:hidden" onClick={() => setMobileOpen(true)}><Icon name="menu" /></button>
             <div className="min-w-0 flex-1"><div className="truncate text-sm font-bold text-slate-900">{pageTitle(location.pathname)}</div><div className="hidden truncate text-xs text-slate-500 sm:block">Western Tech Alumni mock interview program</div></div>
             <div className="hidden text-right lg:block"><div className="text-sm font-semibold text-slate-900">{data.participant.name}</div><div className="text-xs text-slate-500">{data.viewer.organizer ? 'Organizer' : 'Participant'}</div></div>
+            <ThemeToggle />
             <button onClick={() => void logout()} className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50">Log out</button>
           </header>
           <main className="mx-auto w-full max-w-[100rem] px-4 py-8 sm:px-6 sm:py-10 lg:px-8"><div key={location.pathname} className="route-enter"><Outlet /></div></main>
@@ -66,7 +68,7 @@ function pageTitle(pathname: string) {
   const titles: Record<string, string> = {
     '/app': 'My progress', '/app/settings': 'My settings', '/app/admin': 'Overview',
     '/app/admin/participants': 'Participants', '/app/admin/rounds': 'Rounds', '/app/admin/reviews': 'Reviews',
-    '/app/admin/problems': 'Problems', '/app/admin/analytics': 'Analytics', '/app/admin/operations': 'Operations',
+    '/app/admin/forms': 'Forms', '/app/admin/problems': 'Problems', '/app/admin/analytics': 'Analytics', '/app/admin/operations': 'Operations',
     '/app/admin/settings': 'Program settings',
   };
   return titles[pathname] ?? 'WTA Dashboard';
