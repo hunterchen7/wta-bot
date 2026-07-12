@@ -6,6 +6,7 @@ export const demoDashboard: DashboardData = {
     id: 1,
     discordId: '100001',
     discordUsername: 'alexchen',
+    discordNickname: 'Alex Chen',
     name: 'Alex Chen',
     preferredEmail: 'alex@example.com',
     westernEmail: 'achen@uwo.ca',

@@ -11,6 +11,7 @@ export type OutboxKind =
   | 'thread_create' // { sessionId, channelId, name, starter }
   | 'role_add' // { guildId, userId, roleId }
   | 'nickname' // { guildId, userId, nick }
+  | 'discord_identity_sync' // { guildId, userId } — refresh username + server nickname
   | 'email' // { to, subject, text }
   | 'followup' // { interactionToken, message } — edits a deferred response
   | 'guild_setup' // { guildId, year, interactionToken } — annual bootstrap (private-first)

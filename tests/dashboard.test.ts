@@ -11,9 +11,9 @@ const jsonPost = (path: string, body: unknown, cookie?: string, overrides: Recor
 
 beforeAll(async () => {
   await env.DB.prepare(
-    `INSERT INTO participants (id, discord_id, discord_username, name, preferred_email, western_email, year, program, opportunities, experience_band, topics, blurb, status)
-     VALUES (?1, '401', 'student.user', 'Stu Dent', 'stu@example.com', 'stu@uwo.ca', 'Third', 'Computer Science', '["internships"]', '1-2', '["dsa"]', ?3, 'active'),
-            (?2, '402', 'organizer.user', 'Orga Nizer', 'org@example.com', 'org@uwo.ca', 'Fourth', 'Software Engineering', '["new_grad"]', '3-4', '["system_design"]', ?3, 'active')`,
+    `INSERT INTO participants (id, discord_id, discord_username, discord_nickname, name, preferred_email, western_email, year, program, opportunities, experience_band, topics, blurb, status)
+     VALUES (?1, '401', 'student.user', 'Stu Nick', 'Stu Dent', 'stu@example.com', 'stu@uwo.ca', 'Third', 'Computer Science', '["internships"]', '1-2', '["dsa"]', ?3, 'active'),
+            (?2, '402', 'organizer.user', 'Organizer Nick', 'Orga Nizer', 'org@example.com', 'org@uwo.ca', 'Fourth', 'Software Engineering', '["new_grad"]', '3-4', '["system_design"]', ?3, 'active')`,
   ).bind(STUDENT_ID, ADMIN_ID, 'I want to build useful developer infrastructure. '.repeat(25)).run();
 });
 
@@ -65,7 +65,7 @@ describe('participant dashboard API', () => {
     const response = await app.request('/api/dashboard', { headers: { Cookie: await cookieFor(STUDENT_ID, false) } }, env);
     expect(response.status).toBe(200);
     expect(await response.json<any>()).toMatchObject({
-      participant: { name: 'Stu Dent', discordId: '401', discordUsername: 'student.user', preferredEmail: 'stu@example.com' },
+      participant: { name: 'Stu Dent', discordId: '401', discordUsername: 'student.user', discordNickname: 'Stu Nick', preferredEmail: 'stu@example.com' },
       viewer: { participantId: STUDENT_ID, organizer: false },
     });
   });
@@ -79,7 +79,7 @@ describe('participant dashboard API', () => {
 
     const save = await jsonPost('/api/settings', { name: 'Student Updated', preferredEmail: 'student.updated@example.com', westernEmail: 'stu@uwo.ca', year: 'Fourth', program: 'Data Science', experience: '3-4', opportunities: ['internships', 'new_grad'], topics: ['dsa', 'practice'], priorWta: true, emailOk: true, blurb: 'I want to build reliable systems and learn how great engineering teams work. '.repeat(15), interests: 'Distributed systems', priorFeedback: 'More structured feedback' }, cookie);
     expect(save.status).toBe(200);
-    expect(await env.DB.prepare('SELECT name, preferred_email, email_ok, discord_username FROM participants WHERE id = ?1').bind(STUDENT_ID).first()).toEqual({ name: 'Student Updated', preferred_email: 'student.updated@example.com', email_ok: 1, discord_username: 'student.user' });
+    expect(await env.DB.prepare('SELECT name, preferred_email, email_ok, discord_username, discord_nickname FROM participants WHERE id = ?1').bind(STUDENT_ID).first()).toEqual({ name: 'Student Updated', preferred_email: 'student.updated@example.com', email_ok: 1, discord_username: 'student.user', discord_nickname: 'Student Updated' });
     const confirmation = await env.DB.prepare("SELECT payload FROM outbox WHERE kind = 'email' AND payload LIKE '%subscribed%' ORDER BY id DESC LIMIT 1").first<any>();
     expect(JSON.parse(confirmation.payload).to).toBe('student.updated@example.com');
   });

@@ -4,6 +4,7 @@ export type ParticipantSettings = {
   id: number;
   discordId: string;
   discordUsername: string;
+  discordNickname: string;
   name: string;
   preferredEmail: string;
   westernEmail: string;
@@ -42,7 +43,7 @@ export type DashboardData = {
   };
 };
 
-export type SettingsPayload = Omit<ParticipantSettings, 'id' | 'status' | 'discordId' | 'discordUsername'>;
+export type SettingsPayload = Omit<ParticipantSettings, 'id' | 'status' | 'discordId' | 'discordUsername' | 'discordNickname'>;
 
 export class SettingsSaveError extends Error {
   constructor(message: string, readonly fieldErrors: Record<string, string> = {}) {

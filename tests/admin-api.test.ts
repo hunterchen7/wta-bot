@@ -30,10 +30,10 @@ const request = async (path: string, options: RequestInit = {}, organizer = true
 beforeAll(async () => {
   await env.DB.prepare(
     `INSERT INTO participants
-      (id, discord_id, name, preferred_email, western_email, year, program, topics, email_ok, status)
+      (id, discord_id, discord_username, discord_nickname, name, preferred_email, western_email, year, program, topics, email_ok, status)
      VALUES
-      (?1, 'admin-9101', 'Admin Person', 'admin@example.com', 'admin@uwo.ca', 'Fourth', 'Computer Science', '["dsa"]', 1, 'active'),
-      (?2, 'student-9102', 'Student Person', 'student@example.com', 'student@uwo.ca', 'Third', 'Software Engineering', '["dsa"]', 1, 'active')`,
+      (?1, 'admin-9101', 'admin.account', 'Admin Nick', 'Admin Person', 'admin@example.com', 'admin@uwo.ca', 'Fourth', 'Computer Science', '["dsa"]', 1, 'active'),
+      (?2, 'student-9102', 'student.account', 'Student Nick', 'Student Person', 'student@example.com', 'student@uwo.ca', 'Third', 'Software Engineering', '["dsa"]', 1, 'active')`,
   ).bind(ADMIN_ID, STUDENT_ID).run();
   const cohort = await createCohort(env, 'Admin API Cohort', [2026, 7, 26]);
   weekId = cohort.weeks[0]!.id;
@@ -73,7 +73,14 @@ describe('admin operational data', () => {
   it('returns roster, detail, rounds, analytics, and CSV', async () => {
     const roster = await (await request('/api/admin/participants')).json<any>();
     expect(roster.participants).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: STUDENT_ID, name: 'Student Person', email_ok: 1 }),
+      expect.objectContaining({
+        id: STUDENT_ID,
+        name: 'Student Person',
+        discord_username: 'student.account',
+        discord_nickname: 'Student Nick',
+        discord_id: 'student-9102',
+        email_ok: 1,
+      }),
     ]));
 
     const detail = await (await request(`/api/admin/participants/${STUDENT_ID}`)).json<any>();
@@ -101,6 +108,23 @@ describe('admin operational data', () => {
 });
 
 describe('admin mutations and audit history', () => {
+  it('queues a Discord identity refresh for the active roster', async () => {
+    const response = await app.request('/api/admin/participants/sync-discord', {
+      method: 'POST',
+      headers: { Cookie: await cookieFor(ADMIN_ID, true), 'Content-Type': 'application/json' },
+      body: '{}',
+    }, { ...env, ALLOWED_GUILD_IDS: 'guild-1', DISCORD_TOKEN: 'bot-token' });
+    expect(response.status).toBe(200);
+    expect(await response.json<any>()).toMatchObject({ ok: true, queued: 2 });
+    const queued = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'discord_identity_sync' ORDER BY id",
+    ).all<any>();
+    expect(queued.results.map((row) => JSON.parse(row.payload))).toEqual(expect.arrayContaining([
+      { guildId: 'guild-1', userId: 'admin-9101' },
+      { guildId: 'guild-1', userId: 'student-9102' },
+    ]));
+  });
+
   it('bulk changes participant status and queues opted-in messages', async () => {
     const status = await request('/api/admin/participants/status', {
       method: 'POST',

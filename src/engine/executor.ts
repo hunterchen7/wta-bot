@@ -49,6 +49,18 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       await needRest().setNickname(payload.guildId, payload.userId, payload.nick);
       return;
 
+    case 'discord_identity_sync': {
+      const member = await needRest().getGuildMember(payload.guildId, payload.userId);
+      await env.DB.prepare(
+        "UPDATE participants SET discord_username = ?2, discord_nickname = ?3, updated_at = datetime('now') WHERE discord_id = ?1",
+      ).bind(
+        payload.userId,
+        member.user.username,
+        member.nick ?? member.user.global_name ?? member.user.username,
+      ).run();
+      return;
+    }
+
     case 'email':
       await sendEmail(env, payload.to, payload.subject, payload.text);
       return;

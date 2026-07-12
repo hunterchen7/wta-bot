@@ -93,7 +93,7 @@ export class DiscordRest {
   }
 
   async getGuildMember(guildId: string, userId: string) {
-    return this.request<{ roles: string[]; user: { id: string } }>(
+    return this.request<{ roles: string[]; nick?: string | null; user: { id: string; username: string; global_name?: string | null } }>(
       'GET',
       `/guilds/${guildId}/members/${userId}`,
     );
@@ -101,11 +101,11 @@ export class DiscordRest {
 
   /** Paginated member list — requires the Server Members intent to be enabled
    *  on the application (instant toggle under 10k members). */
-  async listAllMembers(guildId: string): Promise<Array<{ user: { id: string; bot?: boolean }; roles: string[] }>> {
-    const all: Array<{ user: { id: string; bot?: boolean }; roles: string[] }> = [];
+  async listAllMembers(guildId: string): Promise<Array<{ user: { id: string; username: string; global_name?: string | null; bot?: boolean }; nick?: string | null; roles: string[] }>> {
+    const all: Array<{ user: { id: string; username: string; global_name?: string | null; bot?: boolean }; nick?: string | null; roles: string[] }> = [];
     let after = '0';
     for (let page = 0; page < 30; page++) {
-      const batch = await this.request<Array<{ user: { id: string; bot?: boolean }; roles: string[] }>>(
+      const batch = await this.request<Array<{ user: { id: string; username: string; global_name?: string | null; bot?: boolean }; nick?: string | null; roles: string[] }>>(
         'GET',
         `/guilds/${guildId}/members?limit=1000&after=${after}`,
       );

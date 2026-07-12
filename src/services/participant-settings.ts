@@ -52,7 +52,7 @@ export async function updateParticipantSettings(
   }
 
   await env.DB.prepare(
-    `UPDATE participants SET name = ?1, preferred_email = ?2, western_email = ?3,
+    `UPDATE participants SET name = ?1, discord_nickname = ?1, preferred_email = ?2, western_email = ?3,
        year = ?4, program = ?5, opportunities = ?6, prior_wta = ?7,
        experience_band = ?8, topics = ?9, blurb = ?10, interests = ?11,
        prior_feedback = ?12, email_ok = ?13, updated_at = datetime('now') WHERE id = ?14`,

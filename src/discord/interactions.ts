@@ -44,9 +44,10 @@ export async function handleInteraction(c: Ctx) {
 
   const user = interactionUser(interaction);
   if (user) {
+    const nickname = interaction.member?.nick ?? user.global_name ?? user.username;
     await c.env.DB.prepare(
-      "UPDATE participants SET discord_username = ?2, updated_at = datetime('now') WHERE discord_id = ?1",
-    ).bind(user.id, user.global_name ?? user.username).run();
+      "UPDATE participants SET discord_username = ?2, discord_nickname = ?3, updated_at = datetime('now') WHERE discord_id = ?1",
+    ).bind(user.id, user.username, nickname).run();
   }
 
   switch (interaction.type) {

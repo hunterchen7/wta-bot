@@ -68,6 +68,7 @@ api.get('/api/dashboard', async (c) => {
       id: participant.id,
       discordId: participant.discord_id,
       discordUsername: participant.discord_username ?? '',
+      discordNickname: participant.discord_nickname ?? '',
       name: participant.name ?? '',
       preferredEmail: participant.preferred_email ?? '',
       westernEmail: participant.western_email ?? '',

@@ -79,6 +79,7 @@ publicApi.post('/api/enrollment/:token', async (c) => {
 
   await upsertParticipant(c.env, identity.discordId, {
     discord_username: identity.username,
+    discord_nickname: input.name,
     name: input.name,
     preferred_email: input.preferredEmail,
     western_email: input.westernEmail,

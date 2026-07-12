@@ -44,7 +44,7 @@ export type Interaction = {
     values?: string[]; // select menu choice(s)
     components?: SubmittedComponent[]; // modal submit tree
   };
-  member?: { user: DiscordUser; permissions?: string; roles?: string[] };
+  member?: { user: DiscordUser; nick?: string | null; permissions?: string; roles?: string[] };
   user?: DiscordUser; // present in DMs instead of member
 };
 

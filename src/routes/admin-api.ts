@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getSettings, setSetting, type SettingKey } from '../config';
-import { enqueue } from '../engine/outbox';
+import { enqueue, enqueueMany } from '../engine/outbox';
 import { maybeMarkEligible } from '../engine/reports';
 import { activeCohort, cohortWeeks, createCohort } from '../engine/weeks';
 import type { Env } from '../env';
@@ -96,7 +96,7 @@ adminApi.get('/api/admin/participants', async (c) => {
   const weeks = cohort ? await cohortWeeks(c.env, cohort.id) : [];
   const currentWeek = currentProgramWeek(weeks);
   const { results } = await c.env.DB.prepare(
-    `SELECT p.id, p.discord_id, p.discord_username, p.name, p.preferred_email, p.western_email, p.year, p.program,
+    `SELECT p.id, p.discord_id, p.discord_username, p.discord_nickname, p.name, p.preferred_email, p.western_email, p.year, p.program,
             p.status, p.email_ok, p.created_at,
             (SELECT count(*) FROM sessions s WHERE s.interviewer_id = p.id AND s.interviewer_credited = 1) AS interviewer_credits,
             (SELECT count(*) FROM sessions s WHERE s.interviewee_id = p.id AND s.interviewee_credited = 1) AS interviewee_credits,
@@ -116,6 +116,24 @@ adminApi.get('/api/admin/participants.csv', async (c) => {
     'Content-Type': 'text/csv; charset=utf-8',
     'Content-Disposition': 'attachment; filename="wta-participants.csv"',
   });
+});
+
+adminApi.post('/api/admin/participants/sync-discord', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const guildId = c.env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
+  if (!guildId || !c.env.DISCORD_TOKEN) {
+    return c.json({ error: 'discord_not_configured', message: 'Discord guild access is not configured.' }, 503);
+  }
+  const { results } = await c.env.DB.prepare(
+    "SELECT discord_id FROM participants WHERE status != 'removed' ORDER BY id LIMIT 500",
+  ).all<{ discord_id: string }>();
+  await enqueueMany(c.env, results.map((participant) => ({
+    kind: 'discord_identity_sync' as const,
+    payload: { guildId, userId: participant.discord_id },
+  })));
+  await audit(c.env, gate.participantId, 'participants.discord_sync_queued', 'participant_batch', undefined, { queued: results.length });
+  return c.json({ ok: true, queued: results.length });
 });
 
 adminApi.get('/api/admin/participants/:id', async (c) => {

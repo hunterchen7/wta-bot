@@ -9,7 +9,7 @@ const weeks = [
 ];
 const names = ['Alex Chen', 'Jordan Lee', 'Maya Singh', 'Sam Wilson', 'Taylor Kim', 'Priya Patel', 'Noah Martin', 'Amara Okafor', 'Leo Zhang', 'Sofia Rodriguez', 'Ethan Brown', 'Zoe Park'];
 const participants = names.map((name, index) => ({
-  id: index + 1, discord_id: `10000${index}`, discord_username: name.toLowerCase().replace(' ', ''), name, preferred_email: `${name.toLowerCase().replace(' ', '.')}@example.com`, western_email: `student${index}@uwo.ca`,
+  id: index + 1, discord_id: `10000${index}`, discord_username: name.toLowerCase().replace(' ', ''), discord_nickname: index % 4 === 0 ? name.split(' ')[0] : name, name, preferred_email: `${name.toLowerCase().replace(' ', '.')}@example.com`, western_email: `student${index}@uwo.ca`,
   year: ['Second', 'Third', 'Fourth'][index % 3], program: index % 3 === 1 ? 'Software Engineering' : 'Computer Science',
   status: index === 8 ? 'held' : index === 10 ? 'paused' : 'active', email_ok: index % 3 ? 1 : 0, created_at: '2026-07-12 12:00:00',
   interviewer_credits: Math.min(3, index % 4), interviewee_credits: Math.min(3, (index + 1) % 4), strikes: index === 8 ? 2 : index === 5 ? 1 : 0,

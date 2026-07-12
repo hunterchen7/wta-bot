@@ -4,6 +4,7 @@ export type Participant = {
   id: number;
   discord_id: string;
   discord_username: string | null;
+  discord_nickname: string | null;
   name: string | null;
   preferred_email: string | null;
   western_email: string | null;
@@ -57,6 +58,7 @@ export async function listParticipants(env: Env): Promise<Participant[]> {
 const CSV_COLUMNS = [
   'discord_id',
   'discord_username',
+  'discord_nickname',
   'name',
   'preferred_email',
   'western_email',
