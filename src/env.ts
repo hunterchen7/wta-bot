@@ -17,6 +17,16 @@ export type Env = {
   // Outbox rows drained per tick (Discord/email sends). Default 20 — safe on
   // the free plan's external-subrequest cap; raise on Workers Paid.
   OUTBOX_BUDGET?: string;
-  // Email Service binding (M5+; optional until the domain is enabled).
-  EMAIL?: { send(message: unknown): Promise<void> };
+  // Email Service binding (optional until the domain is onboarded in the dash).
+  EMAIL?: {
+    send(message: {
+      to: string;
+      from: string;
+      subject: string;
+      text?: string;
+      html?: string;
+    }): Promise<{ messageId?: string } | void>;
+  };
+  // Sender address — must belong to the onboarded Email Service domain.
+  EMAIL_FROM?: string;
 };

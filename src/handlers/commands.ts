@@ -28,6 +28,35 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
   if (!user) return c.json(ephemeral('Could not identify you — try again.'));
 
   switch (interaction.data?.name) {
+    case 'help': {
+      const lines = [
+        '**WTA bot — commands**',
+        '`/join` — enroll in the program, or edit your profile once enrolled',
+        '`/status` — your progress (3+3), sessions, owed report forms, strikes',
+        '`/optout` — sit out the current round (no penalty; catch up later with a double)',
+        '`/cancel` — cancel one of your sessions with notice, so your partner gets re-paired',
+        '`/report no-show` / `/report unresponsive` — your partner ghosted or won\'t schedule',
+        '`/report issue <details>` — anything else, privately to the organizers',
+        '',
+        '**Buttons you\'ll meet:** round opt-in (I\'m in / double / standby / out) · session threads (Scheduled ✅ / Can\'t make it / Report no-show) · Verify (in #start-here)',
+        `**Web dashboard:** log in with your roster email at ${c.env.PUBLIC_ORIGIN ?? 'the bot site'}/login — progress, sessions, and your report forms in one place.`,
+      ];
+      if (await isOrganizer(c.env, interaction)) {
+        lines.push(
+          '',
+          '**Organizer commands:**',
+          '`/setup channels|roles|cohort|verify` — configure the server + launch a cohort',
+          '`/verify backfill` — grant the member role to all existing members',
+          '`/problems add|list|setweek` — manage the problem bank (content editing: dashboard → Problems)',
+          '`/roster` · `/export` — enrollment summary / full CSV',
+          '`/standing @user` · `/excuse @user` · `/participant hold|release|remove @user`',
+          '`/digest` — post the round digest now · `/eligible` — alumni-round list',
+          'Dashboard organizer pages: Roster, Round board, Reviews, Problems.',
+        );
+      }
+      return c.json(ephemeral(lines.join('\n')));
+    }
+
     case 'join': {
       const existing = await getParticipant(c.env, user.id);
       // Resume where they left off; enrolled users get the edit menu.

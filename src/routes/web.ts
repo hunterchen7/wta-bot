@@ -48,6 +48,59 @@ const nav = (user: SessionUser) =>
   </nav>`;
 
 // ---------------------------------------------------------------------------
+// Public form previews — organizers walk every flow without seeding data.
+// Read-only: submissions are disabled and nothing here touches the DB.
+
+web.get('/preview', (c) =>
+  c.html(
+    page(
+      'Form previews',
+      `<h1>Form previews</h1>
+       <p class="sub">Read-only renders of every web-facing page, for walking the flows. Discord-side flows (join, verify, opt-in, session threads) are previewed in the server itself.</p>
+       <div class="card">
+         <p>📝 <a href="/preview/form/interviewee_report">Interviewee report</a> — filed by the person who was interviewed (recording link + code paste)</p>
+         <p>🎙️ <a href="/preview/form/interviewer_report">Interviewer report</a> — filed by the interviewer (ratings + verdict)</p>
+         <p>🎯 <a href="/preview/packet">Interviewer packet</a> — the problem page interviewers get 24h before a session</p>
+         <p>🔐 <a href="/login">Login</a> → dashboard (live, needs a roster email)</p>
+       </div>`,
+    ),
+  ),
+);
+
+web.get('/preview/form/:kind', async (c) => {
+  const { fieldsFor } = await import('../forms/schema');
+  const { renderField } = await import('../forms/render');
+  const kind = c.req.param('kind');
+  const fields = fieldsFor(kind);
+  if (!fields) return c.html(page('Unknown form', '<h1>Unknown form kind</h1>'), 404);
+  const isInterviewer = kind === 'interviewer_report';
+  const body = `
+    <div class="err"><b>PREVIEW</b> — this is a render-only copy; submissions are disabled. Real forms arrive by DM with the session context filled in.</div>
+    <h1>Round 2 — ${isInterviewer ? 'interviewer' : 'interviewee'} report</h1>
+    <p class="sub">Hi Alex — ${isInterviewer ? 'you interviewed Jordan Example' : 'Jordan Example interviewed you'}, Wed, Aug 12, 7:30 p.m. (Toronto). Due Sat, Aug 22, 11:59 p.m.</p>
+    <form onsubmit="return false">
+      ${fields.map((f) => renderField(f)).join('\n')}
+      <p style="margin-top:1.4rem"><button type="button" disabled style="opacity:.5">Submit (disabled in preview)</button></p>
+    </form>`;
+  return c.html(page(`Preview: ${kind}`, body));
+});
+
+web.get('/preview/packet', (c) =>
+  c.html(
+    page(
+      'Preview: packet',
+      `<div class="err"><b>PREVIEW</b> — interviewers get a personal signed link like this 24h before each session.</div>
+       <h1>🎯 Interviewer packet — Round 2</h1>
+       <p class="sub">Merge Intervals (#56) · medium · interviewing Jordan Example · <a href="https://leetcode.com/problems/merge-intervals/" rel="noreferrer">problem link ↗</a></p>
+       <div class="err">🤫 For your eyes only — your interviewee must not see this before the session.</div>
+       <h2>Statement</h2><div class="card" style="white-space:pre-wrap">Given an array of intervals, merge all overlapping intervals…</div>
+       <h2>Hint ladder</h2><div class="card" style="white-space:pre-wrap">1. What happens if you sort first?\n2. When do two intervals overlap?\n3. Walk the sorted list keeping a current merged interval.</div>
+       <h2>Solution</h2><div class="card" style="white-space:pre-wrap">Sort by start; sweep and extend the current interval while next.start <= current.end… O(n log n).</div>`,
+    ),
+  ),
+);
+
+// ---------------------------------------------------------------------------
 // Login
 
 web.get('/login', (c) =>

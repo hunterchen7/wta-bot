@@ -60,6 +60,38 @@ wrangler's OAuth login for one-off manual deploys.
 Schema changes always go in a NEW `migrations/000N_*.sql` file — never edit an
 applied migration.
 
+## Commands
+
+**Everyone:** `/help` (this list, in Discord) · `/join` — enroll or edit your
+profile · `/status` — progress, sessions, owed forms · `/optout` — sit out the
+current round · `/cancel` — cancel a session with notice · `/report
+no-show|unresponsive|issue` — problems, straight to the pipeline/organizers.
+
+**Organizers** (Manage Server or the Organizer role): `/setup
+channels|roles|cohort|verify` · `/verify backfill` · `/problems
+add|list|setweek` · `/roster` · `/export` · `/standing @user` · `/excuse
+@user` · `/participant hold|release|remove @user` · `/digest` · `/eligible`.
+
+**Buttons:** round opt-in (in / double / standby / out) · session threads
+(Scheduled ✅ / Can't make it / Report no-show) · Verify panel · case files
+(Remove / Excuse / Keep) · packet swap.
+
+**Web:** `/login` (email code) → dashboard; organizers also get Roster, Round
+board, Reviews, Problems. `/preview` renders every web form read-only.
+
+## Where to edit what
+
+| Thing | File |
+|---|---|
+| `/join` intake modals + edit menu | `src/intake.ts` |
+| Report form fields (both templates) | `src/forms/schema.ts` |
+| Verify-gate modal | `src/handlers/components.ts` |
+| Slash-command definitions | `src/discord/commands.ts` (self-syncs to Discord on deploy) |
+| Bot messages (opt-in, pairings, nudges) | `src/engine/cycle.ts` |
+| Email sender/content | `src/email.ts` + call sites |
+| Web pages (forms, dashboard, previews) | `src/routes/forms.ts`, `src/routes/web.ts` |
+| Round calendar anchors | `src/engine/weeks.ts` |
+
 ## Milestones
 
 M0 scaffold (this) → M1 intake → M2 opt-in/matching/threads → M3 form rail →

@@ -17,8 +17,13 @@
     "PUBLIC_ORIGIN": "https://wta.hunterchen.ca",
     "OUTBOX_BUDGET": "20",
     // Emails that get organizer views on the dashboard (comma-separated)
-    "DASHBOARD_ADMINS": ""
+    "DASHBOARD_ADMINS": "",
+    // Sender — must belong to the Email Service onboarded domain
+    "EMAIL_FROM": "hello@wta.hunterchen.ca"
   },
+
+  // Cloudflare Email Service (structured send API): env.EMAIL.send({to, from, subject, text})
+  "send_email": [{ "name": "EMAIL" }],
 
   "d1_databases": [
     {
