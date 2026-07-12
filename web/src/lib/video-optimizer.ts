@@ -43,19 +43,22 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
   const estimatedBytes = analysis.duration * (targetVideoBitrate + targetAudioBitrate) / 8;
   if (estimatedBytes >= file.size * 0.9) throw new Error('Re-encoding is unlikely to meaningfully reduce this file.');
 
-  const sampleDuration = Math.min(3, analysis.duration);
-  const benchmarkInput = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
+  const benchmarkResponse = await fetch('/encoding-benchmark.mp4', { signal });
+  if (!benchmarkResponse.ok) throw new Error('The local encoder benchmark is unavailable.');
+  const benchmarkInput = new Input({ source: new BlobSource(await benchmarkResponse.blob()), formats: ALL_FORMATS });
   const benchmarkOutput = new Output({
     format: plan.mimeType === 'video/webm' ? new WebMOutputFormat() : new Mp4OutputFormat({ fastStart: false }),
     target: new NullTarget(),
   });
   let benchmark: import('mediabunny').Conversion | null = null;
   let benchmarkTimedOut = false;
+  const cancelBenchmark = () => { if (benchmark) void benchmark.cancel(); };
+  signal.addEventListener('abort', cancelBenchmark, { once: true });
   const benchmarkStarted = performance.now();
   const benchmarkTimeout = window.setTimeout(() => { benchmarkTimedOut = true; if (benchmark) void benchmark.cancel(); }, BENCHMARK_WALL_LIMIT_MS);
   try {
     benchmark = await Conversion.init({
-      input: benchmarkInput, output: benchmarkOutput, tracks: 'primary', trim: { start: 0, end: sampleDuration },
+      input: benchmarkInput, output: benchmarkOutput, tracks: 'primary',
       video: {
         codec: plan.codec, height: targetHeight, bitrate: targetVideoBitrate, frameRate: 30,
         hardwareAcceleration: 'prefer-hardware', keyFrameInterval: 5, forceTranscode: true,
@@ -69,11 +72,12 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
     throw error;
   } finally {
     window.clearTimeout(benchmarkTimeout);
+    signal.removeEventListener('abort', cancelBenchmark);
     benchmarkInput.dispose();
   }
   if (signal.aborted) throw new DOMException('Optimization canceled.', 'AbortError');
   const benchmarkElapsed = performance.now() - benchmarkStarted;
-  const projectedEncodingMs = benchmarkElapsed / Math.max(sampleDuration, 0.25) * analysis.duration * BENCHMARK_SAFETY_FACTOR;
+  const projectedEncodingMs = benchmarkElapsed / BENCHMARK_CLIP_SECONDS * analysis.duration * BENCHMARK_SAFETY_FACTOR;
   if (performance.now() - optimizationStarted + projectedEncodingMs > MAX_OPTIMIZATION_MS) {
     throw new Error('The full recording would take too long to optimize on this device.');
   }
@@ -131,6 +135,7 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
 }
 
 const MAX_OPTIMIZATION_MS = 60_000;
+const BENCHMARK_CLIP_SECONDS = 3;
 const BENCHMARK_WALL_LIMIT_MS = 8_000;
 const BENCHMARK_SAFETY_FACTOR = 1.25;
 
