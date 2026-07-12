@@ -171,7 +171,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
         description="This profile guides matching and program content. Every change stays local until you save at the bottom."
       />
       {preview ? (
-        <div className="mb-6 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm font-semibold text-violet-900">
+        <div className="mb-6 rounded-2xl border border-western-200 bg-western-50 p-4 text-sm font-semibold text-western-900">
           Preview mode: fields are interactive, but no enrollment data can be
           saved.
         </div>
@@ -326,7 +326,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
               type="checkbox"
               checked={form.priorWta}
               onChange={(event) => set("priorWta", event.target.checked)}
-              className="size-5 accent-emerald-600"
+              className="size-5 accent-western-600"
             />
             I participated in WTA before
           </label>
@@ -387,22 +387,22 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
           description="Discord remains the primary channel."
         >
           <label
-            className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition focus-within:ring-2 focus-within:ring-emerald-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-background ${form.emailOk ? "border-emerald-300 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/35" : "border-slate-200 hover:bg-slate-50 dark:border-border dark:hover:bg-accent"}`}
+            className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition focus-within:ring-2 focus-within:ring-western-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-background ${form.emailOk ? "border-western-300 bg-western-50 dark:border-western-700 dark:bg-western-950/35" : "border-slate-200 hover:bg-slate-50 dark:border-border dark:hover:bg-accent"}`}
           >
             <input
               type="checkbox"
               checked={form.emailOk}
               onChange={(event) => set("emailOk", event.target.checked)}
-              className="mt-0.5 size-5 accent-emerald-600"
+              className="mt-0.5 size-5 accent-western-600"
             />
             <span>
               <span
-                className={`block text-sm font-black ${form.emailOk ? "text-emerald-950 dark:text-emerald-100" : "text-slate-900"}`}
+                className={`block text-sm font-black ${form.emailOk ? "text-western-950 dark:text-western-100" : "text-slate-900"}`}
               >
                 Email me program reminders
               </span>
               <span
-                className={`mt-1 block text-xs leading-5 ${form.emailOk ? "text-emerald-800/80 dark:text-emerald-300/75" : "text-slate-500"}`}
+                className={`mt-1 block text-xs leading-5 ${form.emailOk ? "text-western-800/80 dark:text-western-300/75" : "text-slate-500"}`}
               >
                 Pairings, opt-in reminders, and overdue-report alerts. Saving an
                 opt-in sends a confirmation email.
@@ -415,7 +415,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
         >
           <button
             disabled={preview || busy || !dirty}
-            className="w-full cursor-pointer rounded-xl bg-slate-950 px-4 py-3.5 text-sm font-black text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full cursor-pointer rounded-xl bg-western-700 px-4 py-3.5 text-sm font-black text-white hover:bg-western-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {preview
               ? "Enrollment disabled in preview"
@@ -467,7 +467,7 @@ function EnrollmentShell({
   children: React.ReactNode;
 }) {
   return embedded ? (
-    <main className="min-h-screen bg-[#f7f7f5] px-4 py-6 dark:bg-background sm:px-6">
+    <main className="min-h-screen bg-background px-4 py-6 dark:bg-background sm:px-6">
       <div className="mx-auto max-w-3xl">{children}</div>
     </main>
   ) : (
@@ -547,13 +547,13 @@ function Choices({
         {choices.map((choice) => (
           <label
             key={choice.value}
-            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm font-bold transition focus-within:ring-2 focus-within:ring-emerald-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-background ${selected.includes(choice.value) ? "border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-700 dark:bg-emerald-950/35 dark:text-emerald-100" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-border dark:hover:bg-accent"}`}
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm font-bold transition focus-within:ring-2 focus-within:ring-western-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-background ${selected.includes(choice.value) ? "border-western-300 bg-western-50 text-western-900 dark:border-western-700 dark:bg-western-950/35 dark:text-western-100" : "border-slate-200 text-slate-600 hover:bg-slate-50 dark:border-border dark:hover:bg-accent"}`}
           >
             <input
               type="checkbox"
               checked={selected.includes(choice.value)}
               onChange={() => onToggle(choice.value)}
-              className="size-4 accent-emerald-600"
+              className="size-4 accent-western-600"
             />
             {choice.label}
           </label>

@@ -15,7 +15,7 @@ export function ProgressPage() {
   return (
     <div className="space-y-8">
       <section>
-        <div className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">Your dashboard</div>
+        <div className="text-sm font-bold uppercase tracking-[0.2em] text-western-700">Your dashboard</div>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Hey {participant.name.split(' ')[0] || 'there'} 👋</h1>
@@ -60,7 +60,7 @@ export function ProgressPage() {
             <div className="divide-y divide-slate-100">
               {sessions.map((session) => (
                 <div key={session.id} className="grid gap-3 p-5 sm:grid-cols-[5rem_1fr_12rem_9rem] sm:items-center">
-                  <div className="text-sm font-black text-emerald-700">Round {session.round}</div>
+                  <div className="text-sm font-black text-western-700">Round {session.round}</div>
                   <div>
                     <div className="font-bold text-slate-900">{session.role === 'interviewer' ? `You interview ${session.partnerName ?? 'TBD'}` : `${session.partnerName ?? 'TBD'} interviews you`}</div>
                     <div className="mt-1 text-sm capitalize text-slate-500">Your role: {session.role}</div>
@@ -82,8 +82,8 @@ function ProgressCard({ label: text, value }: { label: string; value: number }) 
   return (
     <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="text-sm font-bold uppercase tracking-wider text-slate-500">{text}</div>
-      <div className="mt-4 flex items-end justify-between"><span className="text-4xl font-black text-slate-950">{value}<span className="text-xl text-slate-400">/3</span></span><span className="text-sm font-semibold text-emerald-700">{Math.round(percent)}%</span></div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${percent}%` }} /></div>
+      <div className="mt-4 flex items-end justify-between"><span className="text-4xl font-black text-slate-950">{value}<span className="text-xl text-slate-400">/3</span></span><span className="text-sm font-semibold text-western-700">{Math.round(percent)}%</span></div>
+      <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-western-500 transition-all" style={{ width: `${percent}%` }} /></div>
     </div>
   );
 }

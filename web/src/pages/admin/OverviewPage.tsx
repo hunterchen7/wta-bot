@@ -19,7 +19,7 @@ export function OverviewPage() {
   return <div className="space-y-7">
     <PageIntro title="Operational overview" description="The current cohort at a glance, with the exceptions that need an organizer—not a wall of vanity metrics." actions={<Link className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" to="/app/admin/operations">System activity</Link>} />
 
-    {!data.cohort ? <Panel><div className="p-7"><h2 className="font-black text-slate-950">No active cohort</h2><p className="mt-1 text-sm text-slate-500">Create a cohort calendar in Program settings before opening enrollment.</p><Link to="/app/admin/settings" className="mt-4 inline-flex rounded-lg bg-slate-950 px-3.5 py-2 text-sm font-bold text-white">Configure cohort</Link></div></Panel> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    {!data.cohort ? <Panel><div className="p-7"><h2 className="font-black text-slate-950">No active cohort</h2><p className="mt-1 text-sm text-slate-500">Create a cohort calendar in Program settings before opening enrollment.</p><Link to="/app/admin/settings" className="mt-4 inline-flex rounded-lg bg-western-700 px-3.5 py-2 text-sm font-bold text-white">Configure cohort</Link></div></Panel> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <Metric label="Active participants" value={data.activeParticipants} note={data.matchingReady ? 'Matching pool is viable' : 'At least 3 are needed to match'} tone={data.matchingReady ? 'good' : 'warn'} />
       <Metric label="Current round" value={data.currentWeek ? `R${data.currentWeek.idx}` : '—'} note={data.currentWeek ? `Reports due ${formatDate(data.currentWeek.reports_due_at, false)}` : 'No round selected'} />
       <Metric label="Session completion" value={totalSessions ? `${Math.round(completed / totalSessions * 100)}%` : '—'} note={`${completed} of ${totalSessions} sessions`} tone={completed === totalSessions && totalSessions ? 'good' : 'default'} />
@@ -41,7 +41,7 @@ export function OverviewPage() {
       </Panel>
     </div>
 
-    <Panel title="Recent organizer activity" actions={<Link to="/app/admin/operations" className="text-xs font-bold text-emerald-700 hover:text-emerald-800">View audit log →</Link>}>
+    <Panel title="Recent organizer activity" actions={<Link to="/app/admin/operations" className="text-xs font-bold text-western-700 hover:text-western-800">View audit log →</Link>}>
       <div className="overflow-x-auto"><table className="w-full min-w-[38rem] text-left text-sm"><thead><tr><th className={thClass}>When</th><th className={thClass}>Organizer</th><th className={thClass}>Action</th><th className={thClass}>Target</th></tr></thead><tbody>{data.recentAudit.map((row) => <tr key={row.id}><td className={tdClass}>{formatDate(row.created_at)}</td><td className={tdClass}>{row.actor_name ?? 'System'}</td><td className={`${tdClass} font-semibold text-slate-900`}>{row.action.replaceAll('.', ' · ').replaceAll('_', ' ')}</td><td className={tdClass}>{row.target_type ? `${row.target_type} #${row.target_id ?? ''}` : '—'}</td></tr>)}</tbody></table></div>
     </Panel>
   </div>;

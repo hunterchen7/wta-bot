@@ -60,7 +60,7 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     {saved ? <div role="status" className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><div className="font-black">Report saved.</div><p className="mt-1 text-sm">Your credit and downstream notifications are being updated. You can keep this link and revise before the deadline.</p></div> : null}
     {data.submittedAt && !saved ? <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm font-semibold text-sky-900">Submitted {formatDate(data.submittedAt)}. Saving again replaces the prior answers.</div> : null}
     {data.overdue ? <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">This report is overdue. Submit it as soon as possible—credit remains on hold until it arrives.</div> : null}
-    {previewKind ? <div className="mb-6 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm font-semibold text-violet-900">Preview mode: interact with the fields to inspect the experience; nothing can be submitted.</div> : null}
+    {previewKind ? <div className="mb-6 rounded-2xl border border-western-200 bg-western-50 p-4 text-sm font-semibold text-western-900">Preview mode: interact with the fields to inspect the experience; nothing can be submitted.</div> : null}
     {error ? <div role="alert" className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-900">{error}</div> : null}
     <form onSubmit={submit} className="space-y-4">{data.fields.map((field, index) => <ReportFieldInput key={field.id} field={field} value={values[field.id] ?? ''} error={fieldErrors[field.id]} index={index + 1} onChange={(value) => set(field.id, value)} />)}
       <div className={`${previewKind ? '' : 'sticky bottom-4 z-20 shadow-xl backdrop-blur'} rounded-2xl border border-slate-200 bg-white/95 p-3`}><Button size="lg" disabled={Boolean(previewKind) || busy || (!dirty && Boolean(data.submittedAt))} className="h-12 w-full cursor-pointer rounded-xl font-black disabled:cursor-not-allowed">{previewKind ? 'Submission disabled in preview' : busy ? 'Saving report…' : data.submittedAt ? 'Save revised report' : 'Submit report'}</Button></div>
@@ -70,7 +70,7 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
 }
 
 function ReportShell({ embedded, children }: { embedded: boolean; children: React.ReactNode }) {
-  return embedded ? <main className="min-h-screen bg-[#f7f7f5] px-4 py-6 dark:bg-background sm:px-6"><div className="mx-auto max-w-3xl">{children}</div></main> : <PublicShell narrow>{children}</PublicShell>;
+  return embedded ? <main className="min-h-screen bg-background px-4 py-6 dark:bg-background sm:px-6"><div className="mx-auto max-w-3xl">{children}</div></main> : <PublicShell narrow>{children}</PublicShell>;
 }
 
 function ReportFieldInput({ field, value, error, index, onChange }: { field: ReportField; value: string; error?: string; index: number; onChange: (value: string) => void }) {

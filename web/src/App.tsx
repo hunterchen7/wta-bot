@@ -44,7 +44,7 @@ export function AppLayout() {
 
   return (
     <DashboardContext.Provider value={{ data, refresh }}>
-      <div className={`min-h-screen bg-[#f7f7f5] transition-[grid-template-columns] duration-200 ease-[cubic-bezier(.22,1,.36,1)] dark:bg-background md:grid ${sidebarCollapsed ? 'md:grid-cols-[5rem_minmax(0,1fr)]' : 'md:grid-cols-[16rem_minmax(0,1fr)]'}`}>
+      <div className={`min-h-screen bg-background transition-[grid-template-columns] duration-200 ease-[cubic-bezier(.22,1,.36,1)] dark:bg-background md:grid ${sidebarCollapsed ? 'md:grid-cols-[5rem_minmax(0,1fr)]' : 'md:grid-cols-[16rem_minmax(0,1fr)]'}`}>
         <AppSidebar data={data} collapsed={sidebarCollapsed} mobileOpen={mobileOpen} onCollapse={toggleSidebar} onCloseMobile={() => setMobileOpen(false)} />
         <div className="min-w-0">
           <header className="sticky top-0 z-30 flex h-16 items-center gap-4 border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur-xl dark:border-border dark:bg-background/90 sm:px-6">

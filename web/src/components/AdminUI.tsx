@@ -8,7 +8,7 @@ import { Tabs as ShadcnTabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export function PageIntro({ eyebrow = 'Admin', title, description, actions }: { eyebrow?: string; title: string; description: string; actions?: ReactNode }) {
   return <header className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-    <div className="max-w-3xl"><div className="text-[0.68rem] font-black uppercase tracking-[0.2em] text-emerald-700">{eyebrow}</div><h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">{title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">{description}</p></div>
+    <div className="max-w-3xl"><div className="text-[0.68rem] font-black uppercase tracking-[0.2em] text-western-700">{eyebrow}</div><h1 className="mt-2 text-3xl font-black tracking-[-0.035em] text-slate-950 sm:text-4xl">{title}</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 sm:text-base">{description}</p></div>
     {actions ? <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div> : null}
   </header>;
 }
@@ -38,7 +38,7 @@ export function Badge({ value }: { value: string | null | undefined }) {
 }
 
 export function EmptyState({ title, description }: { title: string; description: string }) {
-  return <div className="px-6 py-14 text-center"><div className="mx-auto size-2 rounded-full bg-emerald-400 shadow-[0_0_0_6px_rgba(52,211,153,.12)]" /><h3 className="mt-5 text-sm font-extrabold text-slate-900">{title}</h3><p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{description}</p></div>;
+  return <div className="px-6 py-14 text-center"><div className="mx-auto size-2 rounded-full bg-western-400 shadow-[0_0_0_6px_rgba(143,85,224,.16)]" /><h3 className="mt-5 text-sm font-extrabold text-slate-900">{title}</h3><p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{description}</p></div>;
 }
 
 export function LoadingState() {
@@ -96,7 +96,7 @@ export function DialogClose({ children }: { children: ReactNode }) {
   return <ShadcnDialogClose asChild>{children}</ShadcnDialogClose>;
 }
 
-export const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/15';
+export const inputClass = 'w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300 focus:border-western-500 focus:ring-2 focus:ring-western-500/15';
 export const tableWrapClass = 'max-w-full overflow-x-auto';
 export const tableClass = 'w-full min-w-[42rem] border-collapse text-left text-sm';
 export const thClass = 'border-b border-slate-200 bg-slate-50/80 px-4 py-3 text-[0.66rem] font-black uppercase tracking-[0.12em] text-slate-500';

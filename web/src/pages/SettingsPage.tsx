@@ -92,7 +92,7 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <section>
-        <div className="text-sm font-bold uppercase tracking-[0.2em] text-emerald-700">
+        <div className="text-sm font-bold uppercase tracking-[0.2em] text-western-700">
           Account
         </div>
         <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
@@ -122,7 +122,7 @@ export function SettingsPage() {
               type="checkbox"
               checked={form.emailOk}
               onChange={(event) => set("emailOk", event.target.checked)}
-              className="mt-1 size-5 accent-emerald-600"
+              className="mt-1 size-5 accent-western-600"
             />
             <span>
               <span className="block font-bold text-slate-900">
@@ -251,7 +251,7 @@ export function SettingsPage() {
               type="checkbox"
               checked={form.priorWta}
               onChange={(event) => set("priorWta", event.target.checked)}
-              className="size-5 accent-emerald-600"
+              className="size-5 accent-western-600"
             />{" "}
             I participated in WTA before
           </label>
@@ -312,7 +312,7 @@ export function SettingsPage() {
           </span>
           <button
             disabled={!dirty || saving}
-            className="rounded-xl bg-emerald-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
+            className="rounded-xl bg-western-600 px-5 py-2.5 font-bold text-white shadow-lg shadow-western-600/20 hover:bg-western-700 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none"
           >
             {saving ? "Saving…" : "Save all changes"}
           </button>
@@ -433,13 +433,13 @@ function ChoiceGroup({
         {choices.map((choice) => (
           <label
             key={choice.value}
-            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm font-semibold transition ${selected.includes(choice.value) ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
+            className={`flex cursor-pointer items-center gap-3 rounded-xl border p-3 text-sm font-semibold transition ${selected.includes(choice.value) ? "border-western-300 bg-western-50 text-western-900" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}
           >
             <input
               type="checkbox"
               checked={selected.includes(choice.value)}
               onChange={() => onToggle(choice.value)}
-              className="size-4 accent-emerald-600"
+              className="size-4 accent-western-600"
             />
             {choice.label}
           </label>
@@ -455,7 +455,7 @@ function ChoiceGroup({
 }
 
 const inputClass =
-  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300 focus:border-emerald-500";
+  "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-slate-900 shadow-sm transition placeholder:text-slate-400 hover:border-slate-300 focus:border-western-500";
 const fieldClass = (error?: string) =>
   `${inputClass} ${error ? "border-rose-400 bg-rose-50/30 focus:border-rose-500" : ""}`;
 const omit = (values: Record<string, string>, key: PropertyKey) =>
