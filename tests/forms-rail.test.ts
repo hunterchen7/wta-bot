@@ -119,7 +119,7 @@ describe('form rail', () => {
     const initialized = await app.request(`/api/forms/${intervieweeToken}/recording/init`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: 'interview.webm', size: bytes.byteLength, contentType: 'video/webm' }),
+      body: JSON.stringify({ filename: 'interview.mkv', size: bytes.byteLength, contentType: 'video/x-matroska' }),
     }, env);
     expect(initialized.status).toBe(200);
     const upload = await initialized.json<{ id: number; partSize: number }>();
@@ -149,7 +149,7 @@ describe('form rail', () => {
     const cookie = await signToken(env.FORM_SIGNING_SECRET!, 'sess:1:1', new Date(Date.now() + 60_000));
     const playback = await app.request(`/api/recordings/${upload.id}`, { headers: { Cookie: `wta_sess=${cookie}` } }, env);
     expect(playback.status).toBe(200);
-    expect(playback.headers.get('content-type')).toBe('video/webm');
+    expect(playback.headers.get('content-type')).toBe('video/x-matroska');
     expect(new Uint8Array(await playback.arrayBuffer())).toEqual(bytes);
 
     const partial = await app.request(`/api/recordings/${upload.id}`, { headers: { Cookie: `wta_sess=${cookie}`, Range: 'bytes=0-4' } }, env);

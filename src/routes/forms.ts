@@ -254,7 +254,7 @@ function recordingAsset(env: Env, id: number, formInstanceId: number) {
 function recordingExtension(contentType: string) {
   if (contentType === 'video/webm') return '.webm';
   if (contentType === 'video/quicktime') return '.mov';
-  if (contentType === 'video/x-matroska') return '.mkv';
+  if (contentType === 'video/x-matroska' || contentType === 'video/matroska') return '.mkv';
   return '.mp4';
 }
 
