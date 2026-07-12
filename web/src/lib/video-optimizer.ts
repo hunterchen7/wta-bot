@@ -66,6 +66,7 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
       audio: { discard: true },
     });
     if (!benchmark.isValid) throw new Error('The selected browser encoder cannot process this recording.');
+    benchmark.onProgress = (progress) => onProgress(progress * BENCHMARK_PROGRESS_SHARE);
     await benchmark.execute();
   } catch (error) {
     if (benchmarkTimedOut) throw new Error('The browser encoder is too slow for local optimization.');
@@ -108,7 +109,7 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
       audio: { codec: plan.audioCodec, bitrate: plan.audioCodec === 'opus' ? 96_000 : 128_000, numberOfChannels: 2, sampleRate: 48_000, forceTranscode: true },
     });
     if (!conversion.isValid) throw new Error('This browser cannot encode the selected video. Upload the original instead.');
-    conversion.onProgress = (progress) => onProgress(Math.min(progress, 0.995));
+    conversion.onProgress = (progress) => onProgress(Math.min(BENCHMARK_PROGRESS_SHARE + progress * (1 - BENCHMARK_PROGRESS_SHARE), 0.995));
     const remainingBudget = Math.max(1, MAX_OPTIMIZATION_MS - (performance.now() - optimizationStarted));
     const budgetTimeout = window.setTimeout(() => { budgetExceeded = true; void conversion?.cancel(); }, remainingBudget);
     try {
@@ -116,7 +117,7 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
     } finally {
       window.clearTimeout(budgetTimeout);
     }
-    if (budgetExceeded) throw new Error('Local optimization exceeded its one-minute limit.');
+    if (budgetExceeded) throw new Error('Local optimization exceeded its two-minute limit.');
     if (signal.aborted) throw new DOMException('Optimization canceled.', 'AbortError');
     onProgress(1);
     const optimized = await handle.getFile();
@@ -134,10 +135,11 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
   }
 }
 
-const MAX_OPTIMIZATION_MS = 60_000;
+const MAX_OPTIMIZATION_MS = 120_000;
 const BENCHMARK_CLIP_SECONDS = 3;
 const BENCHMARK_WALL_LIMIT_MS = 8_000;
 const BENCHMARK_SAFETY_FACTOR = 1.25;
+const BENCHMARK_PROGRESS_SHARE = 0.1;
 
 async function selectEncodingPlan(
   width: number,
