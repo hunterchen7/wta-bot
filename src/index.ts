@@ -6,8 +6,30 @@ import { exportRoutes } from './routes/export';
 import { web } from './routes/web';
 import { api } from './routes/api';
 import { tick } from './cron';
+import { executeOutbox } from './engine/executor';
+import { drainOutbox } from './engine/outbox';
 
 export const app = new Hono<{ Bindings: Env }>();
+
+// After any POST (interaction, form submit, login, API write), flush a few
+// outbox rows in the background so user-triggered emails/DMs go out within
+// seconds instead of waiting for the 15-min cron. The claim-safe drain means
+// this never collides with the cron or another concurrent request. The cron
+// remains the backstop for quiet periods and scheduled jobs.
+const OPPORTUNISTIC_BUDGET = 10;
+app.use('*', async (c, next) => {
+  await next();
+  if (c.req.method !== 'POST') return;
+  try {
+    c.executionCtx.waitUntil(
+      drainOutbox(c.env, executeOutbox, OPPORTUNISTIC_BUDGET).catch((err) =>
+        console.error('opportunistic drain failed:', err),
+      ),
+    );
+  } catch {
+    // No execution context (test harness) — skip; the cron still drains.
+  }
+});
 
 app.get('/health', async (c) => {
   const row = await c.env.DB.prepare('SELECT count(*) AS n FROM participants')

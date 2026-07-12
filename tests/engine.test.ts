@@ -97,4 +97,38 @@ describe('outbox', () => {
     await drainOutbox(env, (async () => { ran++; }) as any, 50);
     expect(ran).toBeGreaterThan(0);
   });
+
+  it('never double-sends under concurrent drains (atomic claim/lease)', async () => {
+    // The opportunistic post-POST drain and the cron drain can run at the same
+    // instant. Prove the atomic claim gives each row to exactly one drain.
+    await enqueueMany(
+      env,
+      Array.from({ length: 8 }, (_, i) => ({ kind: 'dm' as const, payload: { tag: `race-${i}` } })),
+    );
+    const executed: string[] = [];
+    const exec = async (_e: unknown, _k: string, p: any) => {
+      if (String(p.tag).startsWith('race-')) {
+        await new Promise((r) => setTimeout(r, 3)); // widen the race window
+        executed.push(p.tag);
+      }
+    };
+
+    // Three drains racing, each able to take all 8.
+    await Promise.all([
+      drainOutbox(env, exec as any, 8),
+      drainOutbox(env, exec as any, 8),
+      drainOutbox(env, exec as any, 8),
+    ]);
+
+    const raced = executed.filter((t) => t.startsWith('race-'));
+    // Each of the 8 processed exactly once — no duplicates from a double-claim.
+    expect(new Set(raced).size).toBe(raced.length);
+    expect(new Set(raced).size).toBe(8);
+
+    // And every row is now marked done.
+    const pending = await env.DB.prepare(
+      "SELECT count(*) AS n FROM outbox WHERE done_at IS NULL AND payload LIKE '%race-%'",
+    ).first<{ n: number }>();
+    expect(pending?.n).toBe(0);
+  });
 });

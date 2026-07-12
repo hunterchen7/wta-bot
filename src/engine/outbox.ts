@@ -1,9 +1,9 @@
 import type { Env } from '../env';
 
-// Durable side-effect queue (DESIGN.md §10). Enqueue anywhere; the cron tick
-// drains with a bounded subrequest budget so pairing-day fanout (hundreds of
-// threads/DMs) never hits Workers' per-invocation limits. Failures retry with
-// linear backoff; after MAX_ATTEMPTS the row keeps last_error for the digest.
+// Durable side-effect queue (DESIGN.md §10). Enqueue anywhere; user-triggered
+// POSTs drain a small batch immediately and cron is the retry/fanout backstop.
+// Both paths use bounded subrequest budgets. Failures retry with linear
+// backoff; after MAX_ATTEMPTS the row keeps last_error for the digest.
 
 export type OutboxKind =
   | 'dm' // { userId, message }
@@ -54,19 +54,36 @@ export type OutboxRow = {
 
 export type OutboxExecutor = (env: Env, kind: OutboxKind, payload: any) => Promise<void>;
 
-/** Drain up to `budget` pending rows. Returns how many were attempted. */
+// Seconds a claimed row is "leased" — hidden from other concurrent drains
+// while being processed. If the worker dies mid-send, the row reappears after
+// the lease and is retried. Long enough to cover a slow send, short enough
+// that a crash doesn't strand mail.
+const LEASE_SECONDS = 120;
+
+/** Drain up to `budget` pending rows. Returns how many were attempted.
+ *  Safe to call concurrently (cron + one per POST): the claim is a single
+ *  atomic UPDATE that leases rows forward, so no two live drains grab the same
+ *  row. As with any external side-effect queue, a worker crash after the send
+ *  but before done_at is committed can still result in an at-least-once retry. */
 export async function drainOutbox(
   env: Env,
   execute: OutboxExecutor,
   budget: number,
   now = new Date(),
 ): Promise<number> {
+  const leaseUntil = new Date(now.getTime() + LEASE_SECONDS * 1000).toISOString();
+  // Atomically claim a batch: the UPDATE pushes run_after into the future so a
+  // simultaneous drain's WHERE (run_after <= now) excludes these rows.
   const { results } = await env.DB.prepare(
-    `SELECT id, kind, payload, attempts FROM outbox
-     WHERE done_at IS NULL AND attempts < ?1 AND run_after <= ?2
-     ORDER BY id LIMIT ?3`,
+    `UPDATE outbox SET run_after = ?1
+     WHERE id IN (
+       SELECT id FROM outbox
+       WHERE done_at IS NULL AND attempts < ?2 AND run_after <= ?3
+       ORDER BY id LIMIT ?4
+     )
+     RETURNING id, kind, payload, attempts`,
   )
-    .bind(MAX_ATTEMPTS, now.toISOString(), budget)
+    .bind(leaseUntil, MAX_ATTEMPTS, now.toISOString(), budget)
     .all<OutboxRow>();
 
   for (const row of results) {

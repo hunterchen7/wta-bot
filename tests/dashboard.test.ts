@@ -1,4 +1,5 @@
 import { env } from 'cloudflare:workers';
+import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createCohort } from '../src/engine/weeks';
 import { signToken } from '../src/forms/token';
@@ -302,6 +303,48 @@ describe('views + authorization', () => {
     await env.DB.prepare(
       "UPDATE participants SET name = 'Stu Dent', preferred_email = 'stu@example.com' WHERE id = 1",
     ).run();
+  });
+
+  it('sends a newly opted-in confirmation without waiting for cron', async () => {
+    await env.DB.prepare('UPDATE participants SET email_ok = 0 WHERE id = 1').run();
+    const ctx = createExecutionContext();
+    const response = await app.fetch(
+      new Request('https://wta.test/api/settings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Cookie: await cookieFor(1, false),
+        },
+        body: JSON.stringify({
+          name: 'Stu Dent',
+          preferredEmail: 'stu@example.com',
+          westernEmail: 'supdated@uwo.ca',
+          year: 'Fourth',
+          program: 'Computer Science',
+          experience: '3-4',
+          priorWta: true,
+          emailOk: true,
+          opportunities: ['internships', 'new_grad'],
+          topics: ['dsa', 'system_design'],
+          blurb: 'word '.repeat(170),
+          interests: 'System design and networking',
+          priorFeedback: 'More mock interviews',
+        }),
+      }),
+      env,
+      ctx,
+    );
+    expect(response.status).toBe(200);
+    await waitOnExecutionContext(ctx);
+
+    const sent = await env.DB.prepare(
+      `SELECT done_at, attempts FROM outbox
+       WHERE kind = 'email' AND payload LIKE '%subscribed to WTA email reminders%'
+       ORDER BY id DESC LIMIT 1`,
+    ).first<{ done_at: string | null; attempts: number }>();
+    expect(sent?.done_at).not.toBeNull();
+    expect(sent?.attempts).toBe(0);
+    await env.DB.prepare('UPDATE participants SET email_ok = 0 WHERE id = 1').run();
   });
 
   it('organizers get roster, week board, reviews, problems', async () => {
