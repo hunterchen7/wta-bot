@@ -68,14 +68,6 @@ export const INTERVIEWEE_FIELDS: Field[] = [
     required: true,
     help: 'A Zoom/Meet cloud recording or unlisted upload. Required — organizers review the final-round recording as part of the alumni-interview decision.',
   },
-  {
-    id: 'language',
-    label: 'What programming language did you use?',
-    type: 'select',
-    required: true,
-    options: ['Python', 'Java', 'JavaScript/TypeScript', 'C/C++', 'Rust', 'Go', 'Other'].map((l) => ({ value: l, label: l })),
-    help: 'This sits next to the code editor and controls its syntax highlighting. Pasting recognizable code can fill it automatically.',
-  },
   { id: 'code', label: 'Paste the code you wrote in the interview', type: 'textarea', required: true, mono: true },
   {
     id: 'partner_feedback',

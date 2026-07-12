@@ -30,7 +30,6 @@ const INTERVIEWEE_OK: Record<string, string> = {
   rating_experience: '5',
   rating_communication: '4',
   rating_preparedness: '5',
-  language: 'Python',
   duration: '20-30 minutes',
   video_url: 'https://zoom.example/rec/abc',
   code: 'def solve():\n    return 42',
@@ -90,6 +89,7 @@ describe('form rail', () => {
     expect(form.fields.map((field: any) => field.label)).toEqual(expect.arrayContaining([
       expect.stringContaining('Paste the code'), expect.stringContaining('session recording'),
     ]));
+    expect(form.fields.map((field: any) => field.id)).not.toContain('language');
   });
 
   it('rejects an incomplete submission with field errors', async () => {
