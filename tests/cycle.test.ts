@@ -41,6 +41,26 @@ const button = (custom_id: string, userId: string, extra: Record<string, unknown
 });
 
 describe('full weekly cycle', () => {
+  it('marks an organizer ineligible on their first /join', async () => {
+    const response = await sendInteraction(
+      signer,
+      {
+        type: 2,
+        id: 'join-organizer',
+        token: 't',
+        guild_id: GUILD,
+        data: { name: 'join' },
+        ...asAdmin('998'),
+      },
+      OVERRIDES,
+    );
+    expect(response.status).toBe(200);
+    const participant = await env.DB.prepare(
+      'SELECT pairing_excluded FROM participants WHERE discord_id = ?1',
+    ).bind('998').first<{ pairing_excluded: number }>();
+    expect(participant?.pairing_excluded).toBe(1);
+  });
+
   it('runs enroll → cohort → opt-in → match → schedule → no-show → repair', async () => {
     // --- enroll four students -------------------------------------------------
     for (const [id, name] of [
@@ -87,6 +107,30 @@ describe('full weekly cycle', () => {
     const cohort = (await activeCohort(env))!;
     const [week1] = await cohortWeeks(env, cohort.id);
 
+    // Organizers may enroll to exercise the dashboard, but joining a round is
+    // rejected and permanently removes them from the matching pool.
+    await enroll('999', 'Organizer');
+    const organizerOptin = await sendInteraction(
+      signer,
+      { ...button(`optin:${week1!.id}:in`, '999'), ...asAdmin('999') },
+      OVERRIDES,
+    );
+    expect(((await organizerOptin.json()) as any).data.content).toContain(
+      "Organizers aren't included",
+    );
+    const organizer = await env.DB.prepare(
+      'SELECT id, pairing_excluded FROM participants WHERE discord_id = ?1',
+    ).bind('999').first<{ id: number; pairing_excluded: number }>();
+    expect(organizer?.pairing_excluded).toBe(1);
+    expect(await env.DB.prepare(
+      'SELECT id FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(week1!.id, organizer!.id).first()).toBeNull();
+
+    // Even pre-existing/stale data cannot bypass the engine-level exclusion.
+    await env.DB.prepare(
+      'INSERT INTO optins (week_id, participant_id) VALUES (?1, ?2)',
+    ).bind(week1!.id, organizer!.id).run();
+
     // channels configured (normally via /setup channels)
     await env.DB.prepare(
       `INSERT INTO settings (key, value) VALUES
@@ -113,6 +157,9 @@ describe('full weekly cycle', () => {
       .bind(week1!.id)
       .all<any>();
     expect(sessions).toHaveLength(4);
+    expect(sessions.some((session) =>
+      session.interviewer_id === organizer!.id || session.interviewee_id === organizer!.id,
+    )).toBe(false);
 
     // thread fanout + pairing DMs queued
     const outboxKinds = await env.DB.prepare(

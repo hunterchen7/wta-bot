@@ -1,7 +1,7 @@
 import type { Env } from '../env';
 import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS, wordCount } from '../intake';
 import { enqueue } from '../engine/outbox';
-import { isWhitelistedAdmin } from '../organizers';
+import { excludeOrganizerFromPairing, isWhitelistedAdmin } from '../organizers';
 
 export type ParticipantSettingsInput = {
   name: string;
@@ -77,6 +77,7 @@ export async function updateParticipantSettings(
     .run();
 
   const organizerEmail = isWhitelistedAdmin(env, current.preferred_email) || isWhitelistedAdmin(env, input.preferredEmail);
+  if (organizerEmail) await excludeOrganizerFromPairing(env, participantId);
   if (input.name !== current.name && !organizerEmail) {
     const guildId = env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
     if (guildId) {

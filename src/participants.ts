@@ -18,6 +18,7 @@ export type Participant = {
   interests: string | null;
   prior_feedback: string | null;
   email_ok: number;
+  pairing_excluded: number;
   status: string;
 };
 
@@ -69,6 +70,7 @@ const CSV_COLUMNS = [
   'experience_band',
   'topics',
   'email_ok',
+  'pairing_excluded',
   'status',
 ] as const;
 

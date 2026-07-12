@@ -2,6 +2,8 @@ import type { Context } from 'hono';
 import type { Env } from '../env';
 import { handleCommand } from '../handlers/commands';
 import { handleComponent, handleModal } from '../handlers/components';
+import { isOrganizer } from '../handlers/shared';
+import { excludeOrganizerByDiscordId } from '../organizers';
 import { ephemeral } from './components';
 import { DiscordRest } from './rest';
 import { type Interaction, InteractionType, ResponseType, interactionUser } from './types';
@@ -48,6 +50,9 @@ export async function handleInteraction(c: Ctx) {
     await c.env.DB.prepare(
       "UPDATE participants SET discord_username = ?2, discord_nickname = ?3, updated_at = datetime('now') WHERE discord_id = ?1",
     ).bind(user.id, user.username, nickname).run();
+    if (await isOrganizer(c.env, interaction)) {
+      await excludeOrganizerByDiscordId(c.env, user.id);
+    }
   }
 
   switch (interaction.type) {

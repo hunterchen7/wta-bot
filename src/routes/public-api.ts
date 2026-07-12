@@ -5,7 +5,7 @@ import { activeCohort, cohortWeeks } from '../engine/weeks';
 import type { Env } from '../env';
 import { verifyToken } from '../forms/token';
 import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
-import { isWhitelistedAdmin } from '../organizers';
+import { excludeOrganizerFromPairing, isWhitelistedAdmin } from '../organizers';
 import { getParticipant, upsertParticipant } from '../participants';
 import {
   enqueueEmailConfirmation,
@@ -84,6 +84,10 @@ publicApi.post('/api/enrollment/:token', async (c) => {
   });
 
   const organizerEmail = isWhitelistedAdmin(c.env, before?.preferred_email) || isWhitelistedAdmin(c.env, input.preferredEmail);
+  if (organizerEmail) {
+    const organizer = await getParticipant(c.env, identity.discordId);
+    if (organizer) await excludeOrganizerFromPairing(c.env, organizer.id);
+  }
   if (identity.guildId && input.name !== before?.name && !organizerEmail) {
     await enqueue(c.env, 'nickname', { guildId: identity.guildId, userId: identity.discordId, nick: input.name.slice(0, 32) });
   }

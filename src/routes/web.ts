@@ -5,7 +5,7 @@ import { DiscordRest } from '../discord/rest';
 import { sendEmail } from '../email';
 import type { Env } from '../env';
 import { signToken, verifyToken } from '../forms/token';
-import { isWhitelistedAdmin } from '../organizers';
+import { excludeOrganizerFromPairing, isWhitelistedAdmin } from '../organizers';
 
 // Authentication is the only browser concern that still needs a Worker route:
 // everything visible is rendered by the React app, while this module owns OTPs
@@ -102,6 +102,7 @@ web.post('/api/auth/verify-code', async (c) => {
   }
   await c.env.DB.prepare('UPDATE login_codes SET used_at = ?2 WHERE id = ?1').bind(row.id, new Date().toISOString()).run();
   const organizer = isWhitelistedAdmin(c.env, email) || await checkOrganizer(c.env, participant.discord_id);
+  if (organizer) await excludeOrganizerFromPairing(c.env, participant.id);
   await setSessionCookie(c, participant.id, organizer);
   return c.json({ ok: true, redirect: '/app' });
 });
@@ -112,6 +113,7 @@ web.get('/auth/:token', async (c) => {
   const verified = await verifyToken(secret, c.req.param('token'));
   const match = verified && /^magic:(\d+):([01])$/.exec(verified.subject);
   if (!match) return c.redirect('/login?error=expired');
+  if (match[2] === '1') await excludeOrganizerFromPairing(c.env, Number(match[1]));
   await setSessionCookie(c, Number(match[1]), match[2] === '1');
   return c.redirect('/app');
 });

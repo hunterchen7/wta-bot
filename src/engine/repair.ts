@@ -30,7 +30,9 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
   const { results: open } = await env.DB.prepare(
     `SELECT r.id, r.week_id, r.participant_id, r.need FROM repair_queue r
      JOIN weeks w ON w.id = r.week_id
+     JOIN participants p ON p.id = r.participant_id
      WHERE r.state = 'open' AND ?1 <= COALESCE(w.grace_until, w.reports_due_at)
+       AND p.status = 'active' AND p.pairing_excluded = 0
      ORDER BY r.id`,
   )
     .bind(now.toISOString())
@@ -67,7 +69,7 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
     if (used.has(a.id)) continue;
     const volunteer = await env.DB.prepare(
       `SELECT o.participant_id FROM optins o
-       JOIN participants p ON p.id = o.participant_id AND p.status = 'active'
+       JOIN participants p ON p.id = o.participant_id AND p.status = 'active' AND p.pairing_excluded = 0
        WHERE o.week_id = ?1 AND o.standby = 1 AND o.participant_id != ?2
        ORDER BY RANDOM() LIMIT 5`,
     )
@@ -130,6 +132,13 @@ export async function spawnSession(
   intervieweeId: number,
   origin: 'repair' | 'manual',
 ): Promise<number> {
+  const eligible = await env.DB.prepare(
+    `SELECT count(*) AS n FROM participants
+     WHERE id IN (?1, ?2) AND status = 'active' AND pairing_excluded = 0`,
+  ).bind(interviewerId, intervieweeId).first<{ n: number }>();
+  if (Number(eligible?.n ?? 0) !== 2) {
+    throw new Error('Both participants must be active and eligible for matching.');
+  }
   const ins = await env.DB.prepare(
     `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, origin)
      VALUES (?1, ?2, ?3, 'pending_schedule', ?4)`,

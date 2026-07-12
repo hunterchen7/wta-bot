@@ -142,6 +142,11 @@ async function handleOptin(
   if (participant.status !== 'active') {
     return c.json(ephemeral('Your participation is currently on hold — contact the organizers.'));
   }
+  if (participant.pairing_excluded === 1 || await isOrganizer(c.env, interaction)) {
+    const { excludeOrganizerFromPairing } = await import('../organizers');
+    await excludeOrganizerFromPairing(c.env, participant.id);
+    return c.json(ephemeral('Organizers aren\'t included in participant matching. You can still use the dashboard and form previews.'));
+  }
   const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(weekId).first<any>();
   if (!week) return c.json(ephemeral('This opt-in has expired.'));
   const now = new Date();

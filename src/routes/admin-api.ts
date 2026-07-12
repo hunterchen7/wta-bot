@@ -141,8 +141,9 @@ adminApi.get('/api/admin/overview', async (c) => {
   const weeks = cohort ? await cohortWeeks(c.env, cohort.id) : [];
   const currentWeek = currentProgramWeek(weeks);
 
-  const [statuses, sessionStates, openForms, incidents, repairs, reviews, pendingOutbox, failedOutbox, recentAudit] = await Promise.all([
+  const [statuses, matchingParticipants, sessionStates, openForms, incidents, repairs, reviews, pendingOutbox, failedOutbox, recentAudit] = await Promise.all([
     c.env.DB.prepare('SELECT status, count(*) AS n FROM participants GROUP BY status ORDER BY status').all<any>(),
+    count(c.env, "SELECT count(*) AS n FROM participants WHERE status = 'active' AND pairing_excluded = 0"),
     currentWeek
       ? c.env.DB.prepare('SELECT state, count(*) AS n FROM sessions WHERE week_id = ?1 GROUP BY state').bind(currentWeek.id).all<any>()
       : Promise.resolve({ results: [] as any[] }),
@@ -158,13 +159,12 @@ adminApi.get('/api/admin/overview', async (c) => {
     ).all<any>(),
   ]);
 
-  const activeParticipants = Number(statuses.results.find((row: any) => row.status === 'active')?.n ?? 0);
   return c.json({
     cohort,
     currentWeek,
     participantStatuses: statuses.results,
-    activeParticipants,
-    matchingReady: activeParticipants >= 3,
+    activeParticipants: matchingParticipants,
+    matchingReady: matchingParticipants >= 3,
     sessionStates: sessionStates.results,
     queues: { openForms, incidents, repairs, reviews, pendingOutbox, failedOutbox },
     recentAudit: recentAudit.results,
@@ -509,7 +509,7 @@ adminApi.get('/api/admin/settings', async (c) => {
   const [settings, cohorts, rosterSize] = await Promise.all([
     getSettings(c.env, keys),
     c.env.DB.prepare('SELECT * FROM cohorts ORDER BY id DESC').all<any>(),
-    count(c.env, "SELECT count(*) AS n FROM participants WHERE status = 'active'"),
+    count(c.env, "SELECT count(*) AS n FROM participants WHERE status = 'active' AND pairing_excluded = 0"),
   ]);
   return c.json({ settings, cohorts: cohorts.results, activeParticipants: rosterSize, minimumMatchingPool: 3 });
 });

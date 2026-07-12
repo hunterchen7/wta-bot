@@ -16,7 +16,7 @@ type ActiveParticipant = { id: number; discord_id: string; name: string | null; 
 async function activeParticipants(env: Env): Promise<ActiveParticipant[]> {
   const { results } = await env.DB.prepare(
     `SELECT id, discord_id, name, email_ok, preferred_email FROM participants
-     WHERE status = 'active' AND topics IS NOT NULL`,
+     WHERE status = 'active' AND topics IS NOT NULL AND pairing_excluded = 0`,
   ).all<ActiveParticipant>();
   return results;
 }
@@ -119,7 +119,7 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
   const { results: optins } = await env.DB.prepare(
     `SELECT o.participant_id, o.wants_double, o.standby, p.discord_id, p.name, p.email_ok, p.preferred_email
      FROM optins o JOIN participants p ON p.id = o.participant_id
-     WHERE o.week_id = ?1 AND p.status = 'active'`,
+     WHERE o.week_id = ?1 AND p.status = 'active' AND p.pairing_excluded = 0`,
   )
     .bind(week.id)
     .all<{ participant_id: number; wants_double: number; standby: number; discord_id: string; name: string | null; email_ok: number; preferred_email: string | null }>();

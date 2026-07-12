@@ -10,7 +10,7 @@ import { creditsOf, strikesOf } from '../engine/progress';
 import { activeCohort, cohortWeeks, createCohort } from '../engine/weeks';
 import type { Env } from '../env';
 import { signToken } from '../forms/token';
-import { getParticipant, listParticipants, participantsToCsv } from '../participants';
+import { getParticipant, listParticipants, participantsToCsv, upsertParticipant } from '../participants';
 import { discordTime } from '../time';
 import { type Interaction, interactionUser, ResponseType } from '../discord/types';
 import { isOrganizer } from './shared';
@@ -58,6 +58,15 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
 
     case 'join': {
       const existing = await getParticipant(c.env, user.id);
+      // `/join` only issues the enrollment link, so persist organizer
+      // eligibility here even when this is their first-ever interaction.
+      if (!existing && await isOrganizer(c.env, interaction)) {
+        await upsertParticipant(c.env, user.id, {
+          discord_username: user.username,
+          discord_nickname: interaction.member?.nick ?? user.global_name ?? user.username,
+          pairing_excluded: 1,
+        });
+      }
       if (existing?.status === 'removed') {
         if ((existing as any).removed_reason === 'withdrew') {
           const { buttonRow } = await import('../discord/components');
@@ -136,6 +145,10 @@ async function dashboardCommand(c: Ctx, interaction: Interaction) {
   const secret = c.env.FORM_SIGNING_SECRET;
   if (!secret) return c.json(ephemeral('Dashboard not configured.'));
   const organizer = await isOrganizer(c.env, interaction);
+  if (organizer) {
+    const { excludeOrganizerFromPairing } = await import('../organizers');
+    await excludeOrganizerFromPairing(c.env, p.id);
+  }
   const token = await signToken(secret, `magic:${p.id}:${organizer ? 1 : 0}`, new Date(Date.now() + 10 * 60_000));
   const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
   return c.json(
@@ -505,12 +518,15 @@ async function pairCommand(c: Ctx, interaction: Interaction, opts: Opt[] | undef
   if (interviewerDiscord === intervieweeDiscord) return c.json(ephemeral('Two different people, please.'));
 
   const lookup = (d: string) =>
-    c.env.DB.prepare("SELECT id, name, status FROM participants WHERE discord_id = ?1").bind(d).first<any>();
+    c.env.DB.prepare("SELECT id, name, status, pairing_excluded FROM participants WHERE discord_id = ?1").bind(d).first<any>();
   const interviewer = await lookup(interviewerDiscord);
   const interviewee = await lookup(intervieweeDiscord);
   if (!interviewer || !interviewee) return c.json(ephemeral('Both people must be enrolled (`/join`).'));
   if (interviewer.status !== 'active' || interviewee.status !== 'active') {
     return c.json(ephemeral(`Both must be active (currently: ${interviewer.status} / ${interviewee.status}).`));
+  }
+  if (interviewer.pairing_excluded === 1 || interviewee.pairing_excluded === 1) {
+    return c.json(ephemeral('Organizers cannot be added to participant pairings.'));
   }
   const week = await currentWeek(c);
   if (!week) return c.json(ephemeral('No active cohort — `/setup cohort` first.'));
@@ -530,10 +546,12 @@ async function repairCommand(c: Ctx, interaction: Interaction, opts: Opt[] | und
   const target = String(optVal(opts, 'user') ?? '');
   const need = String(optVal(opts, 'need') ?? '');
   if (need !== 'interviewer' && need !== 'interviewee') return c.json(ephemeral('Pick what they need.'));
-  const p = await c.env.DB.prepare("SELECT id, name, status FROM participants WHERE discord_id = ?1")
+  const p = await c.env.DB.prepare("SELECT id, name, status, pairing_excluded FROM participants WHERE discord_id = ?1")
     .bind(target)
     .first<any>();
   if (!p) return c.json(ephemeral('Not on the roster.'));
+  if (p.status !== 'active') return c.json(ephemeral('That participant is not active.'));
+  if (p.pairing_excluded === 1) return c.json(ephemeral('Organizers cannot be added to the repair queue.'));
   const week = await currentWeek(c);
   if (!week) return c.json(ephemeral('No active cohort.'));
   const { enqueueRepair } = await import('../engine/repair');
