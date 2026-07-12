@@ -35,6 +35,7 @@ const INTERVIEWEE_OK: Record<string, string> = {
   video_url: 'https://zoom.example/rec/abc',
   code: 'def solve():\n    return 42',
   partner_feedback: 'Great hints, thanks!',
+  confirmation: 'yes',
 };
 
 const INTERVIEWER_OK: Record<string, string> = {
@@ -42,14 +43,28 @@ const INTERVIEWER_OK: Record<string, string> = {
   attendance_partner: 'yes',
   camera_self: 'yes',
   camera_partner: 'yes',
+  rating_experience: '5',
+  rating_preparedness: '4',
+  rating_clarifying_questions: '4',
+  described_naive_solution: 'yes',
+  implemented_naive_solution: 'yes',
+  described_optimal_solution: 'yes',
+  implemented_optimal_solution: 'yes',
+  additional_solutions: 'not_applicable',
+  time_complexity: 'yes',
+  space_complexity: 'yes',
+  additional_test_cases: 'yes',
   rating_problem_solving: '4',
   rating_communication: '4',
   rating_code_quality: '3',
   hints: 'few',
+  duration: '20-30 minutes',
   verdict: 'pass',
   verdict_reason: 'Solid problem decomposition, clean code.',
   strengths: 'Communicates the plan before coding.',
   improvements: 'Test edge cases before declaring done.',
+  code: 'def solve():\n    return 42',
+  confirmation: 'yes',
 };
 
 beforeAll(async () => {
@@ -88,7 +103,7 @@ describe('form rail', () => {
     const form = await res.json<any>();
     expect(form).toMatchObject({ round: 3, partnerName: 'Ivy Interviewer', role: 'interviewee' });
     expect(form.fields.map((field: any) => field.label)).toEqual(expect.arrayContaining([
-      expect.stringContaining('Paste the code'), expect.stringContaining('session recording'),
+      expect.stringContaining('Copy the code'), expect.stringContaining('session recording'),
     ]));
     expect(form.fields.map((field: any) => field.id)).not.toContain('language');
   });

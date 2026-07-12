@@ -43,7 +43,7 @@ async function dynamicFields(env: Env, instance: LoadedInstance): Promise<Field[
   ).bind(instance.session_id).all<{ id: number; title: string; number: number | null }>();
   if (!results.length) return base;
   const picker: Field = {
-    id: 'problem_used', label: 'Which problem from the bank did you use?', type: 'select', required: true,
+    id: 'problem_used', label: 'Which interview question did you choose?', type: 'select', required: true,
     options: results.map((problem) => ({ value: String(problem.id), label: `${problem.number ? `#${problem.number} ` : ''}${problem.title}` })),
     help: "Choose the problem you actually used. Your interviewee receives its solution notes after submitting.",
   };

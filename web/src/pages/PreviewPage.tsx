@@ -5,7 +5,7 @@ export function PreviewPage() {
   const cards = [
     { to: '/preview/enrollment', title: 'Program enrollment', description: 'Discord-linked identity, profile, goals, context, and reminder preferences.' },
     { to: '/preview/form/interviewee_report', title: 'Interviewee report', description: 'Recording, code, attendance, experience ratings, and private/shared feedback.' },
-    { to: '/preview/form/interviewer_report', title: 'Interviewer report', description: 'Candidate ratings, hints, verdict, and structured feedback.' },
+    { to: '/preview/form/interviewer_report', title: 'Interviewer report', description: 'Technical and behavioural rubric, hints, verdict, code, and structured feedback.' },
     { to: '/preview/packet', title: 'Interviewer packet', description: 'Private problem statement, hint ladder, and solution notes.' },
     { to: '/bank', title: 'Question bank', description: 'The currently published round set from live program data.' },
     { to: '/login', title: 'Participant login', description: 'Email-code authentication and the signed-in dashboard handoff.' },

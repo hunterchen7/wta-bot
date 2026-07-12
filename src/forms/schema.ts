@@ -2,9 +2,6 @@
 // these specs. `shared: true` fields are relayed to the partner once both
 // reports are in; everything else is organizer-only or structural.
 //
-// NOTE: the interviewer template is a reasoned reconstruction — the legacy
-// interviewer form was inaccessible. Marked fields are easy to adjust.
-
 export type Field = {
   id: string;
   label: string;
@@ -28,6 +25,13 @@ const attendance = [
   { value: 'late', label: 'Yes, but late' },
   { value: 'no', label: 'No' },
 ];
+const duration = ['0-5 minutes', '5-10 minutes', '10-20 minutes', '20-30 minutes', '30+ minutes']
+  .map((label) => ({ value: label, label }));
+const complexity = [
+  { value: 'yes', label: 'Yes' },
+  { value: 'attempted', label: 'No, but they made a reasonable attempt' },
+  { value: 'no', label: 'No, they did not explain it or were incorrect' },
+];
 const scale = (
   id: string,
   label: string,
@@ -38,19 +42,19 @@ const scale = (
 
 export const INTERVIEWEE_FIELDS: Field[] = [
   { id: 'attendance_self', label: 'Did you show up to your scheduled interview?', type: 'radio', options: attendance, required: true },
-  { id: 'attendance_partner', label: 'Did your interviewer show up to the interview?', type: 'radio', options: attendance, required: true },
+  { id: 'attendance_partner', label: 'Did your interviewer show up to your scheduled interview?', type: 'radio', options: attendance, required: true },
   { id: 'camera_self', label: 'Did you have your camera on?', type: 'radio', options: yesNo, required: true },
   { id: 'camera_partner', label: 'Did your interviewer have their camera on?', type: 'radio', options: yesNo, required: true },
   scale('rating_experience', 'Rate the quality of your experience', 'Terrible', 'Excellent'),
   scale(
     'rating_communication',
-    'My interviewer clearly communicated and was easy to understand during the interview.',
+    'Agree or disagree: My interviewer clearly communicated and was easy to understand during the interview.',
     'Strongly disagree',
     'Strongly agree',
   ),
   scale(
     'rating_preparedness',
-    'My interviewer was well prepared for the interview.',
+    'Agree or disagree: My interviewer was well prepared for the interview.',
     'Strongly disagree',
     'Strongly agree',
   ),
@@ -59,7 +63,7 @@ export const INTERVIEWEE_FIELDS: Field[] = [
     label: 'How long was your interview?',
     type: 'select',
     required: true,
-    options: ['0-5 minutes', '5-10 minutes', '10-20 minutes', '20-30 minutes', '30+ minutes'].map((l) => ({ value: l, label: l })),
+    options: duration,
   },
   {
     id: 'video_url',
@@ -68,40 +72,101 @@ export const INTERVIEWEE_FIELDS: Field[] = [
     required: true,
     help: 'Upload the recording directly, or use an existing Zoom, Meet, or Drive link. Files are inspected and, when useful, gently optimized on your device before upload.',
   },
-  { id: 'code', label: 'Paste the code you wrote in the interview', type: 'textarea', required: true, mono: true },
+  {
+    id: 'org_note',
+    label: "Anything else you'd like us to know?",
+    type: 'textarea',
+    help: 'Your interviewer will NOT see this. Include any special permissions you received or other discrepancies in the process.',
+  },
   {
     id: 'partner_feedback',
-    label: 'Do you have any feedback for your interviewer?',
+    label: 'Any feedback for your interviewer?',
     type: 'textarea',
     shared: true,
     help: 'Your interviewer WILL see this once both of you have submitted.',
   },
+  { id: 'code', label: 'Copy the code that you wrote', type: 'textarea', required: true, mono: true },
   {
-    id: 'org_note',
-    label: 'Anything else you would like the organizers to know?',
-    type: 'textarea',
-    help: 'Your interviewer will NOT see this. Include any special permissions you were given, or other discrepancies in the process.',
+    id: 'confirmation',
+    label: 'I have re-read this form and confirmed that everything I entered is correct.',
+    type: 'radio',
+    options: yesNo,
+    required: true,
   },
 ];
 
-// NOTE: reconstruction — the legacy interviewer form was inaccessible. Wording
-// mirrors the interviewee form's style; adjust freely once the original surfaces.
 export const INTERVIEWER_FIELDS: Field[] = [
-  { id: 'attendance_self', label: 'Did you show up to your scheduled interview?', type: 'radio', options: attendance, required: true },
-  { id: 'attendance_partner', label: 'Did your interviewee show up to the interview?', type: 'radio', options: attendance, required: true },
+  { id: 'attendance_self', label: 'Did you attend your scheduled interview?', type: 'radio', options: attendance, required: true },
+  { id: 'attendance_partner', label: 'Did your interviewee attend the scheduled interview?', type: 'radio', options: attendance, required: true },
   { id: 'camera_self', label: 'Did you have your camera on?', type: 'radio', options: yesNo, required: true },
   { id: 'camera_partner', label: 'Did your interviewee have their camera on?', type: 'radio', options: yesNo, required: true },
-  scale('rating_problem_solving', 'How would you rate their problem-solving ability?', 'Weak', 'Excellent'),
+  scale('rating_experience', 'Rate the quality of your experience', 'Terrible', 'Excellent'),
   scale(
-    'rating_communication',
-    'The candidate clearly communicated their thinking as they solved the problem.',
+    'rating_preparedness',
+    'Agree or disagree: My interviewee was well prepared with their tools and setup.',
     'Strongly disagree',
     'Strongly agree',
   ),
+  scale(
+    'rating_communication',
+    'Agree or disagree: My interviewee clearly communicated and was easy to understand during the interview.',
+    'Strongly disagree',
+    'Strongly agree',
+  ),
+  scale(
+    'rating_clarifying_questions',
+    'Agree or disagree: My interviewee asked meaningful clarifying questions.',
+    'Strongly disagree',
+    'Strongly agree',
+  ),
+  {
+    id: 'described_naive_solution',
+    label: 'Did your interviewee describe a correct but unoptimized or naive solution?',
+    type: 'radio', options: yesNo, required: true,
+  },
+  {
+    id: 'implemented_naive_solution',
+    label: 'Did your interviewee correctly implement their naive solution?',
+    type: 'radio', options: yesNo, required: true,
+    help: 'Answer No if they did not come up with a solution. A correct implementation should compile, run, and produce the expected output.',
+  },
+  {
+    id: 'described_optimal_solution',
+    label: 'Did your interviewee correctly describe an optimal solution?',
+    type: 'radio', options: yesNo, required: true,
+  },
+  {
+    id: 'implemented_optimal_solution',
+    label: 'Did your interviewee correctly implement their optimal solution?',
+    type: 'radio', options: yesNo, required: true,
+    help: 'Answer No if they did not come up with an optimal solution. A correct implementation should compile, run, and produce the expected output.',
+  },
+  {
+    id: 'additional_solutions',
+    label: 'Did your interviewee come up with any additional solutions?',
+    type: 'radio', required: true,
+    options: [...yesNo, { value: 'not_applicable', label: 'Not applicable — no other solutions' }],
+  },
+  {
+    id: 'time_complexity',
+    label: 'Did your interviewee explain time complexity correctly?',
+    type: 'radio', options: complexity, required: true,
+  },
+  {
+    id: 'space_complexity',
+    label: 'Did your interviewee explain space complexity correctly?',
+    type: 'radio', options: complexity, required: true,
+  },
+  {
+    id: 'additional_test_cases',
+    label: 'Did your interviewee come up with any additional test cases?',
+    type: 'radio', options: yesNo, required: true,
+  },
+  scale('rating_problem_solving', 'How would you rate their problem-solving ability?', 'Weak', 'Excellent'),
   scale('rating_code_quality', 'How would you rate the quality of the code they wrote?', 'Poor', 'Excellent'),
   {
     id: 'hints',
-    label: 'How much help did the candidate need to get to a solution?',
+    label: 'How much help did your interviewee need to get to a solution?',
     type: 'select',
     required: true,
     options: [
@@ -111,9 +176,16 @@ export const INTERVIEWER_FIELDS: Field[] = [
       { value: 'heavy', label: 'Heavy guidance throughout' },
     ],
   },
+  { id: 'duration', label: 'How long was your interview?', type: 'select', required: true, options: duration },
+  {
+    id: 'org_note',
+    label: "Anything else you'd like us to know? You can leave your private notes here.",
+    type: 'textarea',
+    help: 'Your interviewee will NOT see this. Include any special permissions you received or other discrepancies in the process.',
+  },
   {
     id: 'verdict',
-    label: 'Overall, would you pass this candidate?',
+    label: 'Overall, would you pass this interviewee?',
     type: 'radio',
     required: true,
     options: [
@@ -126,23 +198,23 @@ export const INTERVIEWER_FIELDS: Field[] = [
   { id: 'verdict_reason', label: 'What led you to that verdict?', type: 'textarea', required: true },
   {
     id: 'strengths',
-    label: 'What did the candidate do well that they should keep doing?',
+    label: 'What did your interviewee do well that they should keep doing?',
     type: 'textarea',
     shared: true,
     help: 'Your interviewee WILL see this once both of you have submitted.',
   },
   {
     id: 'improvements',
-    label: 'What should the candidate work on before the real thing?',
+    label: 'Any feedback for your interviewee? What should they work on before the real thing?',
     type: 'textarea',
     shared: true,
     help: 'Your interviewee WILL see this once both of you have submitted.',
   },
+  { id: 'code', label: 'Submit the code that your interviewee wrote', type: 'textarea', required: true, mono: true },
   {
-    id: 'org_note',
-    label: 'Anything else you would like the organizers to know?',
-    type: 'textarea',
-    help: 'Your interviewee will NOT see this. Flag any concerns, discrepancies, or special circumstances here.',
+    id: 'confirmation',
+    label: 'I have re-read this form and confirmed that everything I entered is correct.',
+    type: 'radio', options: yesNo, required: true,
   },
 ];
 

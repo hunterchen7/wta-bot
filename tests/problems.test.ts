@@ -135,7 +135,7 @@ describe('problem bank', () => {
     const res = await app.request(`/api/forms/${token}`, {}, env);
     const form = await res.json<any>();
     const problemField = form.fields.find((field: any) => field.id === 'problem_used');
-    expect(problemField.label).toContain('Which problem');
+    expect(problemField.label).toContain('Which interview question');
     expect(problemField.options.map((option: any) => option.label)).toEqual(expect.arrayContaining([expect.stringContaining('LRU Cache')]));
 
     const set = await env.DB.prepare('SELECT problem_id FROM week_problem_sets WHERE week_id = ?1 LIMIT 1')
@@ -151,13 +151,27 @@ describe('problem bank', () => {
           attendance_partner: 'yes',
           camera_self: 'yes',
           camera_partner: 'yes',
+          rating_experience: '5',
+          rating_preparedness: '4',
+          rating_clarifying_questions: '4',
+          described_naive_solution: 'yes',
+          implemented_naive_solution: 'yes',
+          described_optimal_solution: 'yes',
+          implemented_optimal_solution: 'yes',
+          additional_solutions: 'not_applicable',
+          time_complexity: 'yes',
+          space_complexity: 'yes',
+          additional_test_cases: 'yes',
           problem_used: String(set.problem_id),
           rating_problem_solving: '4',
           rating_communication: '4',
           rating_code_quality: '4',
           hints: 'few',
+          duration: '20-30 minutes',
           verdict: 'pass',
           verdict_reason: 'Good.',
+          code: 'function solve() { return 42; }',
+          confirmation: 'yes',
         }),
       },
       env,

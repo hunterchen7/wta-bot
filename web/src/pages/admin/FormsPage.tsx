@@ -11,12 +11,12 @@ const forms = {
   },
   interviewee_report: {
     label: 'Interviewee report',
-    description: 'Attendance, recording and code links, experience ratings, and private or shared feedback.',
+    description: 'Attendance, camera use, experience, recording and code, plus private and partner-visible feedback.',
     path: '/preview/form/interviewee_report',
   },
   interviewer_report: {
     label: 'Interviewer report',
-    description: 'Attendance, candidate ratings, hints, verdict, and structured strengths and improvements.',
+    description: 'Attendance, technical and behavioural rubric, code, verdict, and private or partner-visible feedback.',
     path: '/preview/form/interviewer_report',
   },
 } as const;
