@@ -18,6 +18,18 @@ beforeAll(async () => {
 });
 
 describe('JSON authentication', () => {
+  it('reports whether the current browser session is authenticated', async () => {
+    const anonymous = await app.request('/api/auth/session', {}, env);
+    expect(anonymous.status).toBe(401);
+    expect(await anonymous.json<any>()).toEqual({ authenticated: false });
+
+    const authenticated = await app.request('/api/auth/session', {
+      headers: { Cookie: await cookieFor(STUDENT_ID, false) },
+    }, env);
+    expect(authenticated.status).toBe(200);
+    expect(await authenticated.json<any>()).toEqual({ authenticated: true, organizer: false, redirect: '/app' });
+  });
+
   it('requests codes for roster emails and gives field guidance for unknown emails', async () => {
     const known = await jsonPost('/api/auth/request-code', { email: 'stu@example.com' });
     expect(known.status).toBe(200);

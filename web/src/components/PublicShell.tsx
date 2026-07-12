@@ -1,12 +1,24 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 export function PublicShell({ children, narrow = false }: { children: ReactNode; narrow?: boolean }) {
+  const [authenticated, setAuthenticated] = useState<boolean | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/auth/session', { headers: { Accept: 'application/json' }, signal: controller.signal })
+      .then((response) => setAuthenticated(response.ok))
+      .catch((cause) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setAuthenticated(false);
+      });
+    return () => controller.abort();
+  }, []);
+
   return <div className="min-h-screen bg-[#f7f7f5] text-slate-900">
     <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-xl">
       <div className="mx-auto flex h-18 max-w-7xl items-center justify-between px-4 sm:px-6">
-        <Link to="/" className="flex items-center gap-3 font-black tracking-tight text-slate-950"><span className="grid size-10 place-items-center rounded-2xl bg-slate-950 text-xs text-emerald-300">WTA</span><span>Mock Interviews</span></Link>
-        <nav className="flex items-center gap-1 text-sm font-bold text-slate-600"><Link className="rounded-lg px-3 py-2 hover:bg-slate-100" to="/bank">Question bank</Link><Link className="rounded-lg px-3 py-2 hover:bg-slate-100" to="/login">Log in</Link></nav>
+        <Link to={authenticated ? '/app' : '/'} className="flex items-center gap-3 font-black tracking-tight text-slate-950"><span className="grid size-10 place-items-center rounded-2xl bg-slate-950 text-xs text-emerald-300">WTA</span><span>Mock Interviews</span></Link>
+        <nav className="flex items-center gap-1 text-sm font-bold text-slate-600"><Link className="rounded-lg px-3 py-2 hover:bg-slate-100" to="/bank">Question bank</Link>{authenticated === null ? <span aria-hidden="true" className="mx-3 h-4 w-16 animate-pulse rounded bg-slate-200" /> : <Link className="rounded-lg px-3 py-2 hover:bg-slate-100" to={authenticated ? '/app' : '/login'}>{authenticated ? 'Dashboard' : 'Log in'}</Link>}</nav>
       </div>
     </header>
     <main className={`mx-auto px-4 py-10 sm:px-6 sm:py-16 ${narrow ? 'max-w-3xl' : 'max-w-6xl'}`}>{children}</main>

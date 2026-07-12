@@ -33,6 +33,16 @@ export async function sessionFrom(c: any): Promise<SessionUser | null> {
   return { participantId: Number(match[1]), organizer: match[2] === '1' };
 }
 
+web.get('/api/auth/session', async (c) => {
+  const session = await sessionFrom(c);
+  if (!session) return c.json({ authenticated: false }, 401);
+  const participant = await c.env.DB.prepare('SELECT id FROM participants WHERE id = ?1')
+    .bind(session.participantId)
+    .first<{ id: number }>();
+  if (!participant) return c.json({ authenticated: false }, 401);
+  return c.json({ authenticated: true, organizer: session.organizer, redirect: '/app' });
+});
+
 web.post('/api/auth/request-code', async (c) => {
   const body = await c.req.json<{ email?: string }>().catch(() => null);
   const email = String(body?.email ?? '').trim().toLowerCase();

@@ -5,6 +5,7 @@ import { PublicIntro, PublicShell, publicInputClass } from '../components/Public
 
 export function LoginPage() {
   const [params] = useSearchParams();
+  const [checkingSession, setCheckingSession] = useState(true);
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
@@ -13,6 +14,19 @@ export function LoginPage() {
   const codeRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (step === 'code') codeRef.current?.focus(); }, [step]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/auth/session', { headers: { Accept: 'application/json' }, signal: controller.signal })
+      .then((response) => {
+        if (response.ok) window.location.replace('/app');
+        else setCheckingSession(false);
+      })
+      .catch((cause) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        setCheckingSession(false);
+      });
+    return () => controller.abort();
+  }, []);
   useEffect(() => {
     if (params.get('error') === 'expired') setError('That one-click sign-in link expired. Request a fresh code below.');
   }, [params]);
@@ -33,6 +47,8 @@ export function LoginPage() {
       setCode('');
     } finally { setBusy(false); }
   };
+
+  if (checkingSession) return <PublicShell narrow><div className="mx-auto grid min-h-[50vh] place-items-center" role="status" aria-live="polite"><div className="text-center"><div className="mx-auto size-2 animate-pulse rounded-full bg-emerald-500 shadow-[0_0_0_7px_rgba(16,185,129,.12)]" /><p className="mt-5 text-sm font-bold text-slate-500">Checking your session…</p></div></div></PublicShell>;
 
   return <PublicShell narrow><div className="mx-auto max-w-xl">
     <PublicIntro eyebrow="Participant access" title={step === 'email' ? 'Welcome back.' : 'Check your inbox.'} description={step === 'email' ? 'Use the preferred email attached to your WTA enrollment. We’ll send a short-lived sign-in code.' : `Enter the six-digit code sent to ${email}. It expires in 10 minutes.`} />
