@@ -51,9 +51,8 @@ Rules of the road:
    - **Public Bot: ON is fine.** The backend enforces a guild allowlist
      (`ALLOWED_GUILD_IDS`) — interactions from foreign servers are refused and
      the bot auto-leaves them.
-   - **Privileged intents: all OFF.** This bot is webhook-only. Exception: flip
-     **Server Members Intent ON** when you need `/verify backfill` (REST member
-     list); it's instant under 10k users and harmless to leave on.
+   - **Privileged intents: all OFF.** This bot is webhook-only. Use Discord's
+     native server verification and moderation settings for server entry.
 5. **Do NOT set the Interactions Endpoint URL yet** — Discord verifies it with
    a signed PING, which only succeeds after the Worker has its secrets (§3).
 6. Invite URL: **OAuth2 → URL Generator** → scopes **`bot` +
@@ -61,7 +60,7 @@ Rules of the road:
    View Channels, Send Messages, Create Public Threads, Create Private
    Threads, Send Messages in Threads, Manage Threads, Embed Links, Attach
    Files, Mention Everyone *(optional)*, Manage Roles *(optional — needed for
-   the verification gate / participant roles; bot's role must sit above those
+   participant roles; bot's role must sit above those
    roles in the server's role list)*, Manage Nicknames *(optional — lets intake
    set members' server nicknames to their entered real names; same hierarchy
    rule, and no bot can ever change the guild owner's nickname)*.

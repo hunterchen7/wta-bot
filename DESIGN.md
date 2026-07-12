@@ -50,11 +50,10 @@ Three incident kinds, tracked distinctly: **ghost** (confirmed time, didn't show
 
 ## 5. Forms
 
-**Intake — native Discord** (`/join` or a Join button):
-- Modal 1: name, preferred email, Western email, dream-company blurb, year.
-- Modal 2 (via Continue button): program, opportunities (intern/new-grad), prior WTA, # technical interviews, topics (checkboxes), email-reminders opt-in (checkbox, default off → `email_ok`).
-- Optional modal 3 behind "add more": open-ended interests, prior-year feedback.
-- Re-running `/join` prefills current answers (self-serve edits). Discord username + "I joined the Discord" fields are obsolete — identity comes from the interaction.
+**Intake — web app launched from Discord** (`/join`):
+- `/join` returns a short-lived signed link tied to the invoking Discord user and guild.
+- The React enrollment form collects identity, program, opportunities, experience, topics, optional context, and email-reminder opt-in in one save-all flow.
+- Re-running `/join` opens the same prefilled form for self-serve edits. The latest Discord username is persisted beside the immutable Discord user ID so dashboard and Discord identities remain reconcilable.
 - **Nickname sync:** on name entry (and edits), the bot sets the member's server nickname to their entered name (truncated to 32). Fire-and-forget — never blocks intake. Needs **Manage Nicknames** + role hierarchy; Discord never allows changing the guild *owner's* nickname.
 
 **External form rail** — for anything richer than a modal (post-interview reports with code paste; later: alumni pages, availability grids):
@@ -108,7 +107,7 @@ Three incident kinds, tracked distinctly: **ghost** (confirmed time, didn't show
 One TypeScript **Cloudflare Worker** on Hunter's personal account:
 
 - `POST /discord` — interactions endpoint (ed25519 verify; discord-hono or equivalent). Slash commands, buttons, modals. Deferred responses for anything slow (matching).
-- `GET|POST /f/:token` — form rail (render + submit). `GET /p/:token` — interviewer packet pages. Forms are server-rendered HTML from the same Worker (hono JSX templates, shared CSS, mobile-first) — no separate Pages project, no client framework, no build pipeline. Token → verify HMAC/expiry/instance state → render prefilled → POST → validate server-side → write `form_instances` in D1 → side effects fire inline (confirmation DM, credit update, relay check). Re-edits allowed until the deadline; last write wins.
+- `/f/:token`, `/p/:token`, `/login`, `/bank`, `/preview/*`, and `/app/*` are React/Tailwind routes served from the Worker asset binding. Their `/api/*` endpoints verify HMAC/expiry/session state, validate on the server, write D1, and trigger side effects. Re-edits remain allowed until the deadline; last write wins. No server-rendered HTML templates remain.
 - **Cron triggers** — opt-in open/close, matching, nudge sweeps, packet delivery (T−24h scan), session-start form drops, deadline/overdue sweeps, digests, DM-failure email retries.
 - **Bindings:** D1 (db), Email Service (send), secrets: `DISCORD_TOKEN`, `DISCORD_PUBLIC_KEY`, `APP_ID`, `FORM_SIGNING_SECRET`.
 - Outbound Discord REST for DMs/threads/announcements (paced against rate limits; ≤200 participants is comfortable).
@@ -146,15 +145,9 @@ Replaces most organizer video-watching with automated triage; humans keep the fi
 - **Output:** score + confidence + timestamped flags ("check 12:30–14:00"). High-confidence passes auto-clear; everything else lands in the §11 review queue marked **suspicious** with pointers, so organizers watch minutes, not hours.
 - **Principles:** the AI never fails anyone — it only clears or escalates to humans; every auto-clear is logged and spot-checkable; rubric and thresholds live in `settings`.
 
-## 14. Verification gate (anti-spam onboarding)
+## 14. Discord verification
 
-Low-effort human check on the existing server (no new server, no KYC):
-
-- **Native layer (no code):** Community enabled, Verification Level **Medium**, AutoMod presets on.
-- **Bot layer:** `@everyone` sees only #start-here. A persistent bot panel there has a **Verify** button → 2-field modal (name + "what brings you here?") → grants the **Member** role (+ optional intro embed posted to #introductions). Multi-step interaction defeats join-spam; humans clear it in ~20s.
-- `/join` remains the separate program gate (→ Participant role). Member ≠ Participant.
-- **Admin:** `/setup verify` posts/refreshes the panel and stores role/channel ids in `settings`; `/verify backfill` grants Member to all existing members once before @everyone is locked (requires Server Members Intent toggled on in the dev portal for the REST member list — instant at <10k users; harmless for a webhook-only bot).
-- Bot role must sit above Member/Participant in the role hierarchy.
+Server entry uses Discord's native verification level, Rules Screening, and AutoMod. The bot does not maintain a parallel verification panel, Member role, intro form, or backfill job. `/join` remains the separate WTA program enrollment gate and grants only the Participant role after the signed web form is completed.
 
 ## 15. Web dashboard & auth (built)
 

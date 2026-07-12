@@ -1,0 +1,77 @@
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useBlocker, useParams } from 'react-router-dom';
+import { publicRequest, SettingsSaveError } from '../api';
+import { PublicIntro, PublicShell, publicInputClass } from '../components/PublicShell';
+
+export type ReportField = { id: string; label: string; type: 'radio' | 'select' | 'scale' | 'text' | 'textarea' | 'url'; options?: Array<{ value: string; label: string }>; required?: boolean; shared?: boolean; help?: string; mono?: boolean; low?: string; high?: string };
+export type ReportData = { preview?: boolean; id: number; kind: string; round: number; role: string; assigneeName: string | null; partnerName: string | null; scheduledAt: string | null; deadlineAt: string; submittedAt: string | null; overdue: boolean; fields: ReportField[]; values: Record<string, string> };
+
+export function ReportPage({ previewKind }: { previewKind?: string }) {
+  const { token } = useParams();
+  const [data, setData] = useState<ReportData | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [baseline, setBaseline] = useState('{}');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const dirty = useMemo(() => !previewKind && JSON.stringify(values) !== baseline, [values, baseline, previewKind]);
+  const blocker = useBlocker(dirty && !saved);
+
+  useEffect(() => {
+    const path = previewKind ? `/public/previews/${previewKind}` : `/forms/${token}`;
+    publicRequest<ReportData>(path).then((result) => { setData(result); setValues(result.values); setBaseline(JSON.stringify(result.values)); }).catch((cause) => setError(cause instanceof Error ? cause.message : 'Could not open this report.'));
+  }, [previewKind, token]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => { if (dirty && !saved) event.preventDefault(); };
+    window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn);
+  }, [dirty, saved]);
+
+  const set = (id: string, value: string) => { setSaved(false); setFieldErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id))); setValues((current) => ({ ...current, [id]: value })); };
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (previewKind) return;
+    setBusy(true); setError(''); setFieldErrors({});
+    try {
+      await publicRequest(`/forms/${token}`, { method: 'POST', body: JSON.stringify(values) });
+      setBaseline(JSON.stringify(values)); setSaved(true); window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (cause) {
+      if (cause instanceof SettingsSaveError) {
+        setFieldErrors(cause.fieldErrors); setError(cause.message);
+        const first = Object.keys(cause.fieldErrors)[0];
+        if (first) requestAnimationFrame(() => document.querySelector<HTMLElement>(`[data-report-field="${first}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }));
+      } else setError('Could not submit this report.');
+    } finally { setBusy(false); }
+  };
+
+  if (error && !data) return <PublicShell narrow><StateCard title="This form can’t be opened" text={error} /></PublicShell>;
+  if (!data) return <PublicShell narrow><div className="animate-pulse space-y-5"><div className="h-28 rounded-3xl bg-slate-200" /><div className="h-96 rounded-3xl bg-slate-200" /></div></PublicShell>;
+
+  return <PublicShell narrow>
+    <PublicIntro eyebrow={previewKind ? 'Read-only preview' : `Round ${data.round} report`} title={`${data.role === 'interviewer' ? 'Interviewer' : 'Interviewee'} report`} description={`Hi ${data.assigneeName ?? 'there'} — ${data.role === 'interviewer' ? `you interviewed ${data.partnerName ?? 'your partner'}` : `${data.partnerName ?? 'Your partner'} interviewed you`}${data.scheduledAt ? ` on ${formatDate(data.scheduledAt)}` : ''}; due ${formatDate(data.deadlineAt)}.`} />
+    {saved ? <div role="status" className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><div className="font-black">Report saved.</div><p className="mt-1 text-sm">Your credit and downstream notifications are being updated. You can keep this link and revise before the deadline.</p></div> : null}
+    {data.submittedAt && !saved ? <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm font-semibold text-sky-900">Submitted {formatDate(data.submittedAt)}. Saving again replaces the prior answers.</div> : null}
+    {data.overdue ? <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">This report is overdue. Submit it as soon as possible—credit remains on hold until it arrives.</div> : null}
+    {previewKind ? <div className="mb-6 rounded-2xl border border-violet-200 bg-violet-50 p-4 text-sm font-semibold text-violet-900">Preview mode: interact with the fields to inspect the experience; nothing can be submitted.</div> : null}
+    {error ? <div role="alert" className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-900">{error}</div> : null}
+    <form onSubmit={submit} className="space-y-4">{data.fields.map((field, index) => <ReportFieldInput key={field.id} field={field} value={values[field.id] ?? ''} error={fieldErrors[field.id]} index={index + 1} onChange={(value) => set(field.id, value)} />)}
+      <div className={`${previewKind ? '' : 'sticky bottom-4 z-20 shadow-xl backdrop-blur'} rounded-2xl border border-slate-200 bg-white/95 p-3`}><button disabled={Boolean(previewKind) || busy || (!dirty && Boolean(data.submittedAt))} className="w-full cursor-pointer rounded-xl bg-slate-950 px-4 py-3.5 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">{previewKind ? 'Submission disabled in preview' : busy ? 'Saving report…' : data.submittedAt ? 'Save revised report' : 'Submit report'}</button></div>
+    </form>
+    {blocker.state === 'blocked' ? <LeaveDialog onStay={() => blocker.reset()} onLeave={() => blocker.proceed()} /> : null}
+  </PublicShell>;
+}
+
+function ReportFieldInput({ field, value, error, index, onChange }: { field: ReportField; value: string; error?: string; index: number; onChange: (value: string) => void }) {
+  const shell = `rounded-2xl border bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.025)] ${error ? 'border-rose-300 ring-2 ring-rose-100' : 'border-slate-200'}`;
+  const head = <><div className="flex items-start gap-3"><span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-slate-100 text-[0.68rem] font-black text-slate-500">{index}</span><div><div className="text-sm font-extrabold leading-6 text-slate-900">{field.label}{field.required ? <span className="ml-1 text-rose-600">*</span> : null}</div>{field.help ? <p className="mt-1 text-xs leading-5 text-slate-500">{field.help}</p> : null}</div></div></>;
+  const alert = error ? <p role="alert" className="mt-3 text-sm font-bold text-rose-700">{error}</p> : null;
+  if (field.type === 'radio' || field.type === 'scale') {
+    const options = field.type === 'scale' ? [1, 2, 3, 4, 5].map((number) => ({ value: String(number), label: String(number) })) : field.options ?? [];
+    return <fieldset data-report-field={field.id} className={shell}>{head}<div className={`mt-4 grid gap-2 ${field.type === 'scale' ? 'grid-cols-5' : 'sm:grid-cols-2'}`}>{options.map((option) => <label key={option.value} className={`cursor-pointer rounded-xl border px-3 py-3 text-center text-sm font-bold transition ${value === option.value ? 'border-emerald-400 bg-emerald-50 text-emerald-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}><input className="sr-only" type="radio" name={field.id} value={option.value} checked={value === option.value} onChange={() => onChange(option.value)} />{option.label}</label>)}</div>{field.type === 'scale' ? <div className="mt-2 flex justify-between text-xs font-semibold text-slate-400"><span>{field.low}</span><span>{field.high}</span></div> : null}{alert}</fieldset>;
+  }
+  return <label data-report-field={field.id} className={`${shell} block`}>{head}<div className="mt-4">{field.type === 'select' ? <select required={field.required} value={value} onChange={(event) => onChange(event.target.value)} className={publicInputClass}><option value="">Choose…</option>{field.options?.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select> : field.type === 'textarea' ? <textarea required={field.required} rows={field.mono ? 12 : 5} spellCheck={!field.mono} value={value} onChange={(event) => onChange(event.target.value)} className={`${publicInputClass} ${field.mono ? 'font-mono text-xs leading-5' : ''}`} /> : <input required={field.required} type={field.type === 'url' ? 'url' : 'text'} value={value} onChange={(event) => onChange(event.target.value)} className={publicInputClass} />}</div>{alert}</label>;
+}
+
+function LeaveDialog({ onStay, onLeave }: { onStay: () => void; onLeave: () => void }) { return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby="leave-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><h2 id="leave-title" className="text-xl font-black text-slate-950">Leave with unsaved answers?</h2><p className="mt-2 text-sm leading-6 text-slate-600">Changes on this report have not been submitted.</p><div className="mt-6 flex justify-end gap-2"><button className="cursor-pointer rounded-lg border border-slate-200 px-4 py-2 text-sm font-bold" onClick={onStay}>Stay here</button><button className="cursor-pointer rounded-lg bg-rose-700 px-4 py-2 text-sm font-bold text-white" onClick={onLeave}>Discard changes</button></div></div></div>; }
+function StateCard({ title, text }: { title: string; text: string }) { return <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm"><h1 className="text-2xl font-black text-slate-950">{title}</h1><p className="mt-3 text-slate-600">{text}</p></div>; }
+const formatDate = (value: string) => new Intl.DateTimeFormat('en-CA', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Toronto' }).format(new Date(value));

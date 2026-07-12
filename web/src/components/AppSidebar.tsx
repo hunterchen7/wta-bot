@@ -14,19 +14,19 @@ type SidebarProps = {
 type NavEntry = { label: string; to: string; icon: IconName; end?: boolean };
 
 const personalItems: NavEntry[] = [
-  { label: 'My progress', to: '/', icon: 'progress', end: true },
-  { label: 'My settings', to: '/settings', icon: 'settings' },
+  { label: 'My progress', to: '/app', icon: 'progress', end: true },
+  { label: 'My settings', to: '/app/settings', icon: 'settings' },
 ];
 
 const adminItems: NavEntry[] = [
-  { label: 'Overview', to: '/admin', icon: 'overview', end: true },
-  { label: 'Participants', to: '/admin/participants', icon: 'participants' },
-  { label: 'Rounds', to: '/admin/rounds', icon: 'rounds' },
-  { label: 'Reviews', to: '/admin/reviews', icon: 'reviews' },
-  { label: 'Problems', to: '/admin/problems', icon: 'problems' },
-  { label: 'Analytics', to: '/admin/analytics', icon: 'analytics' },
-  { label: 'Operations', to: '/admin/operations', icon: 'operations' },
-  { label: 'Program settings', to: '/admin/settings', icon: 'settings' },
+  { label: 'Overview', to: '/app/admin', icon: 'overview', end: true },
+  { label: 'Participants', to: '/app/admin/participants', icon: 'participants' },
+  { label: 'Rounds', to: '/app/admin/rounds', icon: 'rounds' },
+  { label: 'Reviews', to: '/app/admin/reviews', icon: 'reviews' },
+  { label: 'Problems', to: '/app/admin/problems', icon: 'problems' },
+  { label: 'Analytics', to: '/app/admin/analytics', icon: 'analytics' },
+  { label: 'Operations', to: '/app/admin/operations', icon: 'operations' },
+  { label: 'Program settings', to: '/app/admin/settings', icon: 'settings' },
 ];
 
 export function AppSidebar(props: SidebarProps) {
@@ -64,7 +64,7 @@ function SidebarContents({ data, collapsed, mobile, onCollapse, onCloseMobile }:
   return (
     <>
       <div className={`flex h-18 shrink-0 items-center border-b border-white/10 ${collapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
-        <NavLink to="/" className="flex min-w-0 items-center gap-3 font-black tracking-tight text-white" onClick={onCloseMobile}>
+        <NavLink to="/app" className="flex min-w-0 items-center gap-3 font-black tracking-tight text-white" onClick={onCloseMobile}>
           <span className="grid size-10 shrink-0 place-items-center rounded-2xl bg-emerald-400 text-sm text-slate-950 shadow-lg shadow-emerald-500/15">WTA</span>
           {!collapsed ? <span className="truncate">Mock Interviews</span> : null}
         </NavLink>
@@ -80,7 +80,7 @@ function SidebarContents({ data, collapsed, mobile, onCollapse, onCloseMobile }:
         {collapsed ? (
           <div className="grid place-items-center" title={`${data.participant.name} · ${data.participant.preferredEmail}`}><Avatar name={data.participant.name} /></div>
         ) : (
-          <div className="flex items-center gap-3 rounded-2xl bg-white/5 p-3"><Avatar name={data.participant.name} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold text-white">{data.participant.name}</div><div className="truncate text-xs text-slate-400">{data.participant.preferredEmail}</div></div></div>
+          <div className="flex items-center gap-3 rounded-2xl bg-white/5 p-3"><Avatar name={data.participant.name} /><div className="min-w-0 flex-1"><div className="truncate text-sm font-bold text-white">{data.participant.name}</div><div className="truncate text-xs text-slate-400">{data.participant.discordUsername ? `@${data.participant.discordUsername}` : data.participant.preferredEmail}</div></div></div>
         )}
         {!mobile && collapsed ? <button aria-label="Expand sidebar" className="mt-3 grid w-full place-items-center rounded-xl p-2 text-slate-400 hover:bg-white/10 hover:text-white" onClick={onCollapse}><Icon name="chevron" /></button> : null}
       </div>

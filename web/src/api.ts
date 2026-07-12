@@ -2,6 +2,8 @@ export type Choice = { label: string; value: string };
 
 export type ParticipantSettings = {
   id: number;
+  discordId: string;
+  discordUsername: string;
   name: string;
   preferredEmail: string;
   westernEmail: string;
@@ -40,7 +42,7 @@ export type DashboardData = {
   };
 };
 
-export type SettingsPayload = Omit<ParticipantSettings, 'id' | 'status'>;
+export type SettingsPayload = Omit<ParticipantSettings, 'id' | 'status' | 'discordId' | 'discordUsername'>;
 
 export class SettingsSaveError extends Error {
   constructor(message: string, readonly fieldErrors: Record<string, string> = {}) {
@@ -82,6 +84,21 @@ export async function saveSettings(payload: SettingsPayload): Promise<void> {
     throw new Error('Your session expired. Redirecting to login…');
   }
   if (!response.ok) throw new SettingsSaveError(result.message ?? 'Could not save your settings.', result.fieldErrors);
+}
+
+export async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`/api${path}`, {
+    ...init,
+    headers: { Accept: 'application/json', ...(init?.body ? { 'Content-Type': 'application/json' } : {}), ...init?.headers },
+  });
+  const result = await response.json().catch(() => ({})) as { message?: string; fieldErrors?: Record<string, string>; error?: string };
+  if (!response.ok) throw new SettingsSaveError(result.message ?? result.error?.replaceAll('_', ' ') ?? 'The request failed.', result.fieldErrors);
+  return result as T;
+}
+
+export async function logout(): Promise<void> {
+  await fetch('/logout', { method: 'POST', headers: { Accept: 'application/json' } });
+  window.location.assign('/login');
 }
 
 export async function adminRequest<T>(path: string, init?: RequestInit): Promise<T> {

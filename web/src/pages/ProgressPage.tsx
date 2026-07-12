@@ -21,7 +21,7 @@ export function ProgressPage() {
             <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Hey {participant.name.split(' ')[0] || 'there'} 👋</h1>
             <p className="mt-2 text-slate-600">Keep both sides of your interview practice moving.</p>
           </div>
-          <span className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold capitalize text-slate-700 shadow-sm">{participant.status}</span>
+          <div className="flex flex-wrap items-center gap-2"><span className="rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-800">Discord: {participant.discordUsername ? `@${participant.discordUsername}` : participant.discordId}</span><span className="rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-bold capitalize text-slate-700 shadow-sm">{participant.status}</span></div>
         </div>
       </section>
 

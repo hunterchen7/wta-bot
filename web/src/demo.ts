@@ -4,6 +4,8 @@ export const demoDashboard: DashboardData = {
   viewer: { participantId: 1, organizer: true },
   participant: {
     id: 1,
+    discordId: '100001',
+    discordUsername: 'alexchen',
     name: 'Alex Chen',
     preferredEmail: 'alex@example.com',
     westernEmail: 'achen@uwo.ca',

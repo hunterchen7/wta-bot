@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { getDashboard, type DashboardData } from './api';
+import { getDashboard, logout, type DashboardData } from './api';
 import { AppSidebar } from './components/AppSidebar';
 import { Icon } from './components/Icon';
 import { DashboardContext } from './dashboard-context';
@@ -43,7 +43,7 @@ export function AppLayout() {
             <button aria-label="Open navigation" className="rounded-xl border border-slate-200 bg-white p-2 text-slate-700 shadow-sm md:hidden" onClick={() => setMobileOpen(true)}><Icon name="menu" /></button>
             <div className="min-w-0 flex-1"><div className="truncate text-sm font-bold text-slate-900">{pageTitle(location.pathname)}</div><div className="hidden truncate text-xs text-slate-500 sm:block">Western Tech Alumni mock interview program</div></div>
             <div className="hidden text-right lg:block"><div className="text-sm font-semibold text-slate-900">{data.participant.name}</div><div className="text-xs text-slate-500">{data.viewer.organizer ? 'Organizer' : 'Participant'}</div></div>
-            <form method="POST" action="/logout"><button className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50">Log out</button></form>
+            <button onClick={() => void logout()} className="cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-sm hover:bg-slate-50">Log out</button>
           </header>
           <main className="mx-auto w-full max-w-[100rem] px-4 py-8 sm:px-6 sm:py-10 lg:px-8"><div key={location.pathname} className="route-enter"><Outlet /></div></main>
         </div>
@@ -64,10 +64,10 @@ function readInitialSidebarState() {
 
 function pageTitle(pathname: string) {
   const titles: Record<string, string> = {
-    '/': 'My progress', '/settings': 'My settings', '/admin': 'Overview',
-    '/admin/participants': 'Participants', '/admin/rounds': 'Rounds', '/admin/reviews': 'Reviews',
-    '/admin/problems': 'Problems', '/admin/analytics': 'Analytics', '/admin/operations': 'Operations',
-    '/admin/settings': 'Program settings',
+    '/app': 'My progress', '/app/settings': 'My settings', '/app/admin': 'Overview',
+    '/app/admin/participants': 'Participants', '/app/admin/rounds': 'Rounds', '/app/admin/reviews': 'Reviews',
+    '/app/admin/problems': 'Problems', '/app/admin/analytics': 'Analytics', '/app/admin/operations': 'Operations',
+    '/app/admin/settings': 'Program settings',
   };
   return titles[pathname] ?? 'WTA Dashboard';
 }

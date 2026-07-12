@@ -11,11 +11,12 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   build: { outDir: 'dist', emptyOutDir: true },
   server: {
+    host: '127.0.0.1',
     port: 5173,
     proxy: {
       '/api': 'http://localhost:8787',
       '/logout': 'http://localhost:8787',
-      '/f': 'http://localhost:8787',
+      '/auth': 'http://localhost:8787',
     },
   },
 });

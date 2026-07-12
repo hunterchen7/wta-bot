@@ -1,8 +1,8 @@
 # wta-bot
 
 Discord bot for the Western Tech Alumni mock-interview program. One Cloudflare
-Worker serves the Discord interactions endpoint, the external form rail, and
-the interviewer packet pages, backed by D1.
+Worker serves the Discord interactions and JSON API endpoints behind a unified
+React/Tailwind web application, backed by D1.
 
 **Docs:** [DESIGN.md](DESIGN.md) (what & why) ·
 [docs/SETUP.md](docs/SETUP.md) (from-zero install: Discord app, Cloudflare,
@@ -12,8 +12,8 @@ local dev, troubleshooting) · [docs/OPERATIONS.md](docs/OPERATIONS.md)
 ## Stack
 
 - Cloudflare Workers (webhook interactions — no gateway) + D1 + cron triggers
-- hono (Worker API + server-rendered form rail), TypeScript
-- React + Vite + Tailwind for the evolving dashboard web app
+- hono (Worker JSON API), TypeScript
+- React + Vite + Tailwind for every web page and form
 - Cloudflare Email Service for email reminders (M5, opt-in per participant)
 
 ## Setup
@@ -23,7 +23,7 @@ npm install
 cp .dev.vars.example .dev.vars   # fill in (see below)
 npm run migrate:local
 npm run dev                      # Worker/API: http://localhost:8787/health
-npm run dev:web                  # React app: http://localhost:5173/app/
+npm run dev:web                  # React app: http://localhost:5173/
 ```
 
 ### Discord application (one-time)
@@ -69,29 +69,27 @@ applied migration.
 `/report no-show|unresponsive|issue` · `/dashboard` (one-click web sign-in link).
 
 **Organizers — everything under one command:** `/admin` with subcommands:
-`setup bootstrap|publish|channels|roles|cohort|verify` · `roster` · `export` · `standing` ·
+`setup bootstrap|publish|channels|roles|cohort` · `roster` · `export` · `standing` ·
 `excuse` · `pair` · `repair` · `participant hold|release|remove` ·
-`problems add|list|setweek` · `digest` · `eligible` · `backfill`.
+`problems add|list|setweek` · `digest` · `eligible`.
 
 **Buttons:** round opt-in (in / double / standby / out) · session threads
-(Scheduled ✅ / Can't make it / Report no-show) · Verify panel · case files
+(Scheduled ✅ / Can't make it / Report no-show) · case files
 (Remove / Excuse / Keep) · packet swap.
 
-**Web:** `/login` (email code) → dashboard; organizers also get Roster, Round
-board, Reviews, Problems. `/preview` renders every web form read-only.
+**Web:** `/login` (email code) → dashboard; `/join` returns a signed web
+enrollment link; `/preview` opens interactive read-only form previews.
 
 ## Where to edit what
 
 | Thing | File |
 |---|---|
-| `/join` intake modals + edit menu | `src/intake.ts` |
+| `/join` enrollment choices + validation | `src/intake.ts`, `src/routes/public-api.ts`, `web/src/pages/EnrollmentPage.tsx` |
 | Report form fields (both templates) | `src/forms/schema.ts` |
-| Verify-gate modal | `src/handlers/components.ts` |
 | Slash-command definitions | `src/discord/commands.ts` (self-syncs to Discord on deploy) |
 | Bot messages (opt-in, pairings, nudges) | `src/engine/cycle.ts` |
 | Email sender/content | `src/email.ts` + call sites |
-| Web pages (forms, dashboard, previews) | `src/routes/forms.ts`, `src/routes/web.ts` |
-| React dashboard app | `web/` + JSON endpoints in `src/routes/api.ts` |
+| Web pages and forms | `web/` + JSON endpoints in `src/routes/` |
 | Round calendar anchors | `src/engine/weeks.ts` |
 
 ## Milestones

@@ -50,12 +50,13 @@ interaction — no deploy.
 
 ## Discord-side settings that matter
 
-- Bot role must sit **above** the Member/Participant roles (role granting).
+- Bot role must sit **above** the Participant role (role granting).
 - The **threads channel** can be a text channel (private threads: only the
   pair + anyone with **Manage Threads** — give organizers that permission) or
   a **forum channel** (one post per pairing; visible to everyone who sees the
   forum — no privacy, but a tidy browsable board). The bot adapts automatically.
-- **Server Members Intent** (dev portal) must be ON for `/verify backfill`.
+- Use Discord's native verification and AutoMod settings for server access;
+  the bot does not run a separate verification gate.
 - If the interactions endpoint ever shows as failing in the portal, the Worker
   is down or the public key changed — check `/health`, then secrets.
 
@@ -66,17 +67,16 @@ interaction — no deploy.
 0. **The fast path:** grant the bot role Manage Channels + Manage Roles +
    Manage Nicknames, drag it near the top, then run
    `/admin setup bootstrap year:2026`. The bot builds the "WTA 2026" category
-   (start-here / announcements / introductions / interviews / wta-organizers)
+   (announcements / interviews / wta-organizers)
    **private-first** — visible to organizers + the bot only, so you can test —
-   creates missing roles, saves all ids, and posts the verify panel. Nothing
+   creates missing program roles and saves all ids. Nothing
    pre-existing is touched (archive old years manually, or just leave them).
    When testing's done, `/admin setup publish` flips every channel to its
    member-facing permissions. Steps 1-3 below are the manual equivalent.
-1. `/admin setup channels announce:#... organizer:#... threads:#... start_here:#... intros:#...`
-2. `/admin setup roles member:@Member participant:@Participant organizer:@Organizer`
+1. `/admin setup channels announce:#... organizer:#... threads:#...`
+2. `/admin setup roles participant:@Participant organizer:@Organizer`
    (bot role must sit above these, with Manage Roles + Manage Nicknames on)
-3. `/admin setup verify` → panel appears in #start-here; `/admin backfill` once
-   (needs Server Members intent toggled on).
+3. Configure Discord's native verification level and AutoMod in Server Settings.
 4. Load the bank: `/admin problems add` per problem (solution notes pasted in the
    dashboard → Problems), then `/admin problems setweek 1..3`. Sets are **public**:
    `/bank` + the pairing announcement; interviewers record their pick on the
@@ -102,8 +102,8 @@ W3 pass verdicts wait in dashboard → Reviews for a recording **verify/flag**;
 verify + 6/6 fires eligibility automatically.
 
 **Admin reference:** everything under `/admin` (roster, export, standing,
-excuse, pair, repair, participant, problems, digest, eligible, setup,
-backfill) — plus the dashboard: `/dashboard` in Discord for a one-click
+excuse, pair, repair, participant, problems, digest, eligible, setup) — plus
+the dashboard: `/dashboard` in Discord for a one-click
 sign-in link, or `/login` with your roster email.
 
 ## Web dashboard

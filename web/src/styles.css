@@ -14,6 +14,10 @@
     @apply outline-none;
   }
 
+  button:not(:disabled), [role='button'] {
+    cursor: pointer;
+  }
+
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
     @apply ring-2 ring-emerald-500 ring-offset-2;
   }

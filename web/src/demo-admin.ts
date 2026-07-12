@@ -9,7 +9,7 @@ const weeks = [
 ];
 const names = ['Alex Chen', 'Jordan Lee', 'Maya Singh', 'Sam Wilson', 'Taylor Kim', 'Priya Patel', 'Noah Martin', 'Amara Okafor', 'Leo Zhang', 'Sofia Rodriguez', 'Ethan Brown', 'Zoe Park'];
 const participants = names.map((name, index) => ({
-  id: index + 1, discord_id: `10000${index}`, name, preferred_email: `${name.toLowerCase().replace(' ', '.')}@example.com`, western_email: `student${index}@uwo.ca`,
+  id: index + 1, discord_id: `10000${index}`, discord_username: name.toLowerCase().replace(' ', ''), name, preferred_email: `${name.toLowerCase().replace(' ', '.')}@example.com`, western_email: `student${index}@uwo.ca`,
   year: ['Second', 'Third', 'Fourth'][index % 3], program: index % 3 === 1 ? 'Software Engineering' : 'Computer Science',
   status: index === 8 ? 'held' : index === 10 ? 'paused' : 'active', email_ok: index % 3 ? 1 : 0, created_at: '2026-07-12 12:00:00',
   interviewer_credits: Math.min(3, index % 4), interviewee_credits: Math.min(3, (index + 1) % 4), strikes: index === 8 ? 2 : index === 5 ? 1 : 0,
@@ -72,6 +72,6 @@ export async function adminDemoRequest(path: string, init?: RequestInit): Promis
   if (path === '/problems') return { problems, sets: problems.slice(0, 3).map((problem) => ({ week_id: 2, round: 2, cohort_name: cohort.name, problem_id: problem.id, title: problem.title })) } satisfies ProblemsData;
   if (path === '/analytics') return { participants: overview.participantStatuses.map((row) => ({ label: row.status, value: row.n })), sessions: overview.sessionStates.map((row) => ({ label: row.state, value: row.n })), reports: [{ label: 'interviewee_report', total: 18, submitted: 15 }, { label: 'interviewer_report', total: 18, submitted: 14 }], verdicts: [{ label: 'pass', value: 9 }, { label: 'borderline', value: 3 }, { label: 'fail', value: 2 }], problems: problems.map((problem) => ({ id: problem.id, title: problem.title, difficulty: problem.difficulty, uses: problem.uses, avg_experience: problem.uses ? 4.2 - problem.id * .2 : null })), rounds: [{ cohort: cohort.name, round: 1, optins: 12, sessions: 20, completed: 18 }, { cohort: cohort.name, round: 2, optins: 10, sessions: 19, completed: 7 }, { cohort: cohort.name, round: 3, optins: 0, sessions: 0, completed: 0 }] } satisfies AnalyticsData;
   if (path === '/operations') return operations;
-  if (path === '/settings') return { settings: { announce_channel_id: '10829384012', organizer_channel_id: '10829384013', threads_channel_id: '10829384014', organizer_role_id: '10829384099', participant_role_id: '10829384098', member_role_id: '10829384097', packet_mode: 'off' }, cohorts: [cohort, { id: 0, name: 'Summer 2025', start_date: '2025-07-20', weeks_count: 3, status: 'done' }], activeParticipants: 10, minimumMatchingPool: 3 } satisfies AdminSettingsData;
+  if (path === '/settings') return { settings: { announce_channel_id: '10829384012', organizer_channel_id: '10829384013', threads_channel_id: '10829384014', organizer_role_id: '10829384099', participant_role_id: '10829384098', packet_mode: 'off' }, cohorts: [cohort, { id: 0, name: 'Summer 2025', start_date: '2025-07-20', weeks_count: 3, status: 'done' }], activeParticipants: 10, minimumMatchingPool: 3 } satisfies AdminSettingsData;
   throw new Error(`No demo response for ${path}`);
 }
