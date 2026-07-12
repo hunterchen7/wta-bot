@@ -14,6 +14,7 @@ export type Field = {
   shared?: boolean; // relayed to the partner
   help?: string;
   mono?: boolean; // code-style textarea
+  minWords?: number; // enforced server-side on submit
 };
 
 const yesNo = [
@@ -125,6 +126,13 @@ export function validate(fields: Field[], body: Record<string, unknown>): { ok: 
     if (f.type === 'url' && !/^https?:\/\/\S+$/i.test(raw)) {
       errors.push(`“${f.label}” must be a link (https://…).`);
       continue;
+    }
+    if (f.minWords) {
+      const words = raw.trim().split(/\s+/).filter(Boolean).length;
+      if (words < f.minWords) {
+        errors.push(`“${f.label}” needs at least ${f.minWords} words (currently ${words}).`);
+        continue;
+      }
     }
     payload[f.id] = raw.slice(0, f.type === 'textarea' ? 20000 : 500);
   }

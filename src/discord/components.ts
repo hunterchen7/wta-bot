@@ -16,6 +16,7 @@ export function textInput(opts: {
   value?: string;
   placeholder?: string;
   maxLength?: number;
+  minLength?: number;
 }) {
   return {
     type: ComponentType.LABEL,
@@ -29,6 +30,7 @@ export function textInput(opts: {
       value: opts.value,
       placeholder: opts.placeholder,
       max_length: opts.maxLength,
+      min_length: opts.minLength,
     },
   };
 }

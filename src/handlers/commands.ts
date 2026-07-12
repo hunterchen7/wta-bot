@@ -30,7 +30,11 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
   switch (interaction.data?.name) {
     case 'join': {
       const existing = await getParticipant(c.env, user.id);
-      return c.json(intake.modal1(existing));
+      // Resume where they left off; enrolled users get the edit menu.
+      if (!existing || !existing.name) return c.json(intake.modal1(existing));
+      if (existing.year === null) return c.json(intake.modal2(existing));
+      if (existing.topics === null) return c.json(intake.modal3(existing));
+      return c.json(intake.profileMenu(existing));
     }
 
     case 'status':

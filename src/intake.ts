@@ -9,9 +9,22 @@ export const IDS = {
   modal1: 'join:m1',
   modal2: 'join:m2',
   modal3: 'join:m3',
+  // Standalone edit variants — same forms, no continue-chain afterwards.
+  modal1Edit: 'join:m1e',
+  modal2Edit: 'join:m2e',
+  modal3Edit: 'join:m3e',
   continue2: 'join:continue2',
   continue3: 'join:continue3',
+  edit1: 'join:edit1',
+  edit2: 'join:edit2',
+  edit3: 'join:edit3',
 } as const;
+
+export const BLURB_MIN_CHARS = 800; // ≈150–200 words; Discord enforces chars, not words
+export const BLURB_MIN_WORDS = 150;
+
+export const wordCount = (s: string | null | undefined) =>
+  (s ?? '').trim().split(/\s+/).filter(Boolean).length;
 
 const YEARS = ['First', 'Second', 'Third', 'Fourth', 'Fifth or greater'];
 const PROGRAMS = ['Computer Science', 'Software Engineering', 'Data Science', 'Other'];
@@ -40,8 +53,8 @@ const optsFromValues = (
   return options.map((o) => ({ ...o, default: selected.includes(o.value) }));
 };
 
-export function modal1(existing: Participant | null) {
-  return modal(IDS.modal1, 'WTA sign-up — 1 of 3', [
+export function modal1(existing: Participant | null, edit = false) {
+  return modal(edit ? IDS.modal1Edit : IDS.modal1, edit ? 'Edit basics' : 'WTA sign-up — 1 of 3', [
     textInput({ id: 'name', label: 'Full name', value: existing?.name ?? undefined, maxLength: 100 }),
     textInput({
       id: 'preferred_email',
@@ -60,16 +73,17 @@ export function modal1(existing: Participant | null) {
     textInput({
       id: 'blurb',
       label: 'Dream company & role — what and why?',
-      description: 'Roughly 200 words',
+      description: 'Minimum ~200 words — tell us properly!',
       style: TextStyle.PARAGRAPH,
       value: existing?.blurb ?? undefined,
+      minLength: BLURB_MIN_CHARS,
       maxLength: 2000,
     }),
   ]);
 }
 
-export function modal2(existing: Participant | null) {
-  return modal(IDS.modal2, 'WTA sign-up — 2 of 3', [
+export function modal2(existing: Participant | null, edit = false) {
+  return modal(edit ? IDS.modal2Edit : IDS.modal2, edit ? 'Edit program info' : 'WTA sign-up — 2 of 3', [
     stringSelect({ id: 'year', label: 'Incoming year', options: opts(YEARS, existing?.year ?? null) }),
     stringSelect({
       id: 'program',
@@ -99,8 +113,8 @@ export function modal2(existing: Participant | null) {
   ]);
 }
 
-export function modal3(existing: Participant | null) {
-  return modal(IDS.modal3, 'WTA sign-up — 3 of 3', [
+export function modal3(existing: Participant | null, edit = false) {
+  return modal(edit ? IDS.modal3Edit : IDS.modal3, edit ? 'Edit topics & extras' : 'WTA sign-up — 3 of 3', [
     stringSelect({
       id: 'topics',
       label: 'Which topics would help you most?',
@@ -136,8 +150,10 @@ export function modal3(existing: Participant | null) {
   ]);
 }
 
-export function afterModal1() {
-  return ephemeral('Part 1 saved ✅', [buttonRow([{ id: IDS.continue2, label: 'Continue — 2 of 3' }])]);
+export function afterModal1(warning = '') {
+  return ephemeral(`Part 1 saved ✅${warning}`, [
+    buttonRow([{ id: IDS.continue2, label: 'Continue — 2 of 3' }]),
+  ]);
 }
 
 export function afterModal2() {
@@ -148,6 +164,41 @@ export function afterModal3() {
   return ephemeral(
     "You're enrolled in WTA 🎉\n\nRun `/join` anytime to edit your answers, and `/status` to see your progress once the program starts.",
   );
+}
+
+export function afterEdit(warning = '') {
+  return ephemeral(`Saved ✅${warning}`);
+}
+
+export function blurbWarning(blurb: string | null): string {
+  const n = wordCount(blurb);
+  return n > 0 && n < BLURB_MIN_WORDS
+    ? `\n⚠️ Your dream-company answer is ${n} words — we ask for ~200. Run \`/join\` → *Edit basics* to expand it.`
+    : '';
+}
+
+/** Enrolled users get a pick-what-to-edit menu instead of the 3-step chain. */
+export function profileMenu(p: Participant) {
+  const topics = ((): string => {
+    try {
+      return (JSON.parse(p.topics ?? '[]') as string[]).join(', ');
+    } catch {
+      return '';
+    }
+  })();
+  const lines = [
+    `**Your WTA profile** — pick what to edit:`,
+    `1️⃣ **Basics** — ${p.name ?? '?'} · ${p.preferred_email ?? '?'} · ${p.western_email ?? '?'} · dream-job blurb (${wordCount(p.blurb)} words)`,
+    `2️⃣ **Program info** — ${p.year ?? '?'} year · ${p.program ?? '?'} · ${p.experience_band ?? '?'} interviews done`,
+    `3️⃣ **Topics & extras** — ${topics || '?'} · email reminders ${p.email_ok ? 'ON 📧' : 'off'}`,
+  ];
+  return ephemeral(lines.join('\n'), [
+    buttonRow([
+      { id: IDS.edit1, label: 'Edit basics' },
+      { id: IDS.edit2, label: 'Edit program info' },
+      { id: IDS.edit3, label: 'Edit topics & extras' },
+    ]),
+  ]);
 }
 
 // --- submission parsing -----------------------------------------------------

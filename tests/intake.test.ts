@@ -118,13 +118,66 @@ describe('/join intake flow', () => {
     expect(JSON.parse(row.topics)).toEqual(['dsa', 'system_design']);
     expect(row.interests).toBeNull(); // empty optional → null
 
-    // /join again → modal 1 prefilled; selects carry defaults
+    // /join again → edit menu (not the chain); edit buttons open prefilled modals
     const again = await sendInteraction(signer, command('join'));
     const againJson = (await again.json()) as any;
-    expect(againJson.data.components[0].component.value).toBe('Test Student');
-    const m2again = await sendInteraction(signer, button('join:continue2'));
-    const yearOptions = ((await m2again.json()) as any).data.components[0].component.options;
+    expect(againJson.type).toBe(4);
+    expect(againJson.data.content).toContain('Your WTA profile');
+
+    const m1e = await sendInteraction(signer, button('join:edit1'));
+    const m1eJson = (await m1e.json()) as any;
+    expect(m1eJson.type).toBe(9);
+    expect(m1eJson.data.custom_id).toBe('join:m1e');
+    expect(m1eJson.data.components[0].component.value).toBe('Test Student');
+
+    const m2e = await sendInteraction(signer, button('join:edit2'));
+    const yearOptions = ((await m2e.json()) as any).data.components[0].component.options;
     expect(yearOptions.find((o: any) => o.value === 'Third').default).toBe(true);
+
+    // opt-in confirmation email queued exactly once (email_ok flipped 0 -> 1)
+    const confirms = await env.DB.prepare(
+      "SELECT count(*) AS n FROM outbox WHERE kind = 'email' AND payload LIKE '%subscribed%'",
+    ).first<{ n: number }>();
+    expect(confirms?.n).toBe(1);
+
+    // standalone edit of part 3 keeping email on: saves, no duplicate confirm
+    const editSave = await sendInteraction(
+      signer,
+      modalSubmit('join:m3e', [
+        selectField('topics', ['dsa']),
+        selectField('email_ok', ['yes']),
+        textField('interests', ''),
+        textField('prior_feedback', ''),
+      ]),
+    );
+    const editJson = (await editSave.json()) as any;
+    expect(editJson.data.content).toContain('Saved');
+    expect(editJson.data.components).toBeUndefined(); // no continue chain
+    const confirms2 = await env.DB.prepare(
+      "SELECT count(*) AS n FROM outbox WHERE kind = 'email' AND payload LIKE '%subscribed%'",
+    ).first<{ n: number }>();
+    expect(confirms2?.n).toBe(1);
+  });
+
+  it('warns on short dream-company blurbs but still saves', async () => {
+    const res = await sendInteraction(
+      signer,
+      modalSubmit(
+        'join:m1',
+        [
+          textField('name', 'Short Blurb'),
+          textField('preferred_email', 'sb@example.com'),
+          textField('western_email', 'sb@uwo.ca'),
+          textField('blurb', 'I like computers.'),
+        ],
+        '606060',
+      ),
+    );
+    const json = (await res.json()) as any;
+    expect(json.data.content).toContain('Part 1 saved');
+    expect(json.data.content).toContain('~200');
+    const row = await env.DB.prepare("SELECT blurb FROM participants WHERE discord_id = '606060'").first<any>();
+    expect(row.blurb).toBe('I like computers.');
   });
 
   it('/status reflects enrollment state', async () => {

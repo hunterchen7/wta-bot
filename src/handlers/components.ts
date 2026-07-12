@@ -25,10 +25,15 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
   if (!user) return c.json(ephemeral('Could not identify you — try again.'));
   const id = interaction.data?.custom_id ?? '';
 
-  // ---- intake continue buttons -------------------------------------------
+  // ---- intake continue + edit buttons --------------------------------------
   if (id === intake.IDS.continue2 || id === intake.IDS.continue3) {
     const existing = await getParticipant(c.env, user.id);
     return c.json(id === intake.IDS.continue2 ? intake.modal2(existing) : intake.modal3(existing));
+  }
+  if (id === intake.IDS.edit1 || id === intake.IDS.edit2 || id === intake.IDS.edit3) {
+    const existing = await getParticipant(c.env, user.id);
+    const build = id === intake.IDS.edit1 ? intake.modal1 : id === intake.IDS.edit2 ? intake.modal2 : intake.modal3;
+    return c.json(build(existing, true));
   }
 
   // ---- weekly opt-in ------------------------------------------------------
@@ -94,27 +99,49 @@ export async function handleModal(c: Ctx, interaction: Interaction) {
   const id = interaction.data?.custom_id ?? '';
   const values = collectModalValues(interaction.data?.components);
 
-  // ---- intake modals -------------------------------------------------------
-  if (id === intake.IDS.modal1) {
-    const fields = intake.parseModal1(values);
-    await upsertParticipant(c.env, user.id, fields);
-    if (fields.name && interaction.guild_id) {
-      await enqueue(c.env, 'nickname', {
-        guildId: interaction.guild_id,
-        userId: user.id,
-        nick: fields.name.trim().slice(0, 32),
-      });
+  // ---- intake modals (chain mode + standalone edit mode) --------------------
+  const joinModal = /^join:m([123])(e?)$/.exec(id);
+  if (joinModal) {
+    const step = joinModal[1];
+    const isEdit = joinModal[2] === 'e';
+    const before = await getParticipant(c.env, user.id);
+
+    if (step === '1') {
+      const fields = intake.parseModal1(values);
+      await upsertParticipant(c.env, user.id, fields);
+      if (fields.name && interaction.guild_id) {
+        await enqueue(c.env, 'nickname', {
+          guildId: interaction.guild_id,
+          userId: user.id,
+          nick: fields.name.trim().slice(0, 32),
+        });
+      }
+      // Changed email while subscribed -> confirm the new address works.
+      if (
+        before?.email_ok === 1 &&
+        fields.preferred_email &&
+        fields.preferred_email !== before.preferred_email
+      ) {
+        await sendOptInConfirm(c.env, fields.preferred_email, fields.name);
+      }
+      const warning = intake.blurbWarning(fields.blurb);
+      return c.json(isEdit ? intake.afterEdit(warning) : intake.afterModal1(warning));
     }
-    return c.json(intake.afterModal1());
-  }
-  if (id === intake.IDS.modal2) {
-    await upsertParticipant(c.env, user.id, intake.parseModal2(values));
-    return c.json(intake.afterModal2());
-  }
-  if (id === intake.IDS.modal3) {
-    await upsertParticipant(c.env, user.id, intake.parseModal3(values));
-    await onEnrollmentComplete(c, interaction, user.id);
-    return c.json(intake.afterModal3());
+
+    if (step === '2') {
+      await upsertParticipant(c.env, user.id, intake.parseModal2(values));
+      return c.json(isEdit ? intake.afterEdit() : intake.afterModal2());
+    }
+
+    // step 3 — email opt-in confirmation on the 0 -> 1 transition only
+    const fields = intake.parseModal3(values);
+    await upsertParticipant(c.env, user.id, fields);
+    if (fields.email_ok === 1 && (before?.email_ok ?? 0) === 0) {
+      const email = before?.preferred_email ?? (await getParticipant(c.env, user.id))?.preferred_email;
+      if (email) await sendOptInConfirm(c.env, email, before?.name ?? null);
+    }
+    if (!isEdit) await onEnrollmentComplete(c, interaction, user.id);
+    return c.json(isEdit ? intake.afterEdit() : intake.afterModal3());
   }
 
   // ---- session scheduling --------------------------------------------------
@@ -233,6 +260,19 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
     data: {
       content: `📅 Locked in: ${discordTime(when)} (${formatToronto(when)} Toronto). Report forms arrive here + by DM at session time.`,
     },
+  });
+}
+
+/** Confirms the email channel works the moment someone opts in (also catches
+ *  typo'd addresses on day one instead of at the first missed reminder). */
+async function sendOptInConfirm(env: Env, to: string, name: string | null) {
+  await enqueue(env, 'email', {
+    to,
+    subject: "You're subscribed to WTA email reminders ✅",
+    text:
+      `Hi ${name ?? 'there'},\n\n` +
+      `This confirms you've opted into Western Tech Alumni email reminders — pairings, deadlines, and important program updates will land here alongside Discord.\n\n` +
+      `Wasn't you, or changed your mind? Run /join in the Discord server → "Edit topics & extras" and flip email reminders off.\n\n— Western Tech Alumni`,
   });
 }
 
