@@ -48,13 +48,17 @@ const count = async (env: Env, sql: string, ...bindings: unknown[]) => {
   return Number(row?.n ?? 0);
 };
 
+function currentProgramWeek<T extends { reports_due_at: string }>(weeks: T[]): T | null {
+  const now = Date.now();
+  return weeks.find((week) => now <= new Date(week.reports_due_at).getTime()) ?? weeks.at(-1) ?? null;
+}
+
 adminApi.get('/api/admin/overview', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const cohort = await activeCohort(c.env);
   const weeks = cohort ? await cohortWeeks(c.env, cohort.id) : [];
-  const now = Date.now();
-  const currentWeek = weeks.find((week) => now <= new Date(week.reports_due_at).getTime()) ?? weeks.at(-1) ?? null;
+  const currentWeek = currentProgramWeek(weeks);
 
   const [statuses, sessionStates, openForms, incidents, repairs, reviews, pendingOutbox, failedOutbox, recentAudit] = await Promise.all([
     c.env.DB.prepare('SELECT status, count(*) AS n FROM participants GROUP BY status ORDER BY status').all<any>(),
@@ -91,7 +95,7 @@ adminApi.get('/api/admin/participants', async (c) => {
   if (gate instanceof Response) return gate;
   const cohort = await activeCohort(c.env);
   const weeks = cohort ? await cohortWeeks(c.env, cohort.id) : [];
-  const currentWeek = weeks.at(-1) ?? null;
+  const currentWeek = currentProgramWeek(weeks);
   const { results } = await c.env.DB.prepare(
     `SELECT p.id, p.discord_id, p.name, p.preferred_email, p.western_email, p.year, p.program,
             p.status, p.email_ok, p.created_at,
@@ -216,14 +220,20 @@ adminApi.get('/api/admin/reviews', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT s.id, s.review_state, s.state, w.idx AS round, pi.name AS interviewer_name, pe.name AS interviewee_name,
             pe.id AS interviewee_id,
-            json_extract(ie.payload, '$.video_url') AS video_url,
-            json_extract(ir.payload, '$.verdict') AS verdict,
-            json_extract(ir.payload, '$.verdict_reason') AS verdict_reason
+            (SELECT json_extract(f.payload, '$.video_url') FROM form_instances f
+             WHERE f.session_id = s.id AND f.kind = 'interviewee_report' AND f.submitted_at IS NOT NULL
+             ORDER BY f.id DESC LIMIT 1) AS video_url,
+            (SELECT json_extract(f.payload, '$.verdict') FROM form_instances f
+             WHERE f.session_id = s.id AND f.kind = 'interviewer_report' AND f.submitted_at IS NOT NULL
+             ORDER BY f.id DESC LIMIT 1) AS verdict,
+            (SELECT json_extract(f.payload, '$.verdict_reason') FROM form_instances f
+             WHERE f.session_id = s.id AND f.kind = 'interviewer_report' AND f.submitted_at IS NOT NULL
+             ORDER BY f.id DESC LIMIT 1) AS verdict_reason
      FROM sessions s JOIN weeks w ON w.id = s.week_id
      JOIN participants pi ON pi.id = s.interviewer_id JOIN participants pe ON pe.id = s.interviewee_id
-     LEFT JOIN form_instances ie ON ie.session_id = s.id AND ie.kind = 'interviewee_report' AND ie.submitted_at IS NOT NULL
-     LEFT JOIN form_instances ir ON ir.session_id = s.id AND ir.kind = 'interviewer_report' AND ir.submitted_at IS NOT NULL
-     WHERE s.review_state != 'none' OR ie.id IS NOT NULL
+     WHERE s.review_state != 'none' OR EXISTS (
+       SELECT 1 FROM form_instances f WHERE f.session_id = s.id AND f.kind = 'interviewee_report' AND f.submitted_at IS NOT NULL
+     )
      ORDER BY CASE s.review_state WHEN 'pending' THEN 0 WHEN 'flagged' THEN 1 WHEN 'verified' THEN 2 ELSE 3 END, s.id DESC`,
   ).all<any>();
   return c.json({ reviews: results });
@@ -319,11 +329,12 @@ adminApi.get('/api/admin/analytics', async (c) => {
        GROUP BY p.id ORDER BY uses DESC, p.title LIMIT 20`,
     ).all<any>(),
     c.env.DB.prepare(
-      `SELECT c.name AS cohort, w.idx AS round, count(DISTINCT o.participant_id) AS optins, count(DISTINCT s.id) AS sessions,
-              sum(CASE WHEN s.state = 'completed' THEN 1 ELSE 0 END) AS completed
+      `SELECT c.name AS cohort, w.idx AS round,
+              (SELECT count(DISTINCT o.participant_id) FROM optins o WHERE o.week_id = w.id) AS optins,
+              (SELECT count(*) FROM sessions s WHERE s.week_id = w.id) AS sessions,
+              (SELECT count(*) FROM sessions s WHERE s.week_id = w.id AND s.state = 'completed') AS completed
        FROM weeks w JOIN cohorts c ON c.id = w.cohort_id
-       LEFT JOIN optins o ON o.week_id = w.id LEFT JOIN sessions s ON s.week_id = w.id
-       GROUP BY w.id ORDER BY c.id, w.idx`,
+       ORDER BY c.id, w.idx`,
     ).all<any>(),
   ]);
   return c.json({ participants: participants.results, sessions: sessions.results, reports: reports.results, verdicts: verdicts.results, problems: problems.results, rounds: rounds.results });
@@ -382,7 +393,9 @@ adminApi.post('/api/admin/cohorts', async (c) => {
   const body = await c.req.json<{ name?: string; startDate?: string; rounds?: number }>().catch(() => null);
   const match = body?.startDate?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   const rounds = Number(body?.rounds ?? 3);
-  if (!body?.name?.trim() || !match || !Number.isInteger(rounds) || rounds < 1 || rounds > 8) return c.json({ error: 'invalid_request' }, 400);
+  const date = match ? new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]))) : null;
+  const validDate = Boolean(date && date.getUTCFullYear() === Number(match![1]) && date.getUTCMonth() === Number(match![2]) - 1 && date.getUTCDate() === Number(match![3]));
+  if (!body?.name?.trim() || !match || !validDate || !Number.isInteger(rounds) || rounds < 1 || rounds > 8) return c.json({ error: 'invalid_request' }, 400);
   const created = await createCohort(c.env, body.name.trim().slice(0, 100), [Number(match[1]), Number(match[2]), Number(match[3])], rounds);
   await audit(c.env, gate.participantId, 'cohort.created', 'cohort', created.cohortId, { name: body.name, startDate: body.startDate, rounds });
   return c.json({ ok: true, ...created }, 201);

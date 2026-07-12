@@ -84,9 +84,15 @@ describe('admin operational data', () => {
     expect(rounds.sessions[0]).toMatchObject({ id: 9201, interviewer_name: 'Admin Person' });
     expect(rounds.selectedWeek.id).toBe(weekId);
 
+    await env.DB.prepare(
+      `INSERT INTO optins (week_id, participant_id) VALUES (?1, ?2), (?1, ?3)`,
+    ).bind(weekId, ADMIN_ID, STUDENT_ID).run();
     const analytics = await (await request('/api/admin/analytics')).json<any>();
     expect(analytics.verdicts).toEqual(expect.arrayContaining([expect.objectContaining({ label: 'pass' })]));
     expect(analytics.problems[0]).toMatchObject({ title: 'Two Sum', uses: 1 });
+    expect(analytics.rounds).toEqual(expect.arrayContaining([
+      expect.objectContaining({ round: 1, optins: 2, sessions: 1, completed: 1 }),
+    ]));
 
     const csv = await request('/api/admin/participants.csv');
     expect(csv.headers.get('content-type')).toContain('text/csv');
@@ -169,6 +175,12 @@ describe('admin mutations and audit history', () => {
     const created = await cohort.json<any>();
     expect(created.weeks).toHaveLength(3);
     expect(await env.DB.prepare("SELECT status FROM cohorts WHERE name = 'Admin API Cohort'").first()).toEqual({ status: 'done' });
+
+    const invalidDate = await request('/api/admin/cohorts', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Impossible date', startDate: '2027-02-30', rounds: 3 }),
+    });
+    expect(invalidDate.status).toBe(400);
   });
 
   it('surfaces operations and retries dead outbox rows', async () => {
