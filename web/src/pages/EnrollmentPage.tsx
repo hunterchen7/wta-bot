@@ -11,6 +11,7 @@ import {
   PublicShell,
   publicInputClass,
 } from "../components/PublicShell";
+import { PriorParticipationCheckbox } from "../components/PriorParticipationCheckbox";
 import {
   profileBlurbHelp,
   profileFormContent,
@@ -337,15 +338,11 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
             error={fieldErrors.topics}
             onToggle={(value) => toggle("topics", value)}
           />
-          <label className="mt-5 flex cursor-pointer items-center gap-3 text-sm font-bold text-slate-700">
-            <input
-              type="checkbox"
-              checked={form.priorWta}
-              onChange={(event) => set("priorWta", event.target.checked)}
-              className="size-5 accent-western-600"
-            />
-            {profileFormContent.fields.priorWta.label}
-          </label>
+          <PriorParticipationCheckbox
+            checked={form.priorWta}
+            label={profileFormContent.fields.priorWta.label}
+            onChange={(checked) => set("priorWta", checked)}
+          />
         </Section>
         <Section
           title={profileFormContent.sections.context.title}

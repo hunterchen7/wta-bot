@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useBlocker } from "react-router-dom";
 import { useDashboard } from "../dashboard-context";
 import { saveSettings, SettingsSaveError, type SettingsPayload } from "../api";
+import { PriorParticipationCheckbox } from "../components/PriorParticipationCheckbox";
 import {
   profileBlurbHelp,
   profileFormContent,
@@ -261,15 +262,11 @@ export function SettingsPage() {
             error={fieldErrors.topics}
             onToggle={(value) => toggle("topics", value)}
           />
-          <label className="mt-6 flex items-center gap-3 text-sm font-semibold text-slate-700">
-            <input
-              type="checkbox"
-              checked={form.priorWta}
-              onChange={(event) => set("priorWta", event.target.checked)}
-              className="size-5 accent-western-600"
-            />{" "}
-            {profileFormContent.fields.priorWta.label}
-          </label>
+          <PriorParticipationCheckbox
+            checked={form.priorWta}
+            label={profileFormContent.fields.priorWta.label}
+            onChange={(checked) => set("priorWta", checked)}
+          />
 
           <div className="mt-6 space-y-5">
             <Field
