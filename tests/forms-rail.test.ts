@@ -1,0 +1,153 @@
+import { env } from 'cloudflare:workers';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { createCohort } from '../src/engine/weeks';
+import { signFormToken } from '../src/forms/token';
+import { app } from '../src/index';
+
+// Full form-rail flow against real D1: render, validate, submit, credit,
+// relay, verdict → review queue.
+
+let interviewerToken: string;
+let intervieweeToken: string;
+let sessionId: number;
+
+const post = (token: string, fields: Record<string, string>) =>
+  app.request(
+    `/f/${token}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(fields).toString(),
+    },
+    env,
+  );
+
+const INTERVIEWEE_OK: Record<string, string> = {
+  attendance_self: 'yes',
+  attendance_partner: 'yes',
+  camera_self: 'yes',
+  camera_partner: 'yes',
+  rating_experience: '5',
+  rating_communication: '4',
+  rating_preparedness: '5',
+  language: 'Python',
+  duration: '30-45 minutes',
+  video_url: 'https://zoom.example/rec/abc',
+  code: 'def solve():\n    return 42',
+  partner_feedback: 'Great hints, thanks!',
+};
+
+const INTERVIEWER_OK: Record<string, string> = {
+  attendance_self: 'yes',
+  attendance_partner: 'yes',
+  camera_self: 'yes',
+  camera_partner: 'yes',
+  rating_problem_solving: '4',
+  rating_communication: '4',
+  rating_code_quality: '3',
+  hints: 'few',
+  verdict: 'pass',
+  verdict_reason: 'Solid problem decomposition, clean code.',
+  strengths: 'Communicates the plan before coding.',
+  improvements: 'Test edge cases before declaring done.',
+};
+
+beforeAll(async () => {
+  // Roster + final-week session (idx 3 of 3 -> verdict feeds the review queue)
+  await env.DB.prepare(
+    `INSERT INTO participants (discord_id, name, preferred_email, topics, status)
+     VALUES ('201', 'Ivy Interviewer', 'ivy@example.com', '["dsa"]', 'active'),
+            ('202', 'Eve Interviewee', 'eve@example.com', '["dsa"]', 'active')`,
+  ).run();
+  const { weeks } = await createCohort(env, 'Rail Test', [2026, 9, 14]);
+  const week3 = weeks[2]!;
+  const ins = await env.DB.prepare(
+    `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, scheduled_at)
+     VALUES (?1, 1, 2, 'scheduled', '2026-09-30T23:00:00.000Z')`,
+  )
+    .bind(week3.id)
+    .run();
+  sessionId = Number(ins.meta.last_row_id);
+  const mk = async (kind: string, assignee: number) => {
+    const r = await env.DB.prepare(
+      `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at)
+       VALUES (?1, ?2, ?3, ?4, ?5)`,
+    )
+      .bind(kind, sessionId, assignee, crypto.randomUUID(), week3.grace_until)
+      .run();
+    return signFormToken(env.FORM_SIGNING_SECRET!, Number(r.meta.last_row_id), new Date(Date.now() + 86400_000));
+  };
+  interviewerToken = await mk('interviewer_report', 1);
+  intervieweeToken = await mk('interviewee_report', 2);
+});
+
+describe('form rail', () => {
+  it('renders the interviewee form with session context', async () => {
+    const res = await app.request(`/f/${intervieweeToken}`, {}, env);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Week 3');
+    expect(html).toContain('Ivy Interviewer');
+    expect(html).toContain('Paste the code you wrote');
+    expect(html).toContain('session recording');
+  });
+
+  it('rejects an incomplete submission with field errors', async () => {
+    const res = await post(intervieweeToken, { attendance_self: 'yes' });
+    expect(res.status).toBe(400);
+    const html = await res.text();
+    expect(html).toContain('Fix these');
+    expect(html).toContain('required');
+  });
+
+  it('accepts a full interviewee report and credits the side', async () => {
+    const res = await post(intervieweeToken, INTERVIEWEE_OK);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('Report submitted');
+    const s = await env.DB.prepare('SELECT interviewee_credited, state FROM sessions WHERE id = ?1')
+      .bind(sessionId)
+      .first<any>();
+    expect(s.interviewee_credited).toBe(1);
+    expect(s.state).toBe('scheduled'); // not completed until both reports in
+  });
+
+  it('accepts the interviewer report: completes the session, relays feedback, queues W3 review', async () => {
+    const res = await post(interviewerToken, INTERVIEWER_OK);
+    expect(res.status).toBe(200);
+    const s = await env.DB.prepare(
+      'SELECT interviewer_credited, interviewee_credited, state, review_state FROM sessions WHERE id = ?1',
+    )
+      .bind(sessionId)
+      .first<any>();
+    expect(s).toMatchObject({
+      interviewer_credited: 1,
+      interviewee_credited: 1,
+      state: 'completed',
+      review_state: 'pending', // W3 pass verdict -> review queue
+    });
+
+    // Shared feedback relayed both directions via outbox DMs
+    const { results: dms } = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'dm' AND payload LIKE '%Feedback from your session partner%'",
+    ).all<any>();
+    const targets = dms.map((d: any) => JSON.parse(d.payload).userId).sort();
+    expect(targets).toEqual(['201', '202']);
+    const toInterviewer = dms.map((d: any) => JSON.parse(d.payload)).find((p: any) => p.userId === '201');
+    expect(toInterviewer.message.content).toContain('Great hints');
+  });
+
+  it('supports revision until the deadline (last write wins, no double side effects)', async () => {
+    const res = await post(intervieweeToken, { ...INTERVIEWEE_OK, rating_experience: '3' });
+    expect(res.status).toBe(200);
+    const row = await env.DB.prepare(
+      "SELECT payload FROM form_instances WHERE kind = 'interviewee_report'",
+    ).first<any>();
+    expect(JSON.parse(row.payload).rating_experience).toBe('3');
+  });
+
+  it('404s tokens pointing at deleted/missing instances', async () => {
+    const ghost = await signFormToken(env.FORM_SIGNING_SECRET!, 99999, new Date(Date.now() + 60_000));
+    const res = await app.request(`/f/${ghost}`, {}, env);
+    expect(res.status).toBe(404);
+  });
+});

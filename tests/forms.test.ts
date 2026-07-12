@@ -10,15 +10,14 @@ describe('form rail', () => {
     expect(await res.text()).toContain('invalid or expired');
   });
 
-  it('accepts a valid token (M0 placeholder page)', async () => {
+  it('404s a valid token whose instance does not exist', async () => {
     const token = await signFormToken(
       env.FORM_SIGNING_SECRET!,
-      42,
+      424242,
       new Date(Date.now() + 60_000),
     );
     const res = await app.request(`/f/${token}`, {}, env);
-    expect(res.status).toBe(200);
-    expect(await res.text()).toContain('instance #42');
+    expect(res.status).toBe(404);
   });
 
   it('503s when the signing secret is missing', async () => {
