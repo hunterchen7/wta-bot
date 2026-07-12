@@ -9,5 +9,11 @@ export type Env = {
   // Comma-separated guild ids. Unset/empty = allow all (pre-setup only).
   // Foreign-guild interactions get an ephemeral refusal + the bot leaves.
   ALLOWED_GUILD_IDS?: string;
-  // M5: EMAIL: SendEmail (Email Service binding)
+  // Public base URL for links minted outside a request context (cron DMs).
+  PUBLIC_ORIGIN?: string;
+  // Outbox rows drained per tick (Discord/email sends). Default 20 — safe on
+  // the free plan's external-subrequest cap; raise on Workers Paid.
+  OUTBOX_BUDGET?: string;
+  // Email Service binding (M5+; optional until the domain is enabled).
+  EMAIL?: { send(message: unknown): Promise<void> };
 };

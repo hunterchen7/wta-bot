@@ -12,7 +12,11 @@
 
   // Guild allowlist — the app is public on Discord's side; this is the gate.
   // Comma-separate to add more servers (e.g. a separate dev guild).
-  "vars": { "ALLOWED_GUILD_IDS": "1124746819184906431" },
+  "vars": {
+    "ALLOWED_GUILD_IDS": "1124746819184906431",
+    "PUBLIC_ORIGIN": "https://wta.hunterchen.ca",
+    "OUTBOX_BUDGET": "20"
+  },
 
   "d1_databases": [
     {

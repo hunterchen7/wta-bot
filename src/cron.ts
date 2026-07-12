@@ -1,10 +1,18 @@
 import { COMMANDS } from './discord/commands';
+import { closeAndMatch, deadlineSweep, formDropScan, openOptin, optinReminder, scheduleNudge } from './engine/cycle';
+import { weeklyDigest } from './engine/digest';
+import { executeOutbox } from './engine/executor';
+import { drainOutbox } from './engine/outbox';
+import { repairScan } from './engine/repair';
+import { activeCohort, cohortStartTuple, cohortWeeks, weekAnchors } from './engine/weeks';
 import type { Env } from './env';
 
-// Single */15 cron tick (wrangler.jsonc). All real scheduling comes from the
-// weeks table so the program calendar is data, not cron expressions — DST-proof
-// and adjustable without redeploys. Each dispatched job records itself in
-// job_runs first (UNIQUE job_key), making ticks idempotent and safe to overlap.
+// Single */15 cron tick (wrangler.jsonc). The program calendar lives in the
+// weeks table, so scheduling survives DST, redeploys, and config changes.
+// Every dispatched event claims a unique job_runs key (idempotent), and all
+// heavy sends go through the outbox with a bounded per-tick budget.
+
+const STALE_HOURS = 72; // never fire an event more than 3 days late
 
 export async function tick(env: Env, now: Date): Promise<void> {
   const claimed = await claim(env, `tick:${now.toISOString().slice(0, 16)}`, now);
@@ -12,11 +20,47 @@ export async function tick(env: Env, now: Date): Promise<void> {
 
   await syncCommands(env).catch((err) => console.error('command sync failed:', err));
 
-  // M2+: read active cohort weeks and dispatch what's due, e.g.:
-  //   optin_open / optin_close / run_matching / schedule_nudge (Wed)
-  //   packet_delivery (T-24h scan) / form_drop (session start scan)
-  //   deadline_sweep / overdue_sweep / weekly_digest / dm_failure_email_retry
-  // Each job claims its own key, e.g. `optin_open:week:{id}`.
+  const origin = env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca';
+  const cohort = await activeCohort(env).catch(() => null);
+
+  if (cohort) {
+    const start = cohortStartTuple(cohort);
+    const weeks = await cohortWeeks(env, cohort.id);
+
+    const due = async (key: string, at: Date, fn: () => Promise<unknown>) => {
+      if (now.getTime() < at.getTime()) return;
+      if (!(await claim(env, key, now))) return;
+      if (now.getTime() > at.getTime() + STALE_HOURS * 3600_000) return; // claimed, never fires late
+      await fn().catch((err) => console.error(`job ${key} failed:`, err));
+    };
+
+    for (const w of weeks) {
+      const a = weekAnchors(start, w.idx);
+      await due(`optin_open:${w.id}`, new Date(w.optin_opens_at), () => openOptin(env, w));
+      await due(`optin_remind:${w.id}`, a.optin_remind_at, () => optinReminder(env, w));
+      await due(`match:${w.id}`, new Date(w.match_at), () => closeAndMatch(env, w, cohort));
+      await due(`nudge:${w.id}`, a.nudge_at, () => scheduleNudge(env, w));
+      await due(`digest:${w.id}`, a.digest_at, () => weeklyDigest(env, w));
+    }
+
+    await formDropScan(env, origin, now).catch((err) => console.error('formDropScan failed:', err));
+    await deadlineSweep(env, origin, now).catch((err) => console.error('deadlineSweep failed:', err));
+    await repairScan(env, now).catch((err) => console.error('repairScan failed:', err));
+  }
+
+  const budget = Math.max(1, Number(env.OUTBOX_BUDGET ?? 20) || 20);
+  await drainOutbox(env, executeOutbox, budget, now);
+}
+
+export async function claim(env: Env, jobKey: string, now: Date): Promise<boolean> {
+  try {
+    await env.DB.prepare('INSERT INTO job_runs (job_key, ran_at) VALUES (?1, ?2)')
+      .bind(jobKey, now.toISOString())
+      .run();
+    return true;
+  } catch {
+    return false; // already ran
+  }
 }
 
 /** Self-syncs slash-command definitions to Discord (global) whenever the
@@ -44,15 +88,4 @@ export async function syncCommands(env: Env): Promise<'skipped' | 'unchanged' | 
     .bind(desired)
     .run();
   return 'synced';
-}
-
-async function claim(env: Env, jobKey: string, now: Date): Promise<boolean> {
-  try {
-    await env.DB.prepare('INSERT INTO job_runs (job_key, ran_at) VALUES (?1, ?2)')
-      .bind(jobKey, now.toISOString())
-      .run();
-    return true;
-  } catch {
-    return false; // already ran
-  }
 }
