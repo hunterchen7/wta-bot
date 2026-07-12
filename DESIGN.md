@@ -10,7 +10,7 @@ Items marked **[OPEN]** are defaults awaiting Hunter's confirmation. Everything 
 - A **session** is one directed interview: `interviewer → interviewee`. Weekly matching gives every active participant two *different* partners (one per role). Your interviewer and your interviewee in the same week are never the same person, and you never meet the same counterpart twice in a cohort (either direction, repairs included).
 - Missed weeks are made up by **doubling**: per-role deficits are tracked, and weekly demand per role is `min(1 + deficit, 2)`.
 - **Alumni-round eligibility** = 6/6 sessions completed **and the week-3 interview passed**, where "passed" has two parts: (a) the week-3 interviewer's report marks an explicit **pass verdict**, and (b) organizers verify the session recording. v1 automates the workflow around (b) — a review queue with video links and one-click verify/flag — while the watching stays human; §13 sketches the AI-assisted triage that replaces most watching later (deliberately low priority). Scheduling with actual alumni stays manual in v1. **[OPEN — confirm scope]**
-- Roles: **Participant** (enrolled student), **Organizer** (Discord role, gets admin commands + digest channel). Alumni-facing features are v2.
+- Roles: **Member** (verified human — see §14), **Participant** (enrolled student), **Organizer** (Discord role, gets admin commands + digest channel). Alumni-facing features are v2.
 
 ## 2. Weekly lifecycle
 
@@ -144,7 +144,17 @@ Replaces most organizer video-watching with automated triage; humans keep the fi
 - **Output:** score + confidence + timestamped flags ("check 12:30–14:00"). High-confidence passes auto-clear; everything else lands in the §11 review queue marked **suspicious** with pointers, so organizers watch minutes, not hours.
 - **Principles:** the AI never fails anyone — it only clears or escalates to humans; every auto-clear is logged and spot-checkable; rubric and thresholds live in `settings`.
 
-## 14. Open knobs (recap)
+## 14. Verification gate (anti-spam onboarding)
+
+Low-effort human check on the existing server (no new server, no KYC):
+
+- **Native layer (no code):** Community enabled, Verification Level **Medium**, AutoMod presets on.
+- **Bot layer:** `@everyone` sees only #start-here. A persistent bot panel there has a **Verify** button → 2-field modal (name + "what brings you here?") → grants the **Member** role (+ optional intro embed posted to #introductions). Multi-step interaction defeats join-spam; humans clear it in ~20s.
+- `/join` remains the separate program gate (→ Participant role). Member ≠ Participant.
+- **Admin:** `/setup verify` posts/refreshes the panel and stores role/channel ids in `settings`; `/verify backfill` grants Member to all existing members once before @everyone is locked (requires Server Members Intent toggled on in the dev portal for the REST member list — instant at <10k users; harmless for a webhook-only bot).
+- Bot role must sit above Member/Participant in the role hierarchy.
+
+## 15. Open knobs (recap)
 
 1. Weekly schedule anchors (which days) + report deadline style (end-of-week vs 48h-after).
 2. Both reports required — confirmed? (Design assumes yes.)
