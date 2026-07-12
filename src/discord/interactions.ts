@@ -102,6 +102,34 @@ async function handleCommand(c: Ctx, interaction: Interaction) {
       );
     }
 
+    case 'roster': {
+      if (!hasPermission(interaction, ADMINISTRATOR) && !hasPermission(interaction, MANAGE_GUILD)) {
+        return c.json(ephemeral('Organizers only.'));
+      }
+      const stats = await c.env.DB.prepare(
+        `SELECT count(*) AS total,
+                sum(CASE WHEN topics IS NOT NULL THEN 1 ELSE 0 END) AS complete,
+                sum(CASE WHEN status != 'active' THEN 1 ELSE 0 END) AS inactive
+         FROM participants`,
+      ).first<{ total: number; complete: number | null; inactive: number | null }>();
+      const { results: recent } = await c.env.DB.prepare(
+        'SELECT name, discord_id, created_at FROM participants ORDER BY id DESC LIMIT 5',
+      ).all<{ name: string | null; discord_id: string; created_at: string }>();
+      const total = stats?.total ?? 0;
+      const complete = stats?.complete ?? 0;
+      const lines = recent.map(
+        (r) => `• ${r.name ?? 'unnamed'} (<@${r.discord_id}>) — ${r.created_at.slice(0, 16)} UTC`,
+      );
+      return c.json(
+        ephemeral(
+          `**Enrollment** — ${total} signed up, ${complete} complete profiles, ${total - complete} partial` +
+            `${(stats?.inactive ?? 0) > 0 ? `, ${stats?.inactive} inactive` : ''}` +
+            (lines.length ? `\n**Most recent:**\n${lines.join('\n')}` : '\nNo sign-ups yet.') +
+            `\nFull data: \`/export\``,
+        ),
+      );
+    }
+
     case 'optout':
     case 'cancel':
     case 'report':

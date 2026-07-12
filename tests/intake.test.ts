@@ -255,3 +255,31 @@ describe('/export', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('/roster', () => {
+  it('denies non-organizers and summarizes for organizers', async () => {
+    const denied = await sendInteraction(signer, command('roster', asUser('1')));
+    expect(((await denied.json()) as any).data.content).toContain('Organizers only');
+
+    await sendInteraction(
+      signer,
+      modalSubmit(
+        'join:m1',
+        [
+          textField('name', 'Roster Person'),
+          textField('preferred_email', 'r@example.com'),
+          textField('western_email', 'r@uwo.ca'),
+          textField('blurb', 'x'),
+        ],
+        '313131',
+      ),
+    );
+
+    const res = await sendInteraction(signer, command('roster', asAdmin('999')));
+    const content = ((await res.json()) as any).data.content as string;
+    expect(content).toContain('Enrollment');
+    expect(content).toMatch(/\d+ signed up/);
+    expect(content).toContain('Roster Person');
+    expect(content).toContain('partial');
+  });
+});

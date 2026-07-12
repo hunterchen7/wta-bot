@@ -32,6 +32,11 @@ export const COMMANDS: Command[] = [
     default_member_permissions: '32', // MANAGE_GUILD — hidden from regular members
   },
   {
+    name: 'roster',
+    description: 'Organizers: enrollment summary at a glance',
+    default_member_permissions: '32',
+  },
+  {
     name: 'report',
     description: 'Report a session problem to the organizers',
     options: [
