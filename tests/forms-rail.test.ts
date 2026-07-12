@@ -105,7 +105,9 @@ describe('form rail', () => {
     expect(form.fields.map((field: any) => field.label)).toEqual(expect.arrayContaining([
       expect.stringContaining('Copy the code'), expect.stringContaining('session recording'),
     ]));
-    expect(form.fields.map((field: any) => field.id)).not.toContain('language');
+    const fieldIds = form.fields.map((field: any) => field.id);
+    expect(fieldIds).not.toContain('language');
+    expect(fieldIds.indexOf('code')).toBe(fieldIds.indexOf('video_url') + 1);
   });
 
   it('rejects an incomplete submission with field errors', async () => {

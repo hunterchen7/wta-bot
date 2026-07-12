@@ -72,6 +72,7 @@ export const INTERVIEWEE_FIELDS: Field[] = [
     required: true,
     help: 'Upload the recording directly, or use an existing Zoom, Meet, or Drive link.',
   },
+  { id: 'code', label: 'Copy the code that you wrote', type: 'textarea', required: true, mono: true },
   {
     id: 'org_note',
     label: "Anything else you'd like us to know?",
@@ -85,7 +86,6 @@ export const INTERVIEWEE_FIELDS: Field[] = [
     shared: true,
     help: 'Your interviewer WILL see this once both of you have submitted.',
   },
-  { id: 'code', label: 'Copy the code that you wrote', type: 'textarea', required: true, mono: true },
   {
     id: 'confirmation',
     label: 'I have re-read this form and confirmed that everything I entered is correct.',
