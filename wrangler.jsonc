@@ -19,7 +19,8 @@
     // Emails that get organizer views on the dashboard (comma-separated)
     "DASHBOARD_ADMINS": "",
     // Sender — must belong to the Email Service onboarded domain
-    "EMAIL_FROM": "hello@wta.hunterchen.ca"
+    "EMAIL_FROM": "hello@wta.hunterchen.ca",
+    "EMAIL_FROM_NAME": "Western Tech Alumni"
   },
 
   // Cloudflare Email Service (structured send API): env.EMAIL.send({to, from, subject, text})

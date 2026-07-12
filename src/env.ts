@@ -20,8 +20,8 @@ export type Env = {
   // Email Service binding (optional until the domain is onboarded in the dash).
   EMAIL?: {
     send(message: {
-      to: string;
-      from: string;
+      to: string | { email: string; name?: string };
+      from: string | { email: string; name?: string };
       subject: string;
       text?: string;
       html?: string;
@@ -29,4 +29,6 @@ export type Env = {
   };
   // Sender address — must belong to the onboarded Email Service domain.
   EMAIL_FROM?: string;
+  // Display name shown to recipients (defaults to "Western Tech Alumni").
+  EMAIL_FROM_NAME?: string;
 };
