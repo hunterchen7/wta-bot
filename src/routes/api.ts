@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Env } from '../env';
-import { EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
+import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
 import { signToken } from '../forms/token';
 import { updateParticipantSettings, type ParticipantSettingsInput } from '../services/participant-settings';
 import { sessionFrom } from './web';
@@ -102,6 +102,7 @@ api.get('/api/dashboard', async (c) => {
       };
     }),
     owedReports,
+    minimumBlurbWords: BLURB_MIN_WORDS,
     options: {
       years: YEARS,
       programs: PROGRAMS,

@@ -11,6 +11,10 @@ import {
   PublicShell,
   publicInputClass,
 } from "../components/PublicShell";
+import {
+  profileBlurbHelp,
+  profileFormContent,
+} from "../profile-form-content";
 
 type EnrollmentData = {
   discord: { id: string; username: string | null };
@@ -216,11 +220,14 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
       ) : null}
       <form onSubmit={submit} className="space-y-5">
         <Section
-          title="Identity"
-          description="Used for your dashboard, program messages, and organizer records."
+          title={profileFormContent.sections.profile.title}
+          description={profileFormContent.sections.profile.description}
         >
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Full name" error={fieldErrors.name}>
+            <Field
+              label={profileFormContent.fields.name.label}
+              error={fieldErrors.name}
+            >
               <input
                 name="name"
                 required
@@ -231,8 +238,8 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
               />
             </Field>
             <Field
-              label="Preferred email"
-              help="Dashboard login and optional reminders."
+              label={profileFormContent.fields.preferredEmail.label}
+              help={profileFormContent.fields.preferredEmail.help}
               error={fieldErrors.preferredEmail}
             >
               <input
@@ -244,7 +251,10 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
                 className={fieldClass(fieldErrors.preferredEmail)}
               />
             </Field>
-            <Field label="Western email" error={fieldErrors.westernEmail}>
+            <Field
+              label={profileFormContent.fields.westernEmail.label}
+              error={fieldErrors.westernEmail}
+            >
               <input
                 name="westernEmail"
                 required
@@ -254,7 +264,10 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
                 className={fieldClass(fieldErrors.westernEmail)}
               />
             </Field>
-            <Field label="Incoming year" error={fieldErrors.year}>
+            <Field
+              label={profileFormContent.fields.year.label}
+              error={fieldErrors.year}
+            >
               <select
                 name="year"
                 required
@@ -262,13 +275,16 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
                 onChange={(event) => set("year", event.target.value)}
                 className={fieldClass(fieldErrors.year)}
               >
-                <option value="">Choose…</option>
+                <option value="">{profileFormContent.selectPlaceholder}</option>
                 {data.options.years.map((value) => (
                   <option key={value}>{value}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Program" error={fieldErrors.program}>
+            <Field
+              label={profileFormContent.fields.program.label}
+              error={fieldErrors.program}
+            >
               <select
                 name="program"
                 required
@@ -276,14 +292,14 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
                 onChange={(event) => set("program", event.target.value)}
                 className={fieldClass(fieldErrors.program)}
               >
-                <option value="">Choose…</option>
+                <option value="">{profileFormContent.selectPlaceholder}</option>
                 {data.options.programs.map((value) => (
                   <option key={value}>{value}</option>
                 ))}
               </select>
             </Field>
             <Field
-              label="Technical interviews completed"
+              label={profileFormContent.fields.experience.label}
               error={fieldErrors.experience}
             >
               <select
@@ -293,7 +309,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
                 onChange={(event) => set("experience", event.target.value)}
                 className={fieldClass(fieldErrors.experience)}
               >
-                <option value="">Choose…</option>
+                <option value="">{profileFormContent.selectPlaceholder}</option>
                 {data.options.experience.map((value) => (
                   <option key={value}>{value}</option>
                 ))}
@@ -302,12 +318,12 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
           </div>
         </Section>
         <Section
-          title="Goals"
-          description="Choose everything that applies; these answers help shape matching and workshops."
+          title={profileFormContent.sections.goals.title}
+          description={profileFormContent.sections.goals.description}
         >
           <Choices
             field="opportunities"
-            title="What opportunities are you targeting?"
+            title={profileFormContent.fields.opportunities.label}
             choices={data.options.opportunities}
             selected={form.opportunities}
             error={fieldErrors.opportunities}
@@ -315,7 +331,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
           />
           <Choices
             field="topics"
-            title="Which topics would help most?"
+            title={profileFormContent.fields.topics.label}
             choices={data.options.topics}
             selected={form.topics}
             error={fieldErrors.topics}
@@ -328,16 +344,19 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
               onChange={(event) => set("priorWta", event.target.checked)}
               className="size-5 accent-western-600"
             />
-            I participated in WTA before
+            {profileFormContent.fields.priorWta.label}
           </label>
         </Section>
         <Section
-          title="Context"
-          description="Give organizers enough signal to understand your goals and design useful sessions."
+          title={profileFormContent.sections.context.title}
+          description={profileFormContent.sections.context.description}
         >
           <Field
-            label="Imagine your ideal role after graduation. Where would you work, what would you build, and why?"
-            help={`Describe the company, team, or kind of organization; the problems or products you want to work on; the skills you hope to use or develop; and why that work matters to you. Specific answers are much more useful than a company name alone. ${wordCount(form.blurb)} / ${data.minimumBlurbWords} minimum words.`}
+            label={profileFormContent.fields.blurb.label}
+            help={profileBlurbHelp(
+              wordCount(form.blurb),
+              data.minimumBlurbWords,
+            )}
             error={fieldErrors.blurb}
           >
             <textarea
@@ -348,12 +367,12 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
               value={form.blurb}
               onChange={(event) => set("blurb", event.target.value)}
               className={fieldClass(fieldErrors.blurb)}
-              placeholder="For example: the kind of team you would join, what you would be responsible for, which problems excite you, and what you want to learn…"
+              placeholder={profileFormContent.fields.blurb.placeholder}
             />
           </Field>
           <div className="mt-5">
             <Field
-              label="Anything else you want to learn?"
+              label={profileFormContent.fields.interests.label}
               error={fieldErrors.interests}
             >
               <textarea
@@ -368,7 +387,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
           </div>
           <div className="mt-5">
             <Field
-              label="Feedback from prior WTA sessions"
+              label={profileFormContent.fields.priorFeedback.label}
               error={fieldErrors.priorFeedback}
             >
               <textarea
@@ -383,8 +402,8 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
           </div>
         </Section>
         <Section
-          title="Email reminders"
-          description="Discord remains the primary channel."
+          title={profileFormContent.sections.notifications.title}
+          description={profileFormContent.sections.notifications.description}
         >
           <label
             className={`flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition focus-within:ring-2 focus-within:ring-western-500 focus-within:ring-offset-2 dark:focus-within:ring-offset-background ${form.emailOk ? "border-western-300 bg-western-50 dark:border-western-700 dark:bg-western-950/35" : "border-slate-200 hover:bg-slate-50 dark:border-border dark:hover:bg-accent"}`}
@@ -399,13 +418,12 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
               <span
                 className={`block text-sm font-black ${form.emailOk ? "text-western-950 dark:text-western-100" : "text-slate-900"}`}
               >
-                Email me program reminders
+                {profileFormContent.emailOptIn.label}
               </span>
               <span
                 className={`mt-1 block text-xs leading-5 ${form.emailOk ? "text-western-800/80 dark:text-western-300/75" : "text-slate-500"}`}
               >
-                Pairings, opt-in reminders, and overdue-report alerts. Saving an
-                opt-in sends a confirmation email.
+                {profileFormContent.emailOptIn.description}
               </span>
             </span>
           </label>

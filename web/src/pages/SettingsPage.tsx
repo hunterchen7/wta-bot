@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useBlocker } from "react-router-dom";
 import { useDashboard } from "../dashboard-context";
 import { saveSettings, SettingsSaveError, type SettingsPayload } from "../api";
+import {
+  profileBlurbHelp,
+  profileFormContent,
+} from "../profile-form-content";
 
 export function SettingsPage() {
   const { data, refresh } = useDashboard();
@@ -114,8 +118,8 @@ export function SettingsPage() {
 
       <form className="space-y-6" onSubmit={(event) => void submit(event)}>
         <Card
-          title="Notifications"
-          description="Choose whether key reminders also arrive by email."
+          title={profileFormContent.sections.notifications.title}
+          description={profileFormContent.sections.notifications.description}
         >
           <label className="flex cursor-pointer items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <input
@@ -126,22 +130,24 @@ export function SettingsPage() {
             />
             <span>
               <span className="block font-bold text-slate-900">
-                Email me reminders alongside Discord
+                {profileFormContent.emailOptIn.label}
               </span>
               <span className="mt-1 block text-sm leading-6 text-slate-500">
-                Pairings, opt-in reminders, and overdue reports. Turning this on
-                and saving sends a confirmation email.
+                {profileFormContent.emailOptIn.description}
               </span>
             </span>
           </label>
         </Card>
 
         <Card
-          title="Profile"
-          description="These answers are shared with your /join profile."
+          title={profileFormContent.sections.profile.title}
+          description={profileFormContent.sections.profile.description}
         >
           <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Full name" error={fieldErrors.name}>
+            <Field
+              label={profileFormContent.fields.name.label}
+              error={fieldErrors.name}
+            >
               <input
                 name="name"
                 aria-invalid={Boolean(fieldErrors.name)}
@@ -153,8 +159,8 @@ export function SettingsPage() {
               />
             </Field>
             <Field
-              label="Preferred email"
-              help="Used for dashboard login and reminders."
+              label={profileFormContent.fields.preferredEmail.label}
+              help={profileFormContent.fields.preferredEmail.help}
               error={fieldErrors.preferredEmail}
             >
               <input
@@ -168,7 +174,10 @@ export function SettingsPage() {
                 className={fieldClass(fieldErrors.preferredEmail)}
               />
             </Field>
-            <Field label="Western email" error={fieldErrors.westernEmail}>
+            <Field
+              label={profileFormContent.fields.westernEmail.label}
+              error={fieldErrors.westernEmail}
+            >
               <input
                 name="westernEmail"
                 aria-invalid={Boolean(fieldErrors.westernEmail)}
@@ -180,7 +189,10 @@ export function SettingsPage() {
                 className={fieldClass(fieldErrors.westernEmail)}
               />
             </Field>
-            <Field label="Incoming year" error={fieldErrors.year}>
+            <Field
+              label={profileFormContent.fields.year.label}
+              error={fieldErrors.year}
+            >
               <select
                 name="year"
                 aria-invalid={Boolean(fieldErrors.year)}
@@ -189,13 +201,16 @@ export function SettingsPage() {
                 onChange={(event) => set("year", event.target.value)}
                 className={fieldClass(fieldErrors.year)}
               >
-                <option value="">Choose…</option>
+                <option value="">{profileFormContent.selectPlaceholder}</option>
                 {data.options.years.map((item) => (
                   <option key={item}>{item}</option>
                 ))}
               </select>
             </Field>
-            <Field label="Program" error={fieldErrors.program}>
+            <Field
+              label={profileFormContent.fields.program.label}
+              error={fieldErrors.program}
+            >
               <select
                 name="program"
                 aria-invalid={Boolean(fieldErrors.program)}
@@ -204,14 +219,14 @@ export function SettingsPage() {
                 onChange={(event) => set("program", event.target.value)}
                 className={fieldClass(fieldErrors.program)}
               >
-                <option value="">Choose…</option>
+                <option value="">{profileFormContent.selectPlaceholder}</option>
                 {data.options.programs.map((item) => (
                   <option key={item}>{item}</option>
                 ))}
               </select>
             </Field>
             <Field
-              label="Technical interviews completed"
+              label={profileFormContent.fields.experience.label}
               error={fieldErrors.experience}
             >
               <select
@@ -222,7 +237,7 @@ export function SettingsPage() {
                 onChange={(event) => set("experience", event.target.value)}
                 className={fieldClass(fieldErrors.experience)}
               >
-                <option value="">Choose…</option>
+                <option value="">{profileFormContent.selectPlaceholder}</option>
                 {data.options.experience.map((item) => (
                   <option key={item}>{item}</option>
                 ))}
@@ -232,7 +247,7 @@ export function SettingsPage() {
 
           <ChoiceGroup
             field="opportunities"
-            title="What are you looking for?"
+            title={profileFormContent.fields.opportunities.label}
             choices={data.options.opportunities}
             selected={form.opportunities}
             error={fieldErrors.opportunities}
@@ -240,7 +255,7 @@ export function SettingsPage() {
           />
           <ChoiceGroup
             field="topics"
-            title="Topics that would help most"
+            title={profileFormContent.fields.topics.label}
             choices={data.options.topics}
             selected={form.topics}
             error={fieldErrors.topics}
@@ -253,13 +268,16 @@ export function SettingsPage() {
               onChange={(event) => set("priorWta", event.target.checked)}
               className="size-5 accent-western-600"
             />{" "}
-            I participated in WTA before
+            {profileFormContent.fields.priorWta.label}
           </label>
 
           <div className="mt-6 space-y-5">
             <Field
-              label="Imagine your ideal role after graduation. Where would you work, what would you build, and why?"
-              help={`Describe the organization, team, problems, skills, and motivation that make the role compelling to you. ${wordCount(form.blurb)} / 100 minimum words.`}
+              label={profileFormContent.fields.blurb.label}
+              help={profileBlurbHelp(
+                wordCount(form.blurb),
+                data.minimumBlurbWords,
+              )}
               error={fieldErrors.blurb}
             >
               <textarea
@@ -271,10 +289,11 @@ export function SettingsPage() {
                 value={form.blurb}
                 onChange={(event) => set("blurb", event.target.value)}
                 className={fieldClass(fieldErrors.blurb)}
+                placeholder={profileFormContent.fields.blurb.placeholder}
               />
             </Field>
             <Field
-              label="Anything else you want to learn?"
+              label={profileFormContent.fields.interests.label}
               error={fieldErrors.interests}
             >
               <textarea
@@ -288,7 +307,7 @@ export function SettingsPage() {
               />
             </Field>
             <Field
-              label="Feedback from last year"
+              label={profileFormContent.fields.priorFeedback.label}
               error={fieldErrors.priorFeedback}
             >
               <textarea

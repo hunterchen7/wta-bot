@@ -79,6 +79,7 @@ describe('participant dashboard API', () => {
     expect(await response.json<any>()).toMatchObject({
       participant: { name: 'Stu Dent', discordId: '401', discordUsername: 'student.user', discordNickname: 'Stu Nick', preferredEmail: 'stu@example.com' },
       viewer: { participantId: STUDENT_ID, organizer: false },
+      minimumBlurbWords: 100,
     });
   });
 

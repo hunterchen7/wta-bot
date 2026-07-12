@@ -34,6 +34,7 @@ export type DashboardData = {
     state: string;
   }>;
   owedReports: Array<{ id: number; kind: string; deadlineAt: string; url: string }>;
+  minimumBlurbWords: number;
   options: {
     years: string[];
     programs: string[];
