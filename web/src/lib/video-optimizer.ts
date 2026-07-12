@@ -79,7 +79,7 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
   if (signal.aborted) throw new DOMException('Optimization canceled.', 'AbortError');
   const benchmarkElapsed = performance.now() - benchmarkStarted;
   const projectedEncodingMs = benchmarkElapsed / BENCHMARK_CLIP_SECONDS * analysis.duration * BENCHMARK_SAFETY_FACTOR;
-  if (performance.now() - optimizationStarted + projectedEncodingMs > MAX_OPTIMIZATION_MS) {
+  if (performance.now() - optimizationStarted + projectedEncodingMs > MAX_PROJECTED_OPTIMIZATION_MS) {
     throw new Error('The full recording would take too long to optimize on this device.');
   }
 
@@ -110,14 +110,14 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
     });
     if (!conversion.isValid) throw new Error('This browser cannot encode the selected video. Upload the original instead.');
     conversion.onProgress = (progress) => onProgress(Math.min(BENCHMARK_PROGRESS_SHARE + progress * (1 - BENCHMARK_PROGRESS_SHARE), 0.995));
-    const remainingBudget = Math.max(1, MAX_OPTIMIZATION_MS - (performance.now() - optimizationStarted));
+    const remainingBudget = Math.max(1, HARD_OPTIMIZATION_LIMIT_MS - (performance.now() - optimizationStarted));
     const budgetTimeout = window.setTimeout(() => { budgetExceeded = true; void conversion?.cancel(); }, remainingBudget);
     try {
       await conversion.execute();
     } finally {
       window.clearTimeout(budgetTimeout);
     }
-    if (budgetExceeded) throw new Error('Local optimization exceeded its two-minute limit.');
+    if (budgetExceeded) throw new Error('Local optimization exceeded its five-minute limit.');
     if (signal.aborted) throw new DOMException('Optimization canceled.', 'AbortError');
     onProgress(1);
     const optimized = await handle.getFile();
@@ -135,7 +135,8 @@ export async function optimizeVideo(file: File, analysis: VideoAnalysis, onProgr
   }
 }
 
-const MAX_OPTIMIZATION_MS = 120_000;
+const MAX_PROJECTED_OPTIMIZATION_MS = 180_000;
+const HARD_OPTIMIZATION_LIMIT_MS = 300_000;
 const BENCHMARK_CLIP_SECONDS = 3;
 const BENCHMARK_WALL_LIMIT_MS = 8_000;
 const BENCHMARK_SAFETY_FACTOR = 1.25;
