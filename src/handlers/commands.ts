@@ -103,6 +103,12 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
     case 'participant':
       return participantCommand(c, interaction);
 
+    case 'pair':
+      return pairCommand(c, interaction);
+
+    case 'repair':
+      return repairCommand(c, interaction);
+
     case 'problems':
       return problemsCommand(c, interaction);
 
@@ -425,6 +431,74 @@ async function excuseCommand(c: Ctx, interaction: Interaction) {
   if (!latest) return c.json(ephemeral('No open/confirmed incidents to excuse.'));
   const message = await resolveCase(c.env, p.id, 'excuse', latest.id);
   return c.json(ephemeral(message));
+}
+
+/** The round that's currently in play (or the nearest one). */
+async function currentWeek(c: Ctx): Promise<any | null> {
+  const cohort = await activeCohort(c.env);
+  if (!cohort) return null;
+  const weeks = await cohortWeeks(c.env, cohort.id);
+  const now = Date.now();
+  return (
+    weeks.find(
+      (w) =>
+        now >= new Date(w.optin_opens_at).getTime() &&
+        now <= new Date(w.grace_until ?? w.reports_due_at).getTime(),
+    ) ??
+    weeks.find((w) => now < new Date(w.optin_opens_at).getTime()) ??
+    weeks[weeks.length - 1] ??
+    null
+  );
+}
+
+async function pairCommand(c: Ctx, interaction: Interaction) {
+  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
+  const opts = interaction.data?.options as Opt[] | undefined;
+  const interviewerDiscord = String(optVal(opts, 'interviewer') ?? '');
+  const intervieweeDiscord = String(optVal(opts, 'interviewee') ?? '');
+  if (interviewerDiscord === intervieweeDiscord) return c.json(ephemeral('Two different people, please.'));
+
+  const lookup = (d: string) =>
+    c.env.DB.prepare("SELECT id, name, status FROM participants WHERE discord_id = ?1").bind(d).first<any>();
+  const interviewer = await lookup(interviewerDiscord);
+  const interviewee = await lookup(intervieweeDiscord);
+  if (!interviewer || !interviewee) return c.json(ephemeral('Both people must be enrolled (`/join`).'));
+  if (interviewer.status !== 'active' || interviewee.status !== 'active') {
+    return c.json(ephemeral(`Both must be active (currently: ${interviewer.status} / ${interviewee.status}).`));
+  }
+  const week = await currentWeek(c);
+  if (!week) return c.json(ephemeral('No active cohort — `/setup cohort` first.'));
+
+  const { pairedBefore, spawnSession } = await import('../engine/repair');
+  const repeat = await pairedBefore(c.env, week.id, interviewer.id, interviewee.id);
+  const sessionId = await spawnSession(c.env, week.id, interviewer.id, interviewee.id, 'manual');
+  return c.json(
+    ephemeral(
+      `✅ Session #${sessionId} created (round ${week.idx}): **${interviewer.name}** interviews **${interviewee.name}**. Thread + DMs are on their way.` +
+        (repeat ? '\n⚠️ Heads-up: these two have been paired before — the matcher would never do this, but you\'re the boss.' : ''),
+    ),
+  );
+}
+
+async function repairCommand(c: Ctx, interaction: Interaction) {
+  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
+  const opts = interaction.data?.options as Opt[] | undefined;
+  const target = String(optVal(opts, 'user') ?? '');
+  const need = String(optVal(opts, 'need') ?? '');
+  if (need !== 'interviewer' && need !== 'interviewee') return c.json(ephemeral('Pick what they need.'));
+  const p = await c.env.DB.prepare("SELECT id, name, status FROM participants WHERE discord_id = ?1")
+    .bind(target)
+    .first<any>();
+  if (!p) return c.json(ephemeral('Not on the roster.'));
+  const week = await currentWeek(c);
+  if (!week) return c.json(ephemeral('No active cohort.'));
+  const { enqueueRepair } = await import('../engine/repair');
+  await enqueueRepair(c.env, week.id, p.id, need);
+  return c.json(
+    ephemeral(
+      `🛠️ **${p.name}** queued: needs ${need === 'interviewer' ? 'someone to interview them' : 'someone to interview'}. The repair scan pairs them with a complementary victim or standby volunteer within ~15 minutes of one existing.`,
+    ),
+  );
 }
 
 async function problemsCommand(c: Ctx, interaction: Interaction) {

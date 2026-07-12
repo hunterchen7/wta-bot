@@ -145,6 +145,33 @@ export const COMMANDS: Command[] = [
     default_member_permissions: '32',
   },
   {
+    name: 'pair',
+    description: 'Organizers: manually pair two participants (catch-up session)',
+    default_member_permissions: '32',
+    options: [
+      { type: USER, name: 'interviewer', description: 'Who interviews', required: true },
+      { type: USER, name: 'interviewee', description: 'Who gets interviewed', required: true },
+    ],
+  },
+  {
+    name: 'repair',
+    description: 'Organizers: queue someone for an automatic repair pairing',
+    default_member_permissions: '32',
+    options: [
+      { type: USER, name: 'user', description: 'Who needs a session', required: true },
+      {
+        type: STRING,
+        name: 'need',
+        description: 'What they need',
+        required: true,
+        choices: [
+          { name: 'an interviewer (they get interviewed)', value: 'interviewer' },
+          { name: 'an interviewee (they interview)', value: 'interviewee' },
+        ],
+      },
+    ],
+  },
+  {
     name: 'problems',
     description: 'Organizers: manage the problem bank',
     default_member_permissions: '32',

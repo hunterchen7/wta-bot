@@ -95,7 +95,7 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
   return created;
 }
 
-async function pairedBefore(env: Env, weekId: number, a: number, b: number): Promise<boolean> {
+export async function pairedBefore(env: Env, weekId: number, a: number, b: number): Promise<boolean> {
   const row = await env.DB.prepare(
     `SELECT 1 AS x FROM sessions s
      JOIN weeks w ON w.id = s.week_id
@@ -116,16 +116,27 @@ async function createRepairSession(
   intervieweeId: number,
   queueIds: number[],
 ): Promise<void> {
-  const ins = await env.DB.prepare(
-    `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, origin)
-     VALUES (?1, ?2, ?3, 'pending_schedule', 'repair')`,
-  )
-    .bind(weekId, interviewerId, intervieweeId)
-    .run();
-  const sessionId = Number(ins.meta.last_row_id);
+  await spawnSession(env, weekId, interviewerId, intervieweeId, 'repair');
   for (const qid of queueIds) {
     await env.DB.prepare("UPDATE repair_queue SET state = 'matched' WHERE id = ?1").bind(qid).run();
   }
+}
+
+/** Create a session with its thread + partner DMs — repairs and /pair share it. */
+export async function spawnSession(
+  env: Env,
+  weekId: number,
+  interviewerId: number,
+  intervieweeId: number,
+  origin: 'repair' | 'manual',
+): Promise<number> {
+  const ins = await env.DB.prepare(
+    `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, origin)
+     VALUES (?1, ?2, ?3, 'pending_schedule', ?4)`,
+  )
+    .bind(weekId, interviewerId, intervieweeId, origin)
+    .run();
+  const sessionId = Number(ins.meta.last_row_id);
 
   const week = await getWeek(env, weekId);
   const people = await env.DB.prepare(
@@ -137,15 +148,16 @@ async function createRepairSession(
   const interviewee = people.results.find((p) => p.id === intervieweeId)!;
   const deadline = week?.grace_until ?? week?.reports_due_at ?? new Date().toISOString();
 
+  const label = origin === 'repair' ? 'Repair pairing' : 'Catch-up pairing (organizer-arranged)';
   const cfg = await getSettings(env, ['threads_channel_id']);
   if (cfg.threads_channel_id) {
     await enqueue(env, 'thread_create', {
       sessionId,
       channelId: cfg.threads_channel_id,
-      name: `r${week?.idx ?? '?'} repair · ${interviewer.name ?? 'interviewer'} → ${interviewee.name ?? 'interviewee'}`,
+      name: `r${week?.idx ?? '?'} ${origin} · ${interviewer.name ?? 'interviewer'} → ${interviewee.name ?? 'interviewee'}`,
       starter: {
         content:
-          `🛠️ **Repair pairing** — <@${interviewer.discord_id}> interviews <@${interviewee.discord_id}> (replacing a broken session).\n` +
+          `🛠️ **${label}** — <@${interviewer.discord_id}> interviews <@${interviewee.discord_id}>.\n` +
           `Agree on a time and hit **Scheduled ✅** — everything due ${discordTime(deadline)}.`,
         components: [sessionButtons(sessionId)],
       },
@@ -155,7 +167,8 @@ async function createRepairSession(
     await enqueue(env, 'dm', {
       userId: p.discord_id,
       fallbackKind: 'repair_pairing',
-      message: { content: `🛠️ You've been re-paired: ${interviewer.name ?? 'someone'} interviews ${interviewee.name ?? 'someone'}. Check the session thread to schedule — due ${discordTime(deadline)}.` },
+      message: { content: `🛠️ ${label}: ${interviewer.name ?? 'someone'} interviews ${interviewee.name ?? 'someone'}. Check the session thread to schedule — due ${discordTime(deadline)}.` },
     });
   }
+  return sessionId;
 }

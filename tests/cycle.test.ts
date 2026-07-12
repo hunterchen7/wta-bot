@@ -280,4 +280,56 @@ describe('full weekly cycle', () => {
     const attempted = await drainOutbox(env, executeOutbox, 100);
     expect(attempted).toBeGreaterThan(0);
   });
+
+  it('organizers can /pair manually (with repeat warning) and /repair into the queue', async () => {
+    const cmd = (name: string, options: unknown[]) => ({
+      type: 2,
+      id: '1',
+      token: 't',
+      guild_id: GUILD,
+      data: { name, options },
+      ...asAdmin('999'),
+    });
+
+    // 101 and 102 may or may not have met — the command works either way.
+    const pair = await sendInteraction(
+      signer,
+      cmd('pair', [
+        { name: 'interviewer', type: 6, value: '101' },
+        { name: 'interviewee', type: 6, value: '102' },
+      ]),
+      OVERRIDES,
+    );
+    const pairJson = (await pair.json()) as any;
+    expect(pairJson.data.content).toContain('Session #');
+    const manual = await env.DB.prepare(
+      "SELECT count(*) AS n FROM sessions WHERE origin = 'manual'",
+    ).first<any>();
+    expect(manual.n).toBe(1);
+
+    const repair = await sendInteraction(
+      signer,
+      cmd('repair', [
+        { name: 'user', type: 6, value: '103' },
+        { name: 'need', type: 3, value: 'interviewer' },
+      ]),
+      OVERRIDES,
+    );
+    expect(((await repair.json()) as any).data.content).toContain('queued');
+    const queued = await env.DB.prepare(
+      "SELECT count(*) AS n FROM repair_queue WHERE state = 'open' AND need = 'interviewer'",
+    ).first<any>();
+    expect(queued.n).toBeGreaterThanOrEqual(1);
+
+    // non-organizers bounce
+    const denied = await sendInteraction(
+      signer,
+      { ...cmd('pair', [
+        { name: 'interviewer', type: 6, value: '101' },
+        { name: 'interviewee', type: 6, value: '102' },
+      ]), ...asUser('101') },
+      OVERRIDES,
+    );
+    expect(((await denied.json()) as any).data.content).toContain('Organizers only');
+  });
 });
