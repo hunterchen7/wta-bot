@@ -154,7 +154,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
   if (!data)
     return (
       <EnrollmentShell embedded={embedded}>
-        <div className="h-[40rem] animate-pulse rounded-3xl bg-slate-200" />
+        <div className="h-160 animate-pulse rounded-3xl bg-slate-200" />
       </EnrollmentShell>
     );
   return (
