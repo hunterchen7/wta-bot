@@ -89,7 +89,7 @@ export async function onReportSubmitted(
       if (organizer_channel_id) {
         await enqueue(env, 'channel_msg', {
           channelId: organizer_channel_id,
-          message: { content: `🎬 W${week.idx} **pass verdict** on session #${session.id} — recording queued for review (dashboard → Reviews).` },
+          message: { content: `🎬 R${week.idx} **pass verdict** on session #${session.id} — recording queued for review (dashboard → Reviews).` },
         });
       }
     }
@@ -159,14 +159,14 @@ export async function maybeMarkEligible(env: Env, participantId: number): Promis
     fallbackKind: 'eligible',
     message: {
       content:
-        '🏆 **You did it — 6/6 interviews and a verified week-3 pass.** You\'re now eligible for the alumni technical interview; organizers will reach out with next steps. Huge congrats!',
+        '🏆 **You did it — 6/6 interviews and a verified final-round pass.** You\'re now eligible for the alumni technical interview; organizers will reach out with next steps. Huge congrats!',
     },
   });
   const { organizer_channel_id } = await getSettings(env, ['organizer_channel_id']);
   if (organizer_channel_id) {
     await enqueue(env, 'channel_msg', {
       channelId: organizer_channel_id,
-      message: { content: `🏆 **${p.name ?? p.discord_id}** (<@${p.discord_id}>) is **alumni-round eligible** — 6/6 + verified W3 pass.` },
+      message: { content: `🏆 **${p.name ?? p.discord_id}** (<@${p.discord_id}>) is **alumni-round eligible** — 6/6 + verified final-round pass.` },
     });
   }
   return true;

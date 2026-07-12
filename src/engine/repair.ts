@@ -142,7 +142,7 @@ async function createRepairSession(
     await enqueue(env, 'thread_create', {
       sessionId,
       channelId: cfg.threads_channel_id,
-      name: `w${week?.idx ?? '?'} repair · ${interviewer.name ?? 'interviewer'} → ${interviewee.name ?? 'interviewee'}`,
+      name: `r${week?.idx ?? '?'} repair · ${interviewer.name ?? 'interviewer'} → ${interviewee.name ?? 'interviewee'}`,
       starter: {
         content:
           `🛠️ **Repair pairing** — <@${interviewer.discord_id}> interviews <@${interviewee.discord_id}> (replacing a broken session).\n` +

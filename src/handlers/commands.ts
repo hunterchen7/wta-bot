@@ -96,7 +96,7 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
       const current =
         [...weeks].reverse().find((w) => now >= new Date(w.optin_opens_at).getTime()) ?? weeks[0]!;
       await weeklyDigest(c.env, current);
-      return c.json(ephemeral(`Digest for week ${current.idx} queued to the organizer channel.`));
+      return c.json(ephemeral(`Digest for round ${current.idx} queued to the organizer channel.`));
     }
 
     default:
@@ -143,7 +143,7 @@ async function statusCommand(c: Ctx, interaction: Interaction) {
         const role = s.interviewer_id === p.id ? `you interview ${s.interviewee_name ?? '?'}` : `${s.interviewer_name ?? '?'} interviews you`;
         const when = s.scheduled_at ? ` — ${discordTime(s.scheduled_at)}` : ' — **not scheduled yet**';
         const link = s.thread_id && interaction.guild_id ? ` → <#${s.thread_id}>` : '';
-        lines.push(`• W${s.idx}: ${role}${when}${link}`);
+        lines.push(`• R${s.idx}: ${role}${when}${link}`);
       }
     }
   }
@@ -187,7 +187,7 @@ async function optoutCommand(c: Ctx, interaction: Interaction) {
   await c.env.DB.prepare('DELETE FROM optins WHERE week_id = ?1 AND participant_id = ?2')
     .bind(week.id, p.id)
     .run();
-  return c.json(ephemeral(`You're sitting out week ${week.idx} — no penalty. Catch up later with a double.`));
+  return c.json(ephemeral(`You're sitting out round ${week.idx} — no penalty. Catch up later with a double.`));
 }
 
 async function reportCommand(c: Ctx, interaction: Interaction) {
@@ -311,16 +311,14 @@ async function setupCommand(c: Ctx, interaction: Interaction) {
     }
     case 'cohort': {
       const name = String(optVal(opts, 'name') ?? 'WTA Cohort');
-      const start = String(optVal(opts, 'start_monday') ?? '');
+      const start = String(optVal(opts, 'start_date') ?? '');
       const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(start);
-      if (!m) return c.json(ephemeral('Give me `start_monday` as `YYYY-MM-DD` (the Monday week 1 begins).'));
+      if (!m) return c.json(ephemeral('Give me `start_date` as `YYYY-MM-DD` (the day round 1 begins — 2026: `2026-07-26`).'));
       const tuple: [number, number, number] = [Number(m[1]), Number(m[2]), Number(m[3])];
-      const dow = new Date(Date.UTC(tuple[0], tuple[1] - 1, tuple[2], 12)).getUTCDay();
-      if (dow !== 1) return c.json(ephemeral(`${start} is not a Monday — week 1 must start on a Monday.`));
       const { weeks } = await createCohort(c.env, name, tuple);
       const lines = weeks.map(
         (w) =>
-          `**W${w.idx}** opt-in ${discordTime(w.optin_opens_at)} → match ${discordTime(w.match_at)} → due ${discordTime(w.grace_until ?? w.reports_due_at)}`,
+          `**R${w.idx}** opt-in ${discordTime(w.optin_opens_at)} → match ${discordTime(w.match_at)} → due ${discordTime(w.grace_until ?? w.reports_due_at)}`,
       );
       return c.json(ephemeral(`🚀 Cohort **${name}** is live. The cron takes it from here:\n${lines.join('\n')}`));
     }
@@ -442,7 +440,7 @@ async function problemsCommand(c: Ctx, interaction: Interaction) {
       const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE cohort_id = ?1 AND idx = ?2')
         .bind(cohort.id, idx)
         .first<any>();
-      if (!week) return c.json(ephemeral(`No week ${idx} in the active cohort.`));
+      if (!week) return c.json(ephemeral(`No round ${idx} in the active cohort.`));
       const { generateWeekSet, WEEK_BANDS } = await import('../engine/problems');
       const { chosen } = await generateWeekSet(c.env, week.id, idx, size);
       const band = WEEK_BANDS[Math.min(idx, 3)];
@@ -451,7 +449,7 @@ async function problemsCommand(c: Ctx, interaction: Interaction) {
       }
       return c.json(
         ephemeral(
-          `Week ${idx} set (${chosen.length}${chosen.length < size ? ` of ${size} requested — bank is thin` : ''}, band ${band?.[0]}–${band?.[1]}):\n` +
+          `Round ${idx} set (${chosen.length}${chosen.length < size ? ` of ${size} requested — bank is thin` : ''}, band ${band?.[0]}–${band?.[1]}):\n` +
             chosen.map((p) => `• ${p.title}`).join('\n') +
             `\nInterviewers get packets automatically 24h before each session.${idx === 3 ? ' (W3: sanity-check these — the band is tight on purpose.)' : ''}`,
         ),

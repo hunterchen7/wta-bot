@@ -41,6 +41,7 @@ export async function tick(env: Env, now: Date): Promise<void> {
       await due(`optin_remind:${w.id}`, a.optin_remind_at, () => optinReminder(env, w));
       await due(`match:${w.id}`, new Date(w.match_at), () => closeAndMatch(env, w, cohort));
       await due(`nudge:${w.id}`, a.nudge_at, () => scheduleNudge(env, w));
+      await due(`nudge2:${w.id}`, a.nudge2_at, () => scheduleNudge(env, w));
       await due(`digest:${w.id}`, a.digest_at, () => weeklyDigest(env, w));
     }
 

@@ -86,7 +86,7 @@ export const COMMANDS: Command[] = [
         name: 'cohort',
         description: 'Start a cohort — the cron runs the rest',
         options: [
-          { type: STRING, name: 'start_monday', description: 'Week 1 Monday, YYYY-MM-DD', required: true },
+          { type: STRING, name: 'start_date', description: 'Round 1 start day, YYYY-MM-DD (2026: 2026-07-26)', required: true },
           { type: STRING, name: 'name', description: 'Cohort name' },
         ],
       },
@@ -176,7 +176,7 @@ export const COMMANDS: Command[] = [
         name: 'setweek',
         description: 'Pre-generate a week\'s set by difficulty rule',
         options: [
-          { type: 4, name: 'week', description: 'Week number (1-3)', required: true },
+          { type: 4, name: 'week', description: 'Round number (1-3)', required: true },
           { type: 4, name: 'size', description: 'Set size (default 5)' },
         ],
       },

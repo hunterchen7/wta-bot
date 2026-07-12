@@ -147,14 +147,14 @@ async function handleOptin(
   if (!week) return c.json(ephemeral('This opt-in has expired.'));
   const now = new Date();
   if (now > new Date(week.optin_closes_at)) {
-    return c.json(ephemeral(`Opt-in for week ${week.idx} closed ${discordTime(week.optin_closes_at, 'R')}. If you're stranded, organizers can pair you manually.`));
+    return c.json(ephemeral(`Opt-in for round ${week.idx} closed ${discordTime(week.optin_closes_at, 'R')}. If you're stranded, organizers can pair you manually.`));
   }
 
   if (choice === 'out') {
     await c.env.DB.prepare('DELETE FROM optins WHERE week_id = ?1 AND participant_id = ?2')
       .bind(weekId, participant.id)
       .run();
-    return c.json(ephemeral(`Sitting out week ${week.idx} — no penalty. Catch up with a double later if you like.`));
+    return c.json(ephemeral(`Sitting out round ${week.idx} — no penalty. Catch up with a double later if you like.`));
   }
 
   await c.env.DB.prepare(
@@ -166,7 +166,7 @@ async function handleOptin(
     .run();
   const label =
     choice === 'in' ? "You're in" : choice === 'double' ? "You're in with a catch-up double (if you're behind)" : "You're in, plus standby for extra sessions";
-  return c.json(ephemeral(`✅ ${label} for week ${week.idx}. Pairings drop ${discordTime(week.match_at)}.`));
+  return c.json(ephemeral(`✅ ${label} for round ${week.idx}. Pairings drop ${discordTime(week.match_at)}.`));
 }
 
 async function handleSessionButton(

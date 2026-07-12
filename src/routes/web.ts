@@ -43,7 +43,7 @@ async function sessionFrom(c: any): Promise<SessionUser | null> {
 const nav = (user: SessionUser) =>
   `<nav class="top">
     <a href="/dashboard">My progress</a>
-    ${user.organizer ? `<a href="/dashboard/roster">Roster</a><a href="/dashboard/week">Week board</a><a href="/dashboard/reviews">Reviews</a><a href="/dashboard/problems">Problems</a>` : ''}
+    ${user.organizer ? `<a href="/dashboard/roster">Roster</a><a href="/dashboard/week">Round board</a><a href="/dashboard/reviews">Reviews</a><a href="/dashboard/problems">Problems</a>` : ''}
     <form method="POST" action="/logout" style="margin-left:auto"><button class="btn ghost" style="padding:.2rem .8rem">Log out</button></form>
   </nav>`;
 
@@ -248,7 +248,7 @@ web.get('/dashboard', async (c) => {
       ${sessions
         .map(
           (s: any) => `<tr>
-        <td>W${s.idx}</td>
+        <td>R${s.idx}</td>
         <td>${s.interviewer_id === p.id ? `you → ${esc(s.interviewee_name ?? '?')}` : `${esc(s.interviewer_name ?? '?')} → you`}</td>
         <td>${s.scheduled_at ? esc(formatToronto(s.scheduled_at)) : '—'}</td>
         <td><span class="tag">${esc(s.state)}</span></td></tr>`,
@@ -360,7 +360,7 @@ web.get('/dashboard/p/:id', async (c) => {
         if (ir) bits.push(`verdict: <b>${esc(ir.verdict ?? '?')}</b> (${esc(ir.hints ?? '?')} hints, ps ${ir.rating_problem_solving ?? '?'}/5)`);
       }
       return `<tr>
-        <td>W${s.idx}${s.origin === 'repair' ? ' 🛠️' : ''}</td>
+        <td>R${s.idx}${s.origin === 'repair' ? ' 🛠️' : ''}</td>
         <td>${asInterviewer ? 'interviewer' : 'interviewee'} · <a href="/dashboard/p/${partnerId}">${esc(partnerName ?? '?')}</a></td>
         <td>${s.scheduled_at ? esc(formatToronto(s.scheduled_at)) : '—'}</td>
         <td>${esc(s.problem_title ?? '')}</td>
@@ -399,7 +399,7 @@ web.get('/dashboard/week', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const cohort = await activeCohort(c.env);
-  if (!cohort) return c.html(page('Week board', `${nav(gate)}<h1>No active cohort</h1>`));
+  if (!cohort) return c.html(page('Round board', `${nav(gate)}<h1>No active cohort</h1>`));
   const weeks = await cohortWeeks(c.env, cohort.id);
   const now = Date.now();
   const current = [...weeks].reverse().find((w) => now >= new Date(w.optin_opens_at).getTime()) ?? weeks[0]!;
@@ -416,7 +416,7 @@ web.get('/dashboard/week', async (c) => {
   const optins = await c.env.DB.prepare('SELECT count(*) AS n FROM optins WHERE week_id = ?1')
     .bind(current.id)
     .first<any>();
-  const body = `${nav(gate)}<h1>Week ${current.idx} board</h1>
+  const body = `${nav(gate)}<h1>Round ${current.idx} board</h1>
     <p class="sub">${optins?.n ?? 0} opted in · ${results.length} sessions · matched ${esc(formatToronto(current.match_at))}</p>
     <div class="card"><table>
     <tr><th>#</th><th>Interviewer → Interviewee</th><th>When</th><th>State</th><th>Reports</th><th>Review</th></tr>
@@ -429,7 +429,7 @@ web.get('/dashboard/week', async (c) => {
       )
       .join('')}
     </table></div>`;
-  return c.html(page('Week board', body, { wide: true }));
+  return c.html(page('Round board', body, { wide: true }));
 });
 
 web.get('/dashboard/reviews', async (c) => {
@@ -442,7 +442,13 @@ web.get('/dashboard/reviews', async (c) => {
      FROM sessions s JOIN weeks w ON w.id = s.week_id
      JOIN participants pi ON pi.id = s.interviewer_id
      JOIN participants pe ON pe.id = s.interviewee_id
-     WHERE s.review_state != 'none' ORDER BY s.review_state = 'pending' DESC, s.id`,
+     WHERE s.review_state != 'none'
+        OR (s.state = 'completed' AND EXISTS (
+              SELECT 1 FROM form_instances f2
+              WHERE f2.session_id = s.id AND f2.kind = 'interviewee_report'
+                AND f2.submitted_at IS NOT NULL
+                AND json_extract(f2.payload, '$.video_url') IS NOT NULL))
+     ORDER BY s.review_state = 'pending' DESC, s.id`,
   ).all<any>();
   const rows = results.map((s: any) => {
     const ie = s.interviewee_payload ? JSON.parse(s.interviewee_payload) : {};
@@ -454,14 +460,14 @@ web.get('/dashboard/reviews', async (c) => {
              <button name="action" value="verify">Verify pass</button>
              <button name="action" value="flag" class="btn ghost">Flag 🚩</button>
            </form>`;
-    return `<tr><td>#${s.id} W${s.idx}</td>
+    return `<tr><td>#${s.id} R${s.idx}</td>
       <td>${esc(s.interviewer_name ?? '?')} → <b>${esc(s.interviewee_name ?? '?')}</b></td>
       <td>${ie.video_url ? `<a href="${esc(ie.video_url)}" rel="noreferrer">▶ recording</a>` : '<span class="tag">no video!</span>'}</td>
       <td>${esc(ir.verdict ?? '')}: ${esc((ir.verdict_reason ?? '').slice(0, 140))}</td>
-      <td><span class="tag">${esc(s.review_state)}</span></td><td>${actions}</td></tr>`;
+      <td><span class="tag">${esc(s.review_state === 'none' ? 'unreviewed' : s.review_state)}</span></td><td>${actions}</td></tr>`;
   });
-  const body = `${nav(gate)}<h1>W3 recording reviews</h1>
-    <p class="sub">Pass verdicts wait here until a human verifies the recording — verified + 6/6 = alumni-round eligible.</p>
+  const body = `${nav(gate)}<h1>Recording reviews</h1>
+    <p class="sub">Final-round pass verdicts wait here — verify + 6/6 = alumni-round eligible. Earlier rounds appear too once recordings are in.</p>
     <div class="card"><table>
     <tr><th>Session</th><th>Pair</th><th>Recording</th><th>Verdict</th><th>State</th><th></th></tr>
     ${rows.join('')}</table></div>`;

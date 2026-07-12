@@ -55,7 +55,7 @@ function contextHeader(inst: LoadedInstance): string {
   const partner = isInterviewer ? inst.interviewee_name : inst.interviewer_name;
   const role = isInterviewer ? `you interviewed **${partner}**` : `**${partner}** interviewed you`;
   return `
-    <h1>Week ${inst.week_idx} — ${isInterviewer ? 'interviewer' : 'interviewee'} report</h1>
+    <h1>Round ${inst.week_idx} — ${isInterviewer ? 'interviewer' : 'interviewee'} report</h1>
     <p class="sub">Hi ${esc(inst.assignee_name ?? 'there')} — ${role
       .replaceAll('**', '')
       .trim()}${inst.scheduled_at ? `, ${esc(formatToronto(inst.scheduled_at))} (Toronto)` : ''}.
@@ -83,7 +83,7 @@ forms.get('/f/:token', async (c) => {
       ${fields.map((f) => renderField(f, existing[f.id])).join('\n')}
       <p style="margin-top:1.4rem"><button type="submit">Submit report</button></p>
     </form>`;
-  return c.html(page(`Week ${inst.week_idx} report`, body));
+  return c.html(page(`Round ${inst.week_idx} report`, body));
 });
 
 forms.post('/f/:token', async (c) => {
@@ -157,7 +157,7 @@ forms.get('/p/:token', async (c) => {
 
   const md = (s: string | null) => (s ? `<div class="card" style="white-space:pre-wrap">${esc(s)}</div>` : '');
   const body = `
-    <h1>${isPacket ? '🎯 Interviewer packet' : '📖 Solution notes'} — Week ${row.week_idx}</h1>
+    <h1>${isPacket ? '🎯 Interviewer packet' : '📖 Solution notes'} — Round ${row.week_idx}</h1>
     <p class="sub">${esc(row.title)}${row.number ? ` (#${row.number})` : ''} · ${esc(row.difficulty)}${
       isPacket ? ` · interviewing ${esc(row.interviewee_name ?? '')}` : ''
     }${row.url ? ` · <a href="${esc(row.url)}" rel="noreferrer">problem link ↗</a>` : ''}</p>

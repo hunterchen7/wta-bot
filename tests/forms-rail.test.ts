@@ -86,7 +86,7 @@ describe('form rail', () => {
     const res = await app.request(`/f/${intervieweeToken}`, {}, env);
     expect(res.status).toBe(200);
     const html = await res.text();
-    expect(html).toContain('Week 3');
+    expect(html).toContain('Round 3');
     expect(html).toContain('Ivy Interviewer');
     expect(html).toContain('Paste the code you wrote');
     expect(html).toContain('session recording');

@@ -59,7 +59,7 @@ export async function weeklyDigest(env: Env, week: Week): Promise<void> {
   const dead = await deadLetters(env);
 
   const lines = [
-    `📊 **Week ${week.idx} digest**`,
+    `📊 **Round ${week.idx} digest**`,
     `Sessions: ${stats?.completed ?? 0}/${stats?.total ?? 0} completed · ${stats?.scheduled ?? 0} scheduled · ${stats?.unscheduled ?? 0} never scheduled · ${stats?.broken ?? 0} broken`,
     `Reports outstanding: ${overdueForms?.n ?? 0}`,
     incidents.length

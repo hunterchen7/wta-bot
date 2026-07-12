@@ -24,21 +24,28 @@ function addDays(y: number, m: number, d: number, days: number): [number, number
   return [t.getUTCFullYear(), t.getUTCMonth() + 1, t.getUTCDate()];
 }
 
-export function weekAnchors(week1Monday: [number, number, number], idx: number) {
-  const monday = addDays(...week1Monday, (idx - 1) * 7);
+// A "round" is a 14-day window (2026 schedule: R1 Jul 26–Aug 8, R2 Aug 9–22,
+// R3 Aug 23–Sep 5 — starting on Sundays). Rows in the `weeks` table are
+// rounds; `idx` = round number. Anchors are relative to the round's start day,
+// so any start weekday works.
+export const ROUND_DAYS = 14;
+
+export function weekAnchors(roundOneStart: [number, number, number], idx: number) {
+  const start = addDays(...roundOneStart, (idx - 1) * ROUND_DAYS);
   const at = (dayOffset: number, hour: number, minute = 0) => {
-    const [y, m, d] = addDays(...monday, dayOffset);
+    const [y, m, d] = addDays(...start, dayOffset);
     return torontoToUtc(y, m, d, hour, minute);
   };
   return {
-    optin_opens_at: at(-3, 16), // Friday 16:00
-    optin_remind_at: at(-2, 18), // Saturday 18:00 (non-responders)
-    optin_closes_at: at(-1, 18), // Sunday 18:00
-    match_at: at(-1, 18, 15), // Sunday 18:15
-    nudge_at: at(2, 18), // Wednesday 18:00 (unscheduled sessions)
-    reports_due_at: at(6, 23, 59), // week's Sunday 23:59
-    digest_at: at(7, 9), // Monday 09:00 after the week
-    grace_until: at(10, 23, 59), // Thursday after (used for the final week)
+    optin_opens_at: at(-3, 16), // 3 days before the round, 16:00
+    optin_remind_at: at(-2, 18), // non-responder reminder
+    optin_closes_at: at(-1, 18), // eve of the round, 18:00
+    match_at: at(-1, 18, 15), // pairings drop 15 min later
+    nudge_at: at(3, 18), // mid-week-1 unscheduled nudge
+    nudge2_at: at(10, 18), // mid-week-2 unscheduled nudge
+    reports_due_at: at(ROUND_DAYS - 1, 23, 59), // final day of the round
+    digest_at: at(ROUND_DAYS, 9), // morning after the round
+    grace_until: at(ROUND_DAYS + 4, 23, 59), // final round only
   };
 }
 
@@ -50,11 +57,11 @@ export function cohortStartTuple(cohort: Cohort): [number, number, number] {
 export async function createCohort(
   env: Env,
   name: string,
-  week1Monday: [number, number, number],
+  roundOneStart: [number, number, number],
   weeksCount = 3,
 ): Promise<{ cohortId: number; weeks: Week[] }> {
   await env.DB.prepare("UPDATE cohorts SET status = 'done' WHERE status = 'active'").run();
-  const [y, m, d] = week1Monday;
+  const [y, m, d] = roundOneStart;
   const res = await env.DB.prepare(
     "INSERT INTO cohorts (name, start_date, weeks_count, status) VALUES (?1, ?2, ?3, 'active')",
   )
@@ -63,7 +70,7 @@ export async function createCohort(
   const cohortId = Number(res.meta.last_row_id);
 
   for (let idx = 1; idx <= weeksCount; idx++) {
-    const a = weekAnchors(week1Monday, idx);
+    const a = weekAnchors(roundOneStart, idx);
     await env.DB.prepare(
       `INSERT INTO weeks (cohort_id, idx, optin_opens_at, optin_closes_at, match_at, reports_due_at, grace_until)
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,

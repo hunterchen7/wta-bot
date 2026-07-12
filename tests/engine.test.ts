@@ -4,23 +4,33 @@ import { drainOutbox, enqueue, enqueueMany } from '../src/engine/outbox';
 import { demandFor } from '../src/engine/progress';
 import { createCohort, weekAnchors } from '../src/engine/weeks';
 
-describe('week anchors', () => {
-  // 2026-09-14 is a Monday.
+describe('round anchors (14-day rounds)', () => {
   const start: [number, number, number] = [2026, 9, 14];
 
-  it('computes week 1 anchors in Toronto wall time (EDT)', () => {
+  it('computes round 1 anchors in Toronto wall time (EDT)', () => {
     const a = weekAnchors(start, 1);
-    expect(a.optin_opens_at.toISOString()).toBe('2026-09-11T20:00:00.000Z'); // Fri 16:00 EDT
-    expect(a.optin_closes_at.toISOString()).toBe('2026-09-13T22:00:00.000Z'); // Sun 18:00
+    expect(a.optin_opens_at.toISOString()).toBe('2026-09-11T20:00:00.000Z'); // D-3 16:00 EDT
+    expect(a.optin_closes_at.toISOString()).toBe('2026-09-13T22:00:00.000Z'); // D-1 18:00
     expect(a.match_at.toISOString()).toBe('2026-09-13T22:15:00.000Z');
-    expect(a.reports_due_at.toISOString()).toBe('2026-09-21T03:59:00.000Z'); // Sun 23:59 EDT
+    expect(a.reports_due_at.toISOString()).toBe('2026-09-28T03:59:00.000Z'); // D+13 23:59 EDT
+    expect(a.nudge2_at.getTime()).toBeGreaterThan(a.nudge_at.getTime()); // two nudges per round
   });
 
-  it('week 3 lands two weeks later with a grace window', () => {
+  it('matches the real 2026 schedule (rounds start Sundays, Jul 26)', () => {
+    const summer: [number, number, number] = [2026, 7, 26];
+    const r1 = weekAnchors(summer, 1);
+    expect(r1.optin_opens_at.toISOString()).toBe('2026-07-23T20:00:00.000Z'); // Thu 16:00
+    expect(r1.match_at.toISOString()).toBe('2026-07-25T22:15:00.000Z'); // Sat 18:15
+    expect(r1.reports_due_at.toISOString()).toBe('2026-08-09T03:59:00.000Z'); // Aug 8 23:59 EDT
+    const r3 = weekAnchors(summer, 3);
+    expect(r3.match_at.toISOString()).toBe('2026-08-22T22:15:00.000Z'); // eve of Aug 23
+  });
+
+  it('round 3 lands four weeks later with a grace window', () => {
     const w1 = weekAnchors(start, 1);
     const w3 = weekAnchors(start, 3);
     const days = (w3.match_at.getTime() - w1.match_at.getTime()) / 86400_000;
-    expect(days).toBe(14);
+    expect(days).toBe(28);
     expect(w3.grace_until.getTime()).toBeGreaterThan(w3.reports_due_at.getTime());
   });
 

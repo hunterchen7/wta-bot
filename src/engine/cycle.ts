@@ -36,7 +36,7 @@ export async function openOptin(env: Env, week: Week): Promise<void> {
   const cfg = await getSettings(env, ['announce_channel_id', 'participant_role_id']);
   const mention = cfg.participant_role_id ? `<@&${cfg.participant_role_id}> ` : '';
   const content =
-    `${mention}📋 **Week ${week.idx} opt-in is open!**\n` +
+    `${mention}📋 **Round ${week.idx} opt-in is open!** (2 weeks, one interview each side)\n` +
     `Click below if you're doing interviews this week (one as interviewer, one as interviewee). ` +
     `Behind pace? Pick the double. Keen for extras if someone's partner flakes? Standby.\n` +
     `⏰ Closes ${discordTime(week.optin_closes_at)} — silence = sitting out (no penalty).`;
@@ -56,7 +56,7 @@ export async function openOptin(env: Env, week: Week): Promise<void> {
         userId: p.discord_id,
         fallbackKind: 'optin_open',
         message: {
-          content: `📋 WTA week ${week.idx} opt-in is open — closes ${discordTime(week.optin_closes_at)}.`,
+          content: `📋 WTA round ${week.idx} opt-in is open — closes ${discordTime(week.optin_closes_at)}.`,
           components: [optinButtons(week.id)],
         },
       },
@@ -84,7 +84,7 @@ export async function optinReminder(env: Env, week: Week): Promise<void> {
             userId: p.discord_id,
             fallbackKind: 'optin_remind',
             message: {
-              content: `⏰ Last call: WTA week ${week.idx} opt-in closes ${discordTime(week.optin_closes_at, 'R')}. No response = sitting out.`,
+              content: `⏰ Last call: WTA round ${week.idx} opt-in closes ${discordTime(week.optin_closes_at, 'R')}. No response = sitting out.`,
               components: [optinButtons(week.id)],
             },
           },
@@ -95,8 +95,8 @@ export async function optinReminder(env: Env, week: Week): Promise<void> {
           kind: 'email',
           payload: {
             to: p.preferred_email,
-            subject: `WTA week ${week.idx}: opt-in closes soon`,
-            text: `Opt-in for interview week ${week.idx} closes soon. Open Discord and click "I'm in" on the opt-in message if you're participating. No response means sitting out this week (no penalty).`,
+            subject: `WTA round ${week.idx}: opt-in closes soon`,
+            text: `Opt-in for interview round ${week.idx} closes soon. Open Discord and click "I'm in" on the opt-in message if you're participating. No response means sitting out this round (no penalty).`,
           },
         });
       }
@@ -165,10 +165,10 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
       await enqueue(env, 'thread_create', {
         sessionId,
         channelId: cfg.threads_channel_id,
-        name: `w${week.idx} · ${displayName(interviewer)} → ${displayName(interviewee)}`.slice(0, 100),
+        name: `r${week.idx} · ${displayName(interviewer)} → ${displayName(interviewee)}`.slice(0, 100),
         starter: {
           content:
-            `**Week ${week.idx} session** — <@${interviewer.discord_id}> interviews <@${interviewee.discord_id}>.\n` +
+            `**Round ${week.idx} session** — <@${interviewer.discord_id}> interviews <@${interviewee.discord_id}>.\n` +
             `1️⃣ Agree on a time here, then hit **Scheduled ✅** (format: \`2026-09-15 19:30\`, Toronto time).\n` +
             `2️⃣ At the scheduled time you'll both get your report-form links here and by DM.\n` +
             `Deadline: sessions + reports due ${discordTime(week.grace_until ?? week.reports_due_at)}.`,
@@ -189,7 +189,7 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
   for (const [pid, info] of perPerson) {
     const p = byId.get(pid)!;
     const lines = [
-      `🗓️ **Your week ${week.idx} pairings:**`,
+      `🗓️ **Your round ${week.idx} pairings:**`,
       ...info.interviews.map((n) => `• You **interview** ${n}`),
       ...info.interviewedBy.map((n) => `• **${n}** interviews you`),
       `Coordinate times in your session threads. Everything due ${discordTime(week.grace_until ?? week.reports_due_at)}.`,
@@ -202,9 +202,9 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
     if (p.email_ok && p.preferred_email) {
       await enqueue(env, 'email', {
         to: p.preferred_email,
-        subject: `WTA week ${week.idx}: your interview pairings`,
+        subject: `WTA round ${week.idx}: your interview pairings`,
         text:
-          `Your week ${week.idx} pairings:\n` +
+          `Your round ${week.idx} pairings:\n` +
           info.interviews.map((n) => `- You interview ${n}\n`).join('') +
           info.interviewedBy.map((n) => `- ${n} interviews you\n`).join('') +
           `\nCoordinate times in your Discord session threads.`,
@@ -229,7 +229,7 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
     await enqueue(env, 'channel_msg', {
       channelId: cfg.announce_channel_id,
       message: {
-        content: `🤝 **Week ${week.idx} pairings are out** — ${result.edges.length} sessions across ${perPerson.size} participants. Check your DMs and session threads!`,
+        content: `🤝 **Round ${week.idx} pairings are out** — ${result.edges.length} sessions across ${perPerson.size} participants. Check your DMs and session threads!`,
       },
     });
   }
@@ -237,7 +237,7 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
     await enqueue(env, 'channel_msg', {
       channelId: cfg.organizer_channel_id,
       message: {
-        content: `🧮 Week ${week.idx} matched: ${result.edges.length} sessions, ${result.unmatched.length} residual slot(s) → repair queue.`,
+        content: `🧮 Round ${week.idx} matched: ${result.edges.length} sessions, ${result.unmatched.length} residual slot(s) → repair queue.`,
       },
     });
   }
@@ -280,7 +280,7 @@ export async function formDropScan(env: Env, origin: string, now = new Date()): 
           userId: who.discord_id,
           fallbackKind: 'form_link',
           message: {
-            content: `📝 Your **${side} report** for today's week-${s.week_idx} session: ${url}\nDue ${discordTime(deadline)} — your session credit needs it.`,
+            content: `📝 Your **${side} report** for today's round-${s.week_idx} session: ${url}\nDue ${discordTime(deadline)} — your session credit needs it.`,
           },
         });
       }
@@ -320,7 +320,7 @@ export async function scheduleNudge(env: Env, week: Week): Promise<void> {
   if (cfg.organizer_channel_id && results.length > 0) {
     await enqueue(env, 'channel_msg', {
       channelId: cfg.organizer_channel_id,
-      message: { content: `⏳ Week ${week.idx}: ${results.length} session(s) still unscheduled after the Wednesday nudge.` },
+      message: { content: `⏳ Round ${week.idx}: ${results.length} session(s) still unscheduled after the nudge.` },
     });
   }
 }

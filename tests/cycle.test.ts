@@ -129,7 +129,7 @@ describe('full weekly cycle', () => {
               name: 'cohort',
               type: 1,
               options: [
-                { name: 'start_monday', type: 3, value: '2026-09-14' },
+                { name: 'start_date', type: 3, value: '2026-09-14' },
                 { name: 'name', type: 3, value: 'Fall 2026' },
               ],
             },
