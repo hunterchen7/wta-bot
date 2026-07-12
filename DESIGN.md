@@ -131,10 +131,9 @@ Deadline pending **[OPEN — cohort start date]**; M0–M2 before intake opens, 
 
 ## 12. Deployment (CI/CD)
 
-- **GitHub Actions**, repo `hunterchen7/wta-bot` (private): every push/PR runs typecheck + the workers-pool test suite; pushes to `main` that pass then apply D1 migrations (`--remote`) and `wrangler deploy` via `cloudflare/wrangler-action`. Tests gate every deploy — nothing ships red.
-- Requires one repo secret: `CLOUDFLARE_API_TOKEN` (created by Hunter; scoped to Workers Scripts:Edit + D1:Edit on the account, plus the `hunterchen.ca` zone for the custom domain). `account_id` is pinned in `wrangler.jsonc`. Claude never handles the token value.
-- Alternative considered: Cloudflare Workers Builds (native git integration) — rejected for now because Actions gives test-gated deploys and PR checks in one place. Easy to switch later.
-- Local `wrangler dev` / `npm test` workflow unchanged; production deploys happen only via CI.
+- **Cloudflare Workers Builds** (native git integration) owns production deploys: on push to `main` it runs the build command (`npm ci && npm run typecheck && npm test` — failures block deploy) then the deploy command (`npm run deploy:ci` = D1 migrations + `wrangler deploy`). **Token-free**: Cloudflare auto-generates and holds its own deploy credential; nothing is stored in GitHub. Connected by Hunter in the dashboard (OAuth grant is his to make).
+- **GitHub Actions** runs the same typecheck + test suite on every push/PR as an independent check — zero secrets. (An Actions-based deploy with a `CLOUDFLARE_API_TOKEN` secret — scopes: Workers Scripts:Edit + D1:Edit + the zone — remains the documented fallback; it lives in git history.)
+- `account_id` pinned in `wrangler.jsonc`. Local `wrangler dev` / `npm test` unchanged; `npm run deploy` still works locally via wrangler OAuth for one-offs.
 
 ## 13. AI-assisted W3 review (M7 sketch — build last)
 

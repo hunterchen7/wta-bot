@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
+    "deploy:ci": "wrangler d1 migrations apply wta-bot --remote && wrangler deploy",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",

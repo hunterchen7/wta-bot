@@ -40,11 +40,17 @@ wrangler secret put FORM_SIGNING_SECRET   # openssl rand -hex 32
 
 ### Deploy
 
-Deploys are CI-only: every push to `main` runs typecheck + tests, then applies
-D1 migrations and `wrangler deploy` (provisions `wta.hunterchen.ca`). See
-`.github/workflows/ci.yml`. One-time setup: create a Cloudflare API token
-(Workers Scripts:Edit + D1:Edit on the account, plus the `hunterchen.ca` zone)
-and add it as the `CLOUDFLARE_API_TOKEN` repo secret.
+Production deploys run on **Cloudflare Workers Builds** (token-free — Cloudflare
+manages its own deploy credentials). One-time setup in the dashboard:
+**Workers & Pages → Create → Import a repository → `hunterchen7/wta-bot`**, then:
+
+- Production branch: `main`
+- Build command: `npm ci && npm run typecheck && npm test`  ← failing tests block the deploy
+- Deploy command: `npm run deploy:ci`  (applies D1 migrations, then deploys)
+
+GitHub Actions (`.github/workflows/ci.yml`) additionally runs the same checks
+on every push/PR — no secrets needed. Local `npm run deploy` also works via
+wrangler's OAuth login for one-off manual deploys.
 
 Schema changes always go in a NEW `migrations/000N_*.sql` file — never edit an
 applied migration.
