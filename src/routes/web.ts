@@ -165,11 +165,29 @@ web.post('/login', async (c) => {
     .bind(email)
     .first<{ id: number; preferred_email: string; name: string | null }>();
 
-  // Uniform response regardless of membership (no account enumeration).
+  // Unknown email -> say so immediately instead of a dead-end code page.
+  // (Deliberate UX-over-enumeration-protection choice for a club roster.)
+  if (!p) {
+    return c.html(
+      page(
+        'Email not found',
+        `<h1>WTA dashboard</h1>
+         <div class="err"><b>${esc(email)}</b> isn't on the roster.</div>
+         <p class="sub">Use the email you gave at sign-up — run <code>/join</code> in the Discord server to see or edit it. Not enrolled yet? <code>/join</code> is also how you start.</p>
+         <form method="POST" action="/login" class="card">
+           <label class="f" for="email">Email</label>
+           <input type="email" id="email" name="email" required value="${esc(email)}">
+           <p style="margin-top:1rem"><button type="submit">Send code</button></p>
+         </form>`,
+      ),
+      404,
+    );
+  }
+
   const sent = page(
     'Check your email',
     `<h1>Check your email 📬</h1>
-     <p class="sub">If <b>${esc(email)}</b> is on the roster, a 6-digit code is on its way (valid ${CODE_TTL_MIN} minutes).</p>
+     <p class="sub">A 6-digit code is on its way to <b>${esc(email)}</b> (valid ${CODE_TTL_MIN} minutes).</p>
      <form method="POST" action="/login/code" class="card">
        <input type="hidden" name="email" value="${esc(email)}">
        <label class="f" for="code">Code</label>
@@ -177,7 +195,6 @@ web.post('/login', async (c) => {
        <p style="margin-top:1rem"><button type="submit">Log in</button></p>
      </form>`,
   );
-  if (!p) return c.html(sent);
 
   // Rate limit: max 3 live codes per participant per 15 minutes.
   const recent = await c.env.DB.prepare(

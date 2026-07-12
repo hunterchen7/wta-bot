@@ -30,7 +30,7 @@ beforeAll(async () => {
 });
 
 describe('login flow', () => {
-  it('sends (or pretends to send) a code without leaking membership', async () => {
+  it('sends a code to roster emails and bounces unknown ones with guidance', async () => {
     const real = await app.request(
       '/login',
       { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'email=stu%40example.com' },
@@ -46,7 +46,12 @@ describe('login flow', () => {
       { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'email=nobody%40example.com' },
       env,
     );
-    expect(await fake.text()).toContain('Check your email');
+    expect(fake.status).toBe(404);
+    const html = await fake.text();
+    expect(html).toContain("isn't on the roster");
+    expect(html).toContain('/join');
+    const codes = await env.DB.prepare('SELECT count(*) AS n FROM login_codes').first<{ n: number }>();
+    expect(codes?.n).toBe(1); // no code row for the unknown email
   });
 
   it('logs in with a valid code and sets the session cookie', async () => {
