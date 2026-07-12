@@ -3,7 +3,6 @@ import { getSettings } from '../config';
 import { enqueue } from '../engine/outbox';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
 import type { Env } from '../env';
-import { fieldsFor } from '../forms/schema';
 import { verifyToken } from '../forms/token';
 import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
 import { isWhitelistedAdmin } from '../organizers';
@@ -30,19 +29,6 @@ publicApi.get('/api/public/bank', async (c) => {
      JOIN problems p ON p.id = wps.problem_id WHERE wps.week_id = ?1 ORDER BY p.id`,
   ).bind(current.id).all<any>();
   return c.json({ cohort: { name: cohort.name }, round: current.idx, problems: results });
-});
-
-publicApi.get('/api/public/previews/:kind', (c) => {
-  const kind = c.req.param('kind');
-  const fields = fieldsFor(kind);
-  if (!fields) return c.json({ error: 'not_found', message: 'Unknown preview.' }, 404);
-  return c.json({
-    preview: true, id: 0, kind, round: 2,
-    role: kind === 'interviewer_report' ? 'interviewer' : 'interviewee',
-    assigneeName: 'Alex Example', partnerName: 'Jordan Example',
-    scheduledAt: '2026-08-12T23:30:00.000Z', deadlineAt: '2026-08-23T03:59:00.000Z',
-    submittedAt: null, overdue: false, fields, values: {},
-  });
 });
 
 publicApi.get('/api/enrollment/:token', async (c) => {

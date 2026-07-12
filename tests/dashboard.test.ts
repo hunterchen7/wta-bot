@@ -30,6 +30,21 @@ describe('JSON authentication', () => {
     expect(await authenticated.json<any>()).toEqual({ authenticated: true, organizer: false, redirect: '/app' });
   });
 
+  it('gates preview page assets to organizer sessions', async () => {
+    const previewEnv = { ...env, ASSETS: { fetch: async () => new Response('preview shell', { headers: { 'Content-Type': 'text/html' } }) } };
+    const anonymous = await app.request('/preview/form/interviewee_report?embed=1', {}, previewEnv);
+    expect(anonymous.status).toBe(302);
+    expect(anonymous.headers.get('location')).toBe('/login?next=%2Fpreview%2Fform%2Finterviewee_report%3Fembed%3D1');
+
+    const participant = await app.request('/preview', { headers: { Cookie: await cookieFor(STUDENT_ID, false) } }, previewEnv);
+    expect(participant.status).toBe(302);
+    expect(participant.headers.get('location')).toBe('/app');
+
+    const organizer = await app.request('/preview', { headers: { Cookie: await cookieFor(ADMIN_ID, true) } }, previewEnv);
+    expect(organizer.status).toBe(200);
+    expect(await organizer.text()).toBe('preview shell');
+  });
+
   it('requests codes for roster emails and gives field guidance for unknown emails', async () => {
     const known = await jsonPost('/api/auth/request-code', { email: 'stu@example.com' });
     expect(known.status).toBe(200);

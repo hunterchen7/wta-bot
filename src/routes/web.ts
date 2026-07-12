@@ -121,6 +121,21 @@ web.post('/logout', (c) => {
   return c.json({ ok: true, redirect: '/login' });
 });
 
+// Preview shells are organizer-only. Cloudflare routes these paths through the
+// Worker before serving SPA assets; the client gate also protects SPA navigation.
+const serveOrganizerPreview = async (c: any) => {
+  const session = await sessionFrom(c);
+  if (!session) {
+    const url = new URL(c.req.url);
+    return c.redirect(`/login?next=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
+  }
+  if (!session.organizer) return c.redirect('/app');
+  if (!c.env.ASSETS) return c.text('Preview assets are unavailable.', 503);
+  return c.env.ASSETS.fetch(c.req.raw);
+};
+web.get('/preview', serveOrganizerPreview);
+web.get('/preview/*', serveOrganizerPreview);
+
 // Keep old bookmarks useful without retaining any of the legacy HTML surface.
 web.get('/dashboard', (c) => c.redirect('/app', 308));
 web.get('/dashboard/settings', (c) => c.redirect('/app/settings', 308));

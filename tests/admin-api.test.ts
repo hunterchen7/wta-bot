@@ -58,10 +58,53 @@ describe('admin JSON API authorization', () => {
   it('rejects anonymous and participant sessions', async () => {
     expect((await app.request('/api/admin/overview', {}, env)).status).toBe(401);
     expect((await request('/api/admin/overview', {}, false)).status).toBe(403);
+    expect((await app.request('/api/admin/previews/interviewee_report', {}, env)).status).toBe(401);
+    expect((await request('/api/admin/previews/interviewee_report', {}, false)).status).toBe(403);
+    expect((await app.request('/api/public/previews/interviewee_report', {}, env)).status).toBe(404);
   });
 });
 
 describe('admin operational data', () => {
+  it('serves organizer-only previews and discards completed test uploads', async () => {
+    const before = await env.DB.prepare('SELECT count(*) AS n FROM form_instances').first<{ n: number }>();
+    for (const kind of ['interviewee_report', 'interviewer_report']) {
+      const response = await request(`/api/admin/previews/${kind}`);
+      expect(response.status).toBe(200);
+      const preview = await response.json<any>();
+      expect(preview).toMatchObject({ preview: true, kind, fields: expect.any(Array) });
+      expect(preview.fields.length).toBeGreaterThan(5);
+    }
+    expect((await request('/api/admin/previews/nope')).status).toBe(404);
+    expect(await env.DB.prepare('SELECT count(*) AS n FROM form_instances').first()).toEqual(before);
+
+    const bytes = new TextEncoder().encode('temporary organizer preview recording');
+    const initialized = await request('/api/admin/previews/recording/init', {
+      method: 'POST',
+      body: JSON.stringify({ filename: 'preview.webm', size: bytes.byteLength, contentType: 'video/webm' }),
+    });
+    expect(initialized.status).toBe(200);
+    const upload = await initialized.json<{ key: string; uploadId: string; partSize: number }>();
+    expect(upload.key).toMatch(/^previews\/9101\//);
+
+    const uploaded = await request('/api/admin/previews/recording/part/1', {
+      method: 'PUT', body: bytes,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': String(bytes.byteLength),
+        'X-WTA-Object-Key': upload.key,
+        'X-WTA-Upload-Id': upload.uploadId,
+      },
+    });
+    expect(uploaded.status).toBe(200);
+    const part = await uploaded.json<{ partNumber: number; etag: string }>();
+    const completed = await request('/api/admin/previews/recording/complete', {
+      method: 'POST', body: JSON.stringify({ key: upload.key, uploadId: upload.uploadId, parts: [part] }),
+    });
+    expect(completed.status).toBe(200);
+    expect(await completed.json<any>()).toMatchObject({ ok: true, storedBytes: bytes.byteLength });
+    expect(await env.RECORDINGS!.get(upload.key)).toBeNull();
+  });
+
   it('returns overview queues and matching readiness', async () => {
     const response = await request('/api/admin/overview');
     expect(response.status).toBe(200);

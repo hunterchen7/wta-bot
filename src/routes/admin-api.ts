@@ -4,6 +4,7 @@ import { enqueue, enqueueMany } from '../engine/outbox';
 import { maybeMarkEligible } from '../engine/reports';
 import { activeCohort, cohortWeeks, createCohort } from '../engine/weeks';
 import type { Env } from '../env';
+import { fieldsFor } from '../forms/schema';
 import { listParticipants, participantsToCsv } from '../participants';
 import { generateProblemSet, ProblemSetError, problemBankWorkspace, replaceProblemSet } from '../services/problem-sets';
 import { sessionFrom, type SessionUser } from './web';
@@ -15,6 +16,8 @@ const editableSettingKeys = new Set<SettingKey>([
   'announce_channel_id', 'organizer_channel_id', 'threads_channel_id',
   'participant_role_id', 'organizer_role_id', 'packet_mode',
 ]);
+const PREVIEW_RECORDING_PART_BYTES = 16 * 1024 * 1024;
+const MAX_PREVIEW_RECORDING_BYTES = 2 * 1024 * 1024 * 1024;
 
 async function requireOrganizer(c: any): Promise<SessionUser | Response> {
   const session = await sessionFrom(c);
@@ -41,6 +44,84 @@ async function audit(
     targetId == null ? null : String(targetId),
     detail == null ? null : JSON.stringify(detail),
   ).run();
+}
+
+adminApi.get('/api/admin/previews/:kind', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const kind = c.req.param('kind');
+  const fields = fieldsFor(kind);
+  if (!fields) return c.json({ error: 'not_found', message: 'Unknown preview.' }, 404);
+  return c.json({
+    preview: true, id: 0, kind, round: 2,
+    role: kind === 'interviewer_report' ? 'interviewer' : 'interviewee',
+    assigneeName: 'Alex Example', partnerName: 'Jordan Example',
+    scheduledAt: '2026-08-12T23:30:00.000Z', deadlineAt: '2026-08-23T03:59:00.000Z',
+    submittedAt: null, overdue: false, fields, values: {},
+  });
+});
+
+adminApi.post('/api/admin/previews/recording/init', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured', message: 'Recording uploads are not configured.' }, 503);
+  const body = await c.req.json<{ filename?: string; size?: number; contentType?: string }>().catch(() => null);
+  const size = Number(body?.size ?? 0);
+  const contentType = String(body?.contentType ?? '').slice(0, 100);
+  if (!body?.filename || !Number.isFinite(size) || size <= 0 || size > MAX_PREVIEW_RECORDING_BYTES || !contentType.startsWith('video/')) {
+    return c.json({ error: 'invalid_recording', message: 'Choose a supported video no larger than 2 GB.' }, 400);
+  }
+  const key = `previews/${gate.participantId}/${crypto.randomUUID()}${previewRecordingExtension(contentType)}`;
+  const upload = await c.env.RECORDINGS.createMultipartUpload(key, { httpMetadata: { contentType, cacheControl: 'private, no-store' } });
+  return c.json({ key, uploadId: upload.uploadId, partSize: PREVIEW_RECORDING_PART_BYTES });
+});
+
+adminApi.put('/api/admin/previews/recording/part/:part', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
+  const key = c.req.header('x-wta-object-key') ?? '';
+  const uploadId = c.req.header('x-wta-upload-id') ?? '';
+  const partNumber = Number(c.req.param('part'));
+  const contentLength = Number(c.req.header('content-length') ?? 0);
+  if (!validPreviewUpload(gate, key, uploadId) || !Number.isInteger(partNumber) || partNumber < 1 || partNumber > 10000) return c.json({ error: 'invalid_upload' }, 404);
+  if (!c.req.raw.body || contentLength <= 0 || contentLength > PREVIEW_RECORDING_PART_BYTES) return c.json({ error: 'invalid_part' }, 400);
+  const part = await c.env.RECORDINGS.resumeMultipartUpload(key, uploadId).uploadPart(partNumber, c.req.raw.body);
+  return c.json({ partNumber: part.partNumber, etag: part.etag });
+});
+
+adminApi.post('/api/admin/previews/recording/complete', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
+  const body = await c.req.json<{ key?: string; uploadId?: string; parts?: Array<{ partNumber: number; etag: string }> }>().catch(() => null);
+  if (!body || !validPreviewUpload(gate, body.key ?? '', body.uploadId ?? '') || !body.parts?.length) return c.json({ error: 'invalid_upload' }, 404);
+  const parts = body.parts.filter((part) => Number.isInteger(part.partNumber) && part.partNumber > 0 && typeof part.etag === 'string').sort((a, b) => a.partNumber - b.partNumber);
+  if (parts.length !== body.parts.length) return c.json({ error: 'invalid_parts' }, 400);
+  const object = await c.env.RECORDINGS.resumeMultipartUpload(body.key!, body.uploadId!).complete(parts);
+  await c.env.RECORDINGS.delete(body.key!);
+  return c.json({ ok: true, storedBytes: object.size });
+});
+
+adminApi.delete('/api/admin/previews/recording', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  if (!c.env.RECORDINGS) return c.json({ ok: true });
+  const body = await c.req.json<{ key?: string; uploadId?: string }>().catch(() => null);
+  if (!body || !validPreviewUpload(gate, body.key ?? '', body.uploadId ?? '')) return c.json({ ok: true });
+  await c.env.RECORDINGS.resumeMultipartUpload(body.key!, body.uploadId!).abort().catch(() => {});
+  return c.json({ ok: true });
+});
+
+function validPreviewUpload(session: SessionUser, key: string, uploadId: string) {
+  return key.startsWith(`previews/${session.participantId}/`) && key.length <= 200 && uploadId.length > 0 && uploadId.length <= 500;
+}
+
+function previewRecordingExtension(contentType: string) {
+  if (contentType === 'video/webm') return '.webm';
+  if (contentType === 'video/quicktime') return '.mov';
+  if (contentType === 'video/x-matroska' || contentType === 'video/matroska') return '.mkv';
+  return '.mp4';
 }
 
 const count = async (env: Env, sql: string, ...bindings: unknown[]) => {

@@ -44,7 +44,7 @@ export function PreviewPage() {
       <PublicIntro
         eyebrow="Experience library"
         title="Walk every participant flow."
-        description="Interactive previews use the same React components as the live product. Preview submissions are disabled and do not touch program data."
+        description="Interactive previews use the same React components as the live product. Submissions are disabled, and test recordings are discarded after upload."
       />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {cards.map((card) => (

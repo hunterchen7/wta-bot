@@ -5,6 +5,8 @@ import { PublicIntro, PublicShell, publicInputClass } from '../components/Public
 
 export function LoginPage() {
   const [params] = useSearchParams();
+  const requestedNext = params.get('next');
+  const destination = requestedNext?.startsWith('/preview') ? requestedNext : '/app';
   const [checkingSession, setCheckingSession] = useState(true);
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState('');
@@ -18,7 +20,7 @@ export function LoginPage() {
     const controller = new AbortController();
     void fetch('/api/auth/session', { headers: { Accept: 'application/json' }, signal: controller.signal })
       .then((response) => {
-        if (response.ok) window.location.replace('/app');
+        if (response.ok) window.location.replace(destination);
         else setCheckingSession(false);
       })
       .catch((cause) => {
@@ -26,7 +28,7 @@ export function LoginPage() {
         setCheckingSession(false);
       });
     return () => controller.abort();
-  }, []);
+  }, [destination]);
   useEffect(() => {
     if (params.get('error') === 'expired') setError('That one-click sign-in link expired. Request a fresh code below.');
   }, [params]);
@@ -41,7 +43,7 @@ export function LoginPage() {
     event.preventDefault(); setBusy(true); setError('');
     try {
       const result = await publicRequest<{ redirect: string }>('/auth/verify-code', { method: 'POST', body: JSON.stringify({ email, code }) });
-      window.location.assign(result.redirect);
+      window.location.assign(destination || result.redirect);
     } catch (cause) {
       setError(cause instanceof SettingsSaveError ? cause.fieldErrors.code ?? cause.message : 'Could not verify that code.');
       setCode('');

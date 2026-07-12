@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useBlocker, useParams, useSearchParams } from 'react-router-dom';
-import { publicRequest, SettingsSaveError } from '../api';
+import { adminRequest, publicRequest, SettingsSaveError } from '../api';
 import { PublicShell } from '../components/PublicShell';
 import { CodeEditor } from '../components/CodeEditor';
 import { VideoUploadField } from '../components/VideoUploadField';
@@ -28,8 +28,10 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
   const blocker = useBlocker(dirty && !saved);
 
   useEffect(() => {
-    const path = previewKind ? `/public/previews/${previewKind}` : `/forms/${token}`;
-    publicRequest<ReportData>(path).then((result) => { setData(result); setValues(result.values); setBaseline(JSON.stringify(result.values)); }).catch((cause) => setError(cause instanceof Error ? cause.message : 'Could not open this report.'));
+    const request = previewKind
+      ? adminRequest<ReportData>(`/previews/${previewKind}`)
+      : publicRequest<ReportData>(`/forms/${token}`);
+    request.then((result) => { setData(result); setValues(result.values); setBaseline(JSON.stringify(result.values)); }).catch((cause) => setError(cause instanceof Error ? cause.message : 'Could not open this report.'));
   }, [previewKind, token]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty && !saved) event.preventDefault(); };

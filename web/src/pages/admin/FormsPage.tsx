@@ -29,7 +29,7 @@ export function FormsPage() {
   const [loading, setLoading] = useState<Record<FormKind, boolean>>({ enrollment: true, interviewee_report: true, interviewer_report: true });
   const form = forms[kind];
   return <div className="flex min-h-[34rem] flex-col gap-5 lg:h-[calc(100dvh-9rem)] lg:min-h-0">
-    <PageIntro title="Forms" description="Inspect the exact participant-facing reports. These previews use the live form schemas and never write program data." actions={<Button asChild variant="outline"><a href={form.path} target="_blank" rel="noreferrer">Open full preview ↗</a></Button>} />
+    <PageIntro title="Forms" description="Inspect the exact participant-facing reports. Test uploads are transferred normally, then discarded without writing program data." actions={<Button asChild variant="outline"><a href={form.path} target="_blank" rel="noreferrer">Open full preview ↗</a></Button>} />
     <div className="flex shrink-0"><Tabs value={kind} onChange={(value) => setKind(value as FormKind)} items={formEntries.map(([value, item]) => ({ value, label: item.label }))} /></div>
     <Panel className="flex min-h-0 flex-1 flex-col" title={form.label} description={form.description}>
       <div className="relative min-h-0 flex-1 overflow-hidden bg-background dark:bg-background" aria-busy={loading[kind]}>

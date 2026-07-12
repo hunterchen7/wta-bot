@@ -1,7 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { sendEmail } from '../src/email';
-import { app } from '../src/index';
 
 describe('email sending', () => {
   it('sends the structured Email Service payload with a named sender', async () => {
@@ -26,19 +25,5 @@ describe('email sending', () => {
     await expect(
       sendEmail({ ...env, EMAIL: undefined } as any, 'x@y.z', 's', 't'),
     ).resolves.toBeUndefined();
-  });
-});
-
-describe('report preview API', () => {
-  it('returns both report schemas without creating form instances', async () => {
-    for (const kind of ['interviewee_report', 'interviewer_report']) {
-      const res = await app.request(`/api/public/previews/${kind}`, {}, env);
-      expect(res.status).toBe(200);
-      const preview = await res.json<any>();
-      expect(preview).toMatchObject({ preview: true, kind, fields: expect.any(Array) });
-      expect(preview.fields.length).toBeGreaterThan(5);
-    }
-    expect((await app.request('/api/public/previews/nope', {}, env)).status).toBe(404);
-    expect(await env.DB.prepare('SELECT count(*) AS n FROM form_instances').first()).toEqual({ n: 0 });
   });
 });
