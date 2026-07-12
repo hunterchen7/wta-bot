@@ -16,10 +16,21 @@ type Instance = {
   submitted_at: string | null;
 };
 
-export async function onReportSubmitted(env: Env, instance: Instance, payload: Record<string, string>): Promise<void> {
+export async function onReportSubmitted(
+  env: Env,
+  instance: Instance,
+  payload: Record<string, string>,
+  origin?: string,
+): Promise<void> {
   const session = await getSession(env, instance.session_id);
   if (!session) return;
   const side = instance.kind === 'interviewer_report' ? 'interviewer' : 'interviewee';
+
+  // Interviewee filed -> record exposure + release the solution (DESIGN §6).
+  if (side === 'interviewee') {
+    const { releaseSolution } = await import('./problems');
+    await releaseSolution(env, session.id, origin ?? env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca');
+  }
 
   // 1) Credit the submitter's side; complete the session when both sides in.
   await env.DB.prepare(

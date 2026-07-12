@@ -77,6 +77,14 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
     return c.json(ephemeral(message));
   }
 
+  const swap = /^swap:(\d+)$/.exec(id);
+  if (swap) {
+    const { swapProblem } = await import('../engine/problems');
+    const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
+    const message = await swapProblem(c.env, Number(swap[1]), user.id, origin);
+    return c.json(ephemeral(message));
+  }
+
   return c.json(ephemeral('🚧 Not implemented yet.'));
 }
 

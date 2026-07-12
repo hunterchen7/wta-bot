@@ -15,6 +15,7 @@ export type CommandOption = {
   description: string;
   required?: boolean;
   options?: CommandOption[];
+  choices?: Array<{ name: string; value: string | number }>;
 };
 
 export type Command = {
@@ -140,6 +141,50 @@ export const COMMANDS: Command[] = [
   {
     name: 'digest',
     description: 'Organizers: post the weekly digest now',
+    default_member_permissions: '32',
+  },
+  {
+    name: 'problems',
+    description: 'Organizers: manage the problem bank',
+    default_member_permissions: '32',
+    options: [
+      {
+        type: SUB_COMMAND,
+        name: 'add',
+        description: 'Add a problem to the master bank',
+        options: [
+          { type: STRING, name: 'title', description: 'Problem title', required: true },
+          {
+            type: STRING,
+            name: 'difficulty',
+            description: 'Difficulty',
+            required: true,
+            choices: [
+              { name: 'easy', value: 'easy' },
+              { name: 'medium', value: 'medium' },
+              { name: 'hard', value: 'hard' },
+            ],
+          },
+          { type: 4, name: 'number', description: 'LeetCode number' },
+          { type: STRING, name: 'url', description: 'Problem link' },
+          { type: 10, name: 'rank', description: 'Fine rank 1.0–3.1 (2.7 = harder medium)' },
+        ],
+      },
+      { type: SUB_COMMAND, name: 'list', description: 'Bank overview' },
+      {
+        type: SUB_COMMAND,
+        name: 'setweek',
+        description: 'Pre-generate a week\'s set by difficulty rule',
+        options: [
+          { type: 4, name: 'week', description: 'Week number (1-3)', required: true },
+          { type: 4, name: 'size', description: 'Set size (default 5)' },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'eligible',
+    description: 'Organizers: list alumni-round eligible participants',
     default_member_permissions: '32',
   },
 ];

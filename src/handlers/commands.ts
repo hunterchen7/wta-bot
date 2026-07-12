@@ -70,6 +70,23 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
     case 'participant':
       return participantCommand(c, interaction);
 
+    case 'problems':
+      return problemsCommand(c, interaction);
+
+    case 'eligible': {
+      if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
+      const { results } = await c.env.DB.prepare(
+        "SELECT name, discord_id FROM participants WHERE status = 'completed' ORDER BY id",
+      ).all<{ name: string | null; discord_id: string }>();
+      return c.json(
+        ephemeral(
+          results.length
+            ? `🏆 **Alumni-round eligible (${results.length}):**\n${results.map((r) => `• ${r.name ?? '?'} (<@${r.discord_id}>)`).join('\n')}`
+            : 'Nobody eligible yet — 6/6 credits + verified W3 pass required.',
+        ),
+      );
+    }
+
     case 'digest': {
       if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
       const cohort = await activeCohort(c.env);
@@ -377,6 +394,72 @@ async function excuseCommand(c: Ctx, interaction: Interaction) {
   if (!latest) return c.json(ephemeral('No open/confirmed incidents to excuse.'));
   const message = await resolveCase(c.env, p.id, 'excuse', latest.id);
   return c.json(ephemeral(message));
+}
+
+async function problemsCommand(c: Ctx, interaction: Interaction) {
+  if (!(await isOrganizer(c.env, interaction))) return c.json(ephemeral('Organizers only.'));
+  const s = sub(interaction);
+  const opts = s?.options;
+
+  switch (s?.name) {
+    case 'add': {
+      const title = String(optVal(opts, 'title') ?? '').trim();
+      const difficulty = String(optVal(opts, 'difficulty') ?? 'medium');
+      const number = optVal(opts, 'number');
+      const url = optVal(opts, 'url');
+      const rank = optVal(opts, 'rank');
+      if (!title) return c.json(ephemeral('Title required.'));
+      await c.env.DB.prepare(
+        `INSERT INTO problems (number, title, url, difficulty, difficulty_rank) VALUES (?1, ?2, ?3, ?4, ?5)`,
+      )
+        .bind(number ?? null, title, url ?? null, difficulty, rank ?? null)
+        .run();
+      return c.json(
+        ephemeral(
+          `Added **${title}** (${difficulty}${rank ? `, rank ${rank}` : ''}). Statement/solution/hints are edited on the dashboard → Problems.`,
+        ),
+      );
+    }
+    case 'list': {
+      const { results } = await c.env.DB.prepare(
+        `SELECT difficulty, count(*) AS n FROM problems WHERE active = 1 GROUP BY difficulty`,
+      ).all<{ difficulty: string; n: number }>();
+      const { results: recent } = await c.env.DB.prepare(
+        `SELECT number, title, difficulty, difficulty_rank FROM problems WHERE active = 1 ORDER BY id DESC LIMIT 15`,
+      ).all<any>();
+      return c.json(
+        ephemeral(
+          `**Bank:** ${results.map((r) => `${r.n} ${r.difficulty}`).join(' · ') || 'empty'}\n` +
+            recent.map((p: any) => `• ${p.number ? `#${p.number} ` : ''}${p.title} (${p.difficulty}${p.difficulty_rank ? ` ${p.difficulty_rank}` : ''})`).join('\n'),
+        ),
+      );
+    }
+    case 'setweek': {
+      const idx = Number(optVal(opts, 'week') ?? 0);
+      const size = Number(optVal(opts, 'size') ?? 5);
+      const cohort = await activeCohort(c.env);
+      if (!cohort) return c.json(ephemeral('No active cohort — `/setup cohort` first.'));
+      const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE cohort_id = ?1 AND idx = ?2')
+        .bind(cohort.id, idx)
+        .first<any>();
+      if (!week) return c.json(ephemeral(`No week ${idx} in the active cohort.`));
+      const { generateWeekSet, WEEK_BANDS } = await import('../engine/problems');
+      const { chosen } = await generateWeekSet(c.env, week.id, idx, size);
+      const band = WEEK_BANDS[Math.min(idx, 3)];
+      if (chosen.length === 0) {
+        return c.json(ephemeral(`No eligible problems in the ${band?.[0]}–${band?.[1]} rank band — add some with \`/problems add\`.`));
+      }
+      return c.json(
+        ephemeral(
+          `Week ${idx} set (${chosen.length}${chosen.length < size ? ` of ${size} requested — bank is thin` : ''}, band ${band?.[0]}–${band?.[1]}):\n` +
+            chosen.map((p) => `• ${p.title}`).join('\n') +
+            `\nInterviewers get packets automatically 24h before each session.${idx === 3 ? ' (W3: sanity-check these — the band is tight on purpose.)' : ''}`,
+        ),
+      );
+    }
+    default:
+      return c.json(ephemeral('Subcommands: `add`, `list`, `setweek`.'));
+  }
 }
 
 async function participantCommand(c: Ctx, interaction: Interaction) {
