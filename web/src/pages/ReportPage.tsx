@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { useBlocker, useParams } from 'react-router-dom';
+import { useBlocker, useParams, useSearchParams } from 'react-router-dom';
 import { publicRequest, SettingsSaveError } from '../api';
 import { PublicIntro, PublicShell, publicInputClass } from '../components/PublicShell';
 
@@ -8,6 +8,8 @@ export type ReportData = { preview?: boolean; id: number; kind: string; round: n
 
 export function ReportPage({ previewKind }: { previewKind?: string }) {
   const { token } = useParams();
+  const [searchParams] = useSearchParams();
+  const embedded = Boolean(previewKind && searchParams.get('embed') === '1');
   const [data, setData] = useState<ReportData | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
   const [baseline, setBaseline] = useState('{}');
@@ -44,10 +46,10 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     } finally { setBusy(false); }
   };
 
-  if (error && !data) return <PublicShell narrow><StateCard title="This form can’t be opened" text={error} /></PublicShell>;
-  if (!data) return <PublicShell narrow><div className="animate-pulse space-y-5"><div className="h-28 rounded-3xl bg-slate-200" /><div className="h-96 rounded-3xl bg-slate-200" /></div></PublicShell>;
+  if (error && !data) return <ReportShell embedded={embedded}><StateCard title="This form can’t be opened" text={error} /></ReportShell>;
+  if (!data) return <ReportShell embedded={embedded}><div className="animate-pulse space-y-5"><div className="h-28 rounded-3xl bg-slate-200" /><div className="h-96 rounded-3xl bg-slate-200" /></div></ReportShell>;
 
-  return <PublicShell narrow>
+  return <ReportShell embedded={embedded}>
     <PublicIntro eyebrow={previewKind ? 'Read-only preview' : `Round ${data.round} report`} title={`${data.role === 'interviewer' ? 'Interviewer' : 'Interviewee'} report`} description={`Hi ${data.assigneeName ?? 'there'} — ${data.role === 'interviewer' ? `you interviewed ${data.partnerName ?? 'your partner'}` : `${data.partnerName ?? 'Your partner'} interviewed you`}${data.scheduledAt ? ` on ${formatDate(data.scheduledAt)}` : ''}; due ${formatDate(data.deadlineAt)}.`} />
     {saved ? <div role="status" className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-emerald-900"><div className="font-black">Report saved.</div><p className="mt-1 text-sm">Your credit and downstream notifications are being updated. You can keep this link and revise before the deadline.</p></div> : null}
     {data.submittedAt && !saved ? <div className="mb-6 rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm font-semibold text-sky-900">Submitted {formatDate(data.submittedAt)}. Saving again replaces the prior answers.</div> : null}
@@ -58,7 +60,11 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
       <div className={`${previewKind ? '' : 'sticky bottom-4 z-20 shadow-xl backdrop-blur'} rounded-2xl border border-slate-200 bg-white/95 p-3`}><button disabled={Boolean(previewKind) || busy || (!dirty && Boolean(data.submittedAt))} className="w-full cursor-pointer rounded-xl bg-slate-950 px-4 py-3.5 text-sm font-black text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">{previewKind ? 'Submission disabled in preview' : busy ? 'Saving report…' : data.submittedAt ? 'Save revised report' : 'Submit report'}</button></div>
     </form>
     {blocker.state === 'blocked' ? <LeaveDialog onStay={() => blocker.reset()} onLeave={() => blocker.proceed()} /> : null}
-  </PublicShell>;
+  </ReportShell>;
+}
+
+function ReportShell({ embedded, children }: { embedded: boolean; children: React.ReactNode }) {
+  return embedded ? <main className="min-h-screen bg-[#f7f7f5] px-4 py-6 dark:bg-background sm:px-6"><div className="mx-auto max-w-3xl">{children}</div></main> : <PublicShell narrow>{children}</PublicShell>;
 }
 
 function ReportFieldInput({ field, value, error, index, onChange }: { field: ReportField; value: string; error?: string; index: number; onChange: (value: string) => void }) {

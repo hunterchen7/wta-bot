@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense, type ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 import { AppLayout } from './App';
@@ -10,7 +10,6 @@ import { RoundsPage } from './pages/admin/RoundsPage';
 import { ReviewsPage } from './pages/admin/ReviewsPage';
 import { ProblemsPage } from './pages/admin/ProblemsPage';
 import { AnalyticsPage } from './pages/admin/AnalyticsPage';
-import { OperationsPage } from './pages/admin/OperationsPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { LoginPage } from './pages/LoginPage';
 import { ReportPage } from './pages/ReportPage';
@@ -19,6 +18,10 @@ import { BankPage } from './pages/BankPage';
 import { PreviewPage } from './pages/PreviewPage';
 import { EnrollmentPage } from './pages/EnrollmentPage';
 import './styles.css';
+
+const OperationsPage = lazy(() => import('./pages/admin/OperationsPage').then((module) => ({ default: module.OperationsPage })));
+const FormsPage = lazy(() => import('./pages/admin/FormsPage').then((module) => ({ default: module.FormsPage })));
+const deferred = (page: ReactNode) => <Suspense fallback={<div className="h-80 animate-pulse rounded-2xl bg-slate-200/70" />}>{page}</Suspense>;
 
 const router = createBrowserRouter(
   [
@@ -43,9 +46,10 @@ const router = createBrowserRouter(
         { path: 'admin/participants', element: <ParticipantsPage /> },
         { path: 'admin/rounds', element: <RoundsPage /> },
         { path: 'admin/reviews', element: <ReviewsPage /> },
+        { path: 'admin/forms', element: deferred(<FormsPage />) },
         { path: 'admin/problems', element: <ProblemsPage /> },
         { path: 'admin/analytics', element: <AnalyticsPage /> },
-        { path: 'admin/operations', element: <OperationsPage /> },
+        { path: 'admin/operations', element: deferred(<OperationsPage />) },
         { path: 'admin/settings', element: <AdminSettingsPage /> },
       ],
     },
