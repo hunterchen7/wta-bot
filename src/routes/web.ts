@@ -269,21 +269,130 @@ web.get('/dashboard/roster', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const { results } = await c.env.DB.prepare('SELECT * FROM participants ORDER BY id').all<any>();
+  // Current-week opt-in chip
+  const cohort = await activeCohort(c.env);
+  let currentWeekId: number | null = null;
+  if (cohort) {
+    const weeks = await cohortWeeks(c.env, cohort.id);
+    const now = Date.now();
+    currentWeekId =
+      [...weeks].reverse().find((w) => now >= new Date(w.optin_opens_at).getTime())?.id ?? null;
+  }
+  const optedIn = new Set<number>();
+  if (currentWeekId) {
+    const { results: opt } = await c.env.DB.prepare(
+      'SELECT participant_id FROM optins WHERE week_id = ?1',
+    )
+      .bind(currentWeekId)
+      .all<{ participant_id: number }>();
+    for (const o of opt) optedIn.add(o.participant_id);
+  }
   const rows = await Promise.all(
     results.map(async (p: any) => {
       const cr = await creditsOf(c.env, p.id);
       const st = await strikesOf(c.env, p.id);
-      return `<tr><td>${esc(p.name ?? '')}</td><td><code>${esc(p.discord_id)}</code></td>
+      return `<tr><td><a href="/dashboard/p/${p.id}">${esc(p.name ?? '(unnamed)')}</a></td>
         <td>${esc(p.preferred_email ?? '')}</td><td>${esc(p.year ?? '')} ${esc(p.program ?? '')}</td>
         <td>${cr.interviewer}/3 · ${cr.interviewee}/3</td><td>${st || ''}</td>
+        <td>${currentWeekId ? (optedIn.has(p.id) ? '✅ in' : '—') : ''}</td>
         <td><span class="tag">${esc(p.status)}</span>${p.email_ok ? ' 📧' : ''}</td></tr>`;
     }),
   );
   const body = `${nav(gate)}<h1>Roster (${results.length})</h1>
     <div class="card"><table>
-    <tr><th>Name</th><th>Discord</th><th>Email</th><th>Program</th><th>Credits</th><th>Strikes</th><th>Status</th></tr>
+    <tr><th>Name</th><th>Email</th><th>Program</th><th>Credits</th><th>Strikes</th><th>This week</th><th>Status</th></tr>
     ${rows.join('')}</table></div>`;
   return c.html(page('Roster', body, { wide: true }));
+});
+
+web.get('/dashboard/p/:id', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const pid = Number(c.req.param('id'));
+  const p = await c.env.DB.prepare('SELECT * FROM participants WHERE id = ?1').bind(pid).first<any>();
+  if (!p) return c.html(page('Not found', `${nav(gate)}<h1>No such participant</h1>`), 404);
+
+  const credits = await creditsOf(c.env, pid);
+  const strikes = await strikesOf(c.env, pid);
+  const json = (s: string | null) => {
+    try {
+      return s ? (JSON.parse(s) as string[]).join(', ') : '';
+    } catch {
+      return s ?? '';
+    }
+  };
+
+  const { results: sessions } = await c.env.DB.prepare(
+    `SELECT s.*, w.idx,
+       pi.name AS interviewer_name, pi.id AS pi_id,
+       pe.name AS interviewee_name, pe.id AS pe_id,
+       pr.title AS problem_title,
+       (SELECT payload FROM form_instances f WHERE f.session_id = s.id AND f.kind = 'interviewee_report' AND f.submitted_at IS NOT NULL) AS ie_payload,
+       (SELECT payload FROM form_instances f WHERE f.session_id = s.id AND f.kind = 'interviewer_report' AND f.submitted_at IS NOT NULL) AS ir_payload
+     FROM sessions s
+     JOIN weeks w ON w.id = s.week_id
+     JOIN participants pi ON pi.id = s.interviewer_id
+     JOIN participants pe ON pe.id = s.interviewee_id
+     LEFT JOIN problems pr ON pr.id = s.problem_id
+     WHERE s.interviewer_id = ?1 OR s.interviewee_id = ?1
+     ORDER BY w.idx, s.id`,
+  )
+    .bind(pid)
+    .all<any>();
+
+  const sessionRows = sessions
+    .map((s: any) => {
+      const asInterviewer = s.interviewer_id === pid;
+      const partnerName = asInterviewer ? s.interviewee_name : s.interviewer_name;
+      const partnerId = asInterviewer ? s.pe_id : s.pi_id;
+      const ie = s.ie_payload ? JSON.parse(s.ie_payload) : null;
+      const ir = s.ir_payload ? JSON.parse(s.ir_payload) : null;
+      // Artifacts about THIS person: as interviewee -> their video/code + the
+      // interviewer's verdict/ratings of them; as interviewer -> the ratings
+      // the interviewee gave them.
+      const bits: string[] = [];
+      if (asInterviewer) {
+        if (ie) bits.push(`rated by interviewee: exp ${ie.rating_experience ?? '?'} · comm ${ie.rating_communication ?? '?'} · prep ${ie.rating_preparedness ?? '?'}`);
+        if (ir) bits.push('own report ✅');
+      } else {
+        if (ie?.video_url) bits.push(`<a href="${esc(ie.video_url)}" rel="noreferrer">▶ recording</a>`);
+        if (ie?.code) bits.push(`<details style="display:inline"><summary>code</summary><pre style="white-space:pre-wrap">${esc(ie.code.slice(0, 4000))}</pre></details>`);
+        if (ir) bits.push(`verdict: <b>${esc(ir.verdict ?? '?')}</b> (${esc(ir.hints ?? '?')} hints, ps ${ir.rating_problem_solving ?? '?'}/5)`);
+      }
+      return `<tr>
+        <td>W${s.idx}${s.origin === 'repair' ? ' 🛠️' : ''}</td>
+        <td>${asInterviewer ? 'interviewer' : 'interviewee'} · <a href="/dashboard/p/${partnerId}">${esc(partnerName ?? '?')}</a></td>
+        <td>${s.scheduled_at ? esc(formatToronto(s.scheduled_at)) : '—'}</td>
+        <td>${esc(s.problem_title ?? '')}</td>
+        <td><span class="tag">${esc(s.state)}</span>${s.review_state !== 'none' ? ` <span class="tag">${esc(s.review_state)}</span>` : ''}</td>
+        <td>${bits.join(' · ')}</td></tr>`;
+    })
+    .join('');
+
+  const { results: incidents } = await c.env.DB.prepare(
+    `SELECT kind, state, created_at FROM incidents WHERE accused_id = ?1 ORDER BY id DESC`,
+  )
+    .bind(pid)
+    .all<any>();
+
+  const body = `${nav(gate)}
+    <h1>${esc(p.name ?? '(unnamed)')} <span class="tag">${esc(p.status)}</span>${p.status === 'completed' ? ' 🏆' : ''}</h1>
+    <p class="sub"><code>${esc(p.discord_id)}</code> · ${esc(p.preferred_email ?? '')} · ${esc(p.western_email ?? '')} · joined ${esc(String(p.created_at).slice(0, 10))}</p>
+    <div class="card">
+      <b>${esc(p.year ?? '?')}</b> year · ${esc(p.program ?? '?')} · looking for ${esc(json(p.opportunities) || '?')} ·
+      ${esc(p.experience_band ?? '?')} prior interviews · prior WTA: ${p.prior_wta ? 'yes' : 'no'} ${p.email_ok ? '· 📧 emails on' : ''}<br>
+      <b>Topics:</b> ${esc(json(p.topics))}<br>
+      ${p.blurb ? `<b>Dream job:</b> ${esc(p.blurb)}<br>` : ''}
+      ${p.interests ? `<b>Wants to learn:</b> ${esc(p.interests)}<br>` : ''}
+      <b>Progress:</b> 🎙️ ${credits.interviewer}/3 · 🧑‍💻 ${credits.interviewee}/3 ${strikes ? `· ⚠️ ${strikes} strike(s)` : ''}
+    </div>
+    <h2>Sessions</h2>
+    <div class="card"><table>
+      <tr><th>Week</th><th>Role · Partner</th><th>When</th><th>Problem</th><th>State</th><th>Artifacts & signals</th></tr>
+      ${sessionRows || '<tr><td colspan="6">None yet.</td></tr>'}
+    </table></div>
+    ${incidents.length ? `<h2>Incidents</h2><div class="card">${incidents.map((i: any) => `• ${esc(i.kind)} (${esc(i.state)}) — ${esc(String(i.created_at).slice(0, 10))}`).join('<br>')}</div>` : ''}`;
+  return c.html(page(p.name ?? 'Profile', body, { wide: true }));
 });
 
 web.get('/dashboard/week', async (c) => {

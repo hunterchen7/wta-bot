@@ -146,6 +146,52 @@ describe('views + authorization', () => {
     expect(roster).toContain('org@example.com');
   });
 
+  it('profile pages show intake, sessions, artifacts, and partner links', async () => {
+    const cookie = await cookieFor(2, true);
+    const week1 = await env.DB.prepare('SELECT id FROM weeks WHERE idx = 1').first<any>();
+    const ins = await env.DB.prepare(
+      `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, scheduled_at, interviewee_credited)
+       VALUES (?1, 2, 1, 'completed', '2026-09-16T23:30:00.000Z', 1)`,
+    )
+      .bind(week1.id)
+      .run();
+    const sid = Number(ins.meta.last_row_id);
+    await env.DB.prepare(
+      `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at, submitted_at, payload)
+       VALUES ('interviewee_report', ?1, 1, ?2, '2026-09-21T03:59:00.000Z', '2026-09-17T00:00:00.000Z', ?3)`,
+    )
+      .bind(
+        sid,
+        crypto.randomUUID(),
+        JSON.stringify({ video_url: 'https://rec.example/xyz', code: 'print(42)', rating_experience: '5' }),
+      )
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at, submitted_at, payload)
+       VALUES ('interviewer_report', ?1, 2, ?2, '2026-09-21T03:59:00.000Z', '2026-09-17T00:00:00.000Z', ?3)`,
+    )
+      .bind(sid, crypto.randomUUID(), JSON.stringify({ verdict: 'pass', hints: 'few', rating_problem_solving: '4' }))
+      .run();
+
+    const res = await get('/dashboard/p/1', cookie);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Stu Dent');
+    expect(html).toContain('dsa'); // intake topics render
+    expect(html).toContain('https://rec.example/xyz'); // recording link
+    expect(html).toContain('print(42)'); // code artifact
+    expect(html).toContain('pass'); // interviewer verdict
+    expect(html).toContain('/dashboard/p/2'); // partner link
+
+    // students cannot view profiles
+    const stu = await get('/dashboard/p/2', await cookieFor(1, false));
+    expect(stu.status).toBe(403);
+
+    // roster links through to profiles
+    const roster = await (await get('/dashboard/roster', cookie)).text();
+    expect(roster).toContain('/dashboard/p/1');
+  });
+
   it('review verify action updates state and problem editor saves content', async () => {
     const cookie = await cookieFor(2, true);
     // seed a pending-review session
