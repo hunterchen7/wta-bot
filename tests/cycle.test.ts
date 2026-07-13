@@ -13,9 +13,9 @@ import { asAdmin, asUser, makeSigner, sendInteraction, type Signer } from './hel
 
 const GUILD = '900100200';
 const OVERRIDES = { ALLOWED_GUILD_IDS: GUILD };
-const textField = (custom_id: string, value: string) => ({
+const selectField = (custom_id: string, value: string) => ({
   type: 18,
-  component: { type: 4, custom_id, value },
+  component: { type: 3, custom_id, values: [value] },
 });
 
 let signer: Signer;
@@ -198,6 +198,35 @@ describe('full weekly cycle', () => {
     )
       .bind(s0.interviewer_id)
       .first<any>();
+    const scheduler = await sendInteraction(
+      signer,
+      button(`sess:${s0.id}:sched`, interviewerDiscord.discord_id),
+      OVERRIDES,
+    );
+    const schedulerJson = (await scheduler.json()) as any;
+    expect(schedulerJson.type).toBe(9);
+    const schedulerFields = Object.fromEntries(
+      schedulerJson.data.components.map((field: any) => [field.component.custom_id, field.component]),
+    ) as Record<string, any>;
+    expect(schedulerFields.date.options[0].value).toBe('2026-09-14');
+    expect(schedulerFields.date.options.at(-1).value).toBe('2026-09-27');
+    expect(schedulerFields.hour.options).toHaveLength(24);
+    expect(schedulerFields.hour.options.map((option: any) => option.value)).toEqual(expect.arrayContaining(['00', '19', '23']));
+
+    const tooEarly = await sendInteraction(
+      signer,
+      {
+        type: 5, id: 'too-early', token: 't', guild_id: GUILD,
+        data: {
+          custom_id: `sess:${s0.id}:schedmodal`,
+          components: [selectField('date', '2026-09-13'), selectField('hour', '19'), selectField('minute', '30')],
+        },
+        ...asUser(interviewerDiscord.discord_id),
+      },
+      OVERRIDES,
+    );
+    expect(((await tooEarly.json()) as any).data.content).toContain('before this session');
+
     const sched = await sendInteraction(
       signer,
       {
@@ -207,7 +236,7 @@ describe('full weekly cycle', () => {
         guild_id: GUILD,
         data: {
           custom_id: `sess:${s0.id}:schedmodal`,
-          components: [textField('when', '2026-09-16 19:30')],
+          components: [selectField('date', '2026-09-16'), selectField('hour', '19'), selectField('minute', '30')],
         },
         ...asUser(interviewerDiscord.discord_id),
       },

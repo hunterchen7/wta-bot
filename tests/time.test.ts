@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatToronto, parseTorontoLocal, torontoToUtc } from '../src/time';
+import { formatToronto, parseTorontoLocal, torontoDateKey, torontoToUtc } from '../src/time';
 
 describe('Toronto time helpers', () => {
   it('converts summer (EDT, UTC-4) wall time to UTC', () => {
@@ -27,5 +27,10 @@ describe('Toronto time helpers', () => {
     const s = formatToronto(d);
     expect(s).toContain('7:30');
     expect(s).toContain('Sep');
+  });
+
+  it('derives the Toronto calendar date around UTC midnight', () => {
+    expect(torontoDateKey('2026-07-13T01:00:00.000Z')).toBe('2026-07-12');
+    expect(torontoDateKey('2026-07-13T05:00:00.000Z')).toBe('2026-07-13');
   });
 });

@@ -78,6 +78,17 @@ export function formatToronto(utc: Date | string): string {
   }).format(d);
 }
 
+/** Calendar date containing an instant in Toronto, formatted for storage/select values. */
+export function torontoDateKey(utc: Date | string): string {
+  const d = typeof utc === 'string' ? new Date(utc) : utc;
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
 export const iso = (d: Date) => d.toISOString();
 
 /** Discord's native timestamp markup — renders in each viewer's local zone. */

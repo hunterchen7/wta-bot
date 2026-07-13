@@ -3,12 +3,12 @@
 
 import type { Context } from 'hono';
 import { getSettings } from '../config';
-import { ephemeral, modal, textInput } from '../discord/components';
+import { ephemeral, modal, stringSelect } from '../discord/components';
 import { disputeIncident, getSession, reportIncident, resolveCase } from '../engine/incidents';
 import { enqueue } from '../engine/outbox';
 import type { Env } from '../env';
 import { getParticipant } from '../participants';
-import { discordTime, formatToronto, parseTorontoLocal } from '../time';
+import { discordTime, formatToronto, parseTorontoLocal, torontoDateKey } from '../time';
 import {
   collectModalValues,
   type Interaction,
@@ -192,17 +192,15 @@ async function handleSessionButton(
     if (session.state === 'broken' || session.state === 'cancelled') {
       return c.json(ephemeral('This session was cancelled/broken — it can\'t be scheduled.'));
     }
-    return c.json(
-      modal(`sess:${sessionId}:schedmodal`, 'Confirm your session time', [
-        textInput({
-          id: 'when',
-          label: 'When? (Toronto time)',
-          description: 'Format: YYYY-MM-DD HH:mm — e.g. 2026-09-16 19:30',
-          placeholder: '2026-09-16 19:30',
-          maxLength: 20,
-        }),
-      ]),
-    );
+    const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(session.week_id).first<any>();
+    if (!week) return c.json(ephemeral('This round no longer exists.'));
+    const dateOptions = schedulingDateOptions(week, session, new Date());
+    if (!dateOptions.length) return c.json(ephemeral('There are no legal scheduling dates left in this round. Contact an organizer.'));
+    return c.json(modal(`sess:${sessionId}:schedmodal`, 'Confirm your session time', [
+      stringSelect({ id: 'date', label: 'Date (Toronto)', description: schedulingWindowDescription(week, session), options: dateOptions }),
+      stringSelect({ id: 'hour', label: 'Hour (24-hour time)', options: Array.from({ length: 24 }, (_, hour) => ({ label: String(hour).padStart(2, '0'), value: String(hour).padStart(2, '0') })) }),
+      stringSelect({ id: 'minute', label: 'Minute', options: ['00', '15', '30', '45'].map((value) => ({ label: value, value })) }),
+    ]));
   }
 
   if (session.state === 'broken' || session.state === 'cancelled') {
@@ -213,20 +211,38 @@ async function handleSessionButton(
 }
 
 async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId: number, values: Map<string, string | string[]>) {
-  const raw = String(values.get('when') ?? '');
-  const when = parseTorontoLocal(raw);
-  if (!when) {
-    return c.json(ephemeral(`Couldn't parse \`${raw}\` — use \`YYYY-MM-DD HH:mm\` (Toronto), e.g. \`2026-09-16 19:30\`.`));
-  }
   const session = await getSession(c.env, sessionId);
   if (!session) return c.json(ephemeral('Session not found.'));
+  const user = interactionUser(interaction)!;
+  const me = await getParticipant(c.env, user.id);
+  const mine = me && (session.interviewer_id === me.id || session.interviewee_id === me.id);
+  if (!mine && !(await isOrganizer(c.env, interaction))) {
+    return c.json(ephemeral('Only the two session participants (or organizers) can schedule this session.'));
+  }
+  if (session.state === 'broken' || session.state === 'cancelled') {
+    return c.json(ephemeral('This session was cancelled/broken — it can\'t be scheduled.'));
+  }
   const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(session.week_id).first<any>();
+  if (!week) return c.json(ephemeral('This round no longer exists.'));
+  const date = modalValue(values, 'date');
+  const hour = Number(modalValue(values, 'hour'));
+  const minute = modalValue(values, 'minute');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(hour) || hour < 0 || hour > 23 || !['00', '15', '30', '45'].includes(minute)) {
+    return c.json(ephemeral('That date or time is invalid. Reopen the scheduler and choose from the available options.'));
+  }
+  const when = parseTorontoLocal(`${date} ${String(hour).padStart(2, '0')}:${minute}`);
+  if (!when) return c.json(ephemeral('That date does not exist in Toronto time. Choose another date.'));
+  const now = new Date();
+  const windowStart = session.origin === 'manual' ? now : new Date(week.match_at);
   const deadline = new Date(week.grace_until ?? week.reports_due_at);
-  if (when.getTime() < Date.now() - 3600_000) {
+  if (when.getTime() < now.getTime() - 60_000) {
     return c.json(ephemeral('That time is in the past — pick something upcoming.'));
   }
+  if (when < windowStart) {
+    return c.json(ephemeral(`That is before this session's scheduling window opens (${formatToronto(windowStart)} Toronto).`));
+  }
   if (when > deadline) {
-    return c.json(ephemeral(`That's past the week's deadline (${formatToronto(deadline)} Toronto). Pick an earlier slot.`));
+    return c.json(ephemeral(`That's past the round deadline (${formatToronto(deadline)} Toronto). Pick an earlier slot.`));
   }
   await c.env.DB.prepare("UPDATE sessions SET scheduled_at = ?1, state = 'scheduled' WHERE id = ?2")
     .bind(when.toISOString(), sessionId)
@@ -238,6 +254,37 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
       content: `📅 Locked in: ${discordTime(when)} (${formatToronto(when)} Toronto). Report forms arrive here + by DM at session time.`,
     },
   });
+}
+
+function modalValue(values: Map<string, string | string[]>, key: string): string {
+  const value = values.get(key);
+  return Array.isArray(value) ? String(value[0] ?? '') : String(value ?? '');
+}
+
+function schedulingWindowDescription(week: any, session: { origin?: string }): string {
+  const start = session.origin === 'manual' ? new Date() : new Date(week.match_at);
+  const end = new Date(week.grace_until ?? week.reports_due_at);
+  return `${formatToronto(start)} through ${formatToronto(end)}`.slice(0, 100);
+}
+
+function schedulingDateOptions(week: any, session: { origin?: string }, now: Date) {
+  const startsAt = session.origin === 'manual'
+    ? now
+    : new Date(Math.max(now.getTime(), new Date(week.match_at).getTime()));
+  const endsAt = new Date(week.grace_until ?? week.reports_due_at);
+  const first = torontoDateKey(startsAt);
+  const last = torontoDateKey(endsAt);
+  const options: Array<{ label: string; value: string; description?: string; default?: boolean }> = [];
+  for (let cursor = new Date(`${first}T12:00:00Z`); options.length < 25; cursor = new Date(cursor.getTime() + 86400_000)) {
+    const value = cursor.toISOString().slice(0, 10);
+    if (value > last) break;
+    options.push({
+      value,
+      label: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', weekday: 'short', month: 'short', day: 'numeric' }).format(cursor),
+      default: options.length === 0,
+    });
+  }
+  return options;
 }
 
 /** Self-serve program withdrawal: cancel open sessions, repair-queue the
