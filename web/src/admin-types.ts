@@ -53,3 +53,14 @@ export type CronHealth = { status: 'healthy' | 'late' | 'never_run'; lastTickAt:
 export type OperationsData = { outbox: OutboxRow[]; notifications: Array<Record<string, any>>; jobs: Array<Record<string, any>>; audit: AuditRow[]; cron: CronHealth };
 
 export type AdminSettingsData = { settings: Record<string, string>; cohorts: Cohort[]; timeline: ProgramWeek[]; programWeek: ProgramWeek | null; activeParticipants: number; minimumMatchingPool: number };
+export type AdminMcpData = {
+  mcpUrl: string;
+  token: string | null;
+  credential: null | {
+    id: number;
+    tokenPrefix: string;
+    scopes: string[];
+    lastUsedAt: string | null;
+    createdAt: string;
+  };
+};

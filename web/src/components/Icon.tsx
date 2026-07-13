@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'analytics' | 'chevron' | 'close' | 'collapse' | 'forms' | 'menu' | 'operations' | 'overview' | 'participants' | 'problems' | 'progress' | 'reviews' | 'rounds' | 'settings';
+export type IconName = 'analytics' | 'chevron' | 'close' | 'collapse' | 'forms' | 'mcp' | 'menu' | 'operations' | 'overview' | 'participants' | 'problems' | 'progress' | 'reviews' | 'rounds' | 'settings';
 
 export function Icon({ name, className = 'size-5' }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -9,6 +9,7 @@ export function Icon({ name, className = 'size-5' }: { name: IconName; className
     close: <><path d="m6 6 12 12" /><path d="m18 6-12 12" /></>,
     collapse: <><path d="m15 18-6-6 6-6" /><path d="M20 4v16" /></>,
     forms: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h6" /></>,
+    mcp: <><path d="M8 12h8" /><path d="M12 8v8" /><path d="M4.9 4.9a10 10 0 0 1 14.2 0" /><path d="M4.9 19.1a10 10 0 0 0 14.2 0" /><circle cx="12" cy="12" r="9" /></>,
     menu: <><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></>,
     operations: <><path d="M12 2v4" /><path d="M12 18v4" /><path d="m4.93 4.93 2.83 2.83" /><path d="m16.24 16.24 2.83 2.83" /><path d="M2 12h4" /><path d="M18 12h4" /><circle cx="12" cy="12" r="3" /></>,
     overview: <><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></>,

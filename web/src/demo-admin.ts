@@ -1,4 +1,4 @@
-import type { AdminSettingsData, AnalyticsData, OperationsData, OverviewData, ParticipantsData, ProblemsData, ReviewsData, RoundsData } from './admin-types';
+import type { AdminMcpData, AdminSettingsData, AnalyticsData, OperationsData, OverviewData, ParticipantsData, ProblemsData, ReviewsData, RoundsData } from './admin-types';
 
 const now = new Date('2026-08-13T14:00:00.000Z').toISOString();
 const cohort = { id: 1, name: 'Summer 2026', start_date: '2026-07-26', weeks_count: 3, status: 'active' };
@@ -59,6 +59,7 @@ const operations: OperationsData = {
 
 export async function adminDemoRequest(path: string, init?: RequestInit): Promise<unknown> {
   await new Promise((resolve) => setTimeout(resolve, init?.method ? 180 : 80));
+  if (path === '/mcp-token/reset' && init?.method === 'POST') return { mcpUrl: 'https://wta.hunterchen.ca/mcp', token: 'wta_admin_demo_personal_mcp_token_123456789', credential: { id: 2, tokenPrefix: 'wta_admin_demo_per', scopes: ['admin:read', 'participants:write', 'problems:write', 'program:write', 'operations:write'], lastUsedAt: null, createdAt: now } } satisfies AdminMcpData;
   if (init?.method && init.method !== 'GET') return { ok: true, updated: 1, queued: 1, skipped: 0, state: 'verified', id: 99, weeks };
   if (path === '/overview') return overview;
   if (path === '/participants') return { participants, cohort, currentWeek: weeks[1] } satisfies ParticipantsData;
@@ -75,6 +76,7 @@ export async function adminDemoRequest(path: string, init?: RequestInit): Promis
   if (path === '/problems') return { problems, sets: problems.filter((problem) => problem.available_weeks.includes(2)).map((problem) => ({ week_id: 2, round: 2, cohort_name: cohort.name, problem_id: problem.id, title: problem.title })), cohort, weeks } satisfies ProblemsData;
   if (path === '/analytics') return { participants: overview.participantStatuses.map((row) => ({ label: row.status, value: row.n })), sessions: overview.sessionStates.map((row) => ({ label: row.state, value: row.n })), reports: [{ label: 'interviewee_report', total: 18, submitted: 15 }, { label: 'interviewer_report', total: 18, submitted: 14 }], reviews: [{ label: 'verified', value: 9 }, { label: 'pending', value: 3 }, { label: 'flagged', value: 2 }], problems: problems.map((problem) => ({ id: problem.id, title: problem.title, difficulty: problem.difficulty, uses: problem.uses, avg_experience: problem.uses ? 4.2 - problem.id * .2 : null })), rounds: [{ cohort: cohort.name, round: 1, optins: 12, sessions: 20, completed: 18 }, { cohort: cohort.name, round: 2, optins: 10, sessions: 19, completed: 7 }, { cohort: cohort.name, round: 3, optins: 0, sessions: 0, completed: 0 }] } satisfies AnalyticsData;
   if (path === '/operations') return operations;
+  if (path === '/mcp-token') return { mcpUrl: 'https://wta.hunterchen.ca/mcp', token: 'wta_admin_demo_personal_mcp_token_123456789', credential: { id: 1, tokenPrefix: 'wta_admin_demo_per', scopes: ['admin:read', 'participants:write', 'problems:write', 'program:write', 'operations:write'], lastUsedAt: now, createdAt: '2026-08-10T14:00:00.000Z' } } satisfies AdminMcpData;
   if (path === '/settings') return { settings: { announce_channel_id: '10829384012', organizer_channel_id: '10829384013', threads_channel_id: '10829384014', organizer_role_id: '10829384099', participant_role_id: '10829384098', packet_mode: 'off' }, cohorts: [cohort, { id: 0, name: 'Summer 2025', start_date: '2025-07-20', weeks_count: 3, status: 'done' }], timeline: [
     { index: 0, startsOn: '2026-07-12', endsOn: '2026-07-18', title: 'Word-of-mouth marketing', technicalRound: null },
     { index: 1, startsOn: '2026-07-19', endsOn: '2026-07-25', title: 'Preparing for applicants', technicalRound: null },

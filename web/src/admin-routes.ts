@@ -10,6 +10,7 @@ export const adminRouteModules = {
   analytics: () => import('./pages/admin/AnalyticsPage').then((module) => ({ default: module.AnalyticsPage })),
   operations: () => import('./pages/admin/OperationsPage').then((module) => ({ default: module.OperationsPage })),
   settings: () => import('./pages/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })),
+  mcp: () => import('./pages/admin/McpPage').then((module) => ({ default: module.McpPage })),
 };
 
 const routes = {
@@ -22,6 +23,7 @@ const routes = {
   '/app/admin/analytics': { module: adminRouteModules.analytics, data: '/analytics' },
   '/app/admin/operations': { module: adminRouteModules.operations, data: '/operations' },
   '/app/admin/settings': { module: adminRouteModules.settings, data: '/settings' },
+  '/app/admin/mcp': { module: adminRouteModules.mcp, data: '/mcp-token' },
 } as const;
 
 export function preloadAdminRoute(pathname: string) {

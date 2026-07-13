@@ -18,6 +18,7 @@ const RoundsPage = lazy(adminRouteModules.rounds);
 const ReviewsPage = lazy(adminRouteModules.reviews);
 const AnalyticsPage = lazy(adminRouteModules.analytics);
 const AdminSettingsPage = lazy(adminRouteModules.settings);
+const McpPage = lazy(adminRouteModules.mcp);
 const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })));
 const ReportPage = lazy(() => import('./pages/ReportPage').then((module) => ({ default: module.ReportPage })));
 const ProblemPage = lazy(() => import('./pages/ProblemPage').then((module) => ({ default: module.ProblemPage })));
@@ -58,6 +59,8 @@ const router = createBrowserRouter(
         { path: 'admin/analytics', element: deferred(<AnalyticsPage />) },
         { path: 'admin/operations', element: deferred(<OperationsPage />) },
         { path: 'admin/settings', element: deferred(<AdminSettingsPage />) },
+        { path: 'admin/mcp', element: deferred(<McpPage />) },
+        { path: 'admin/integrations', element: <Navigate to="/app/admin/mcp" replace /> },
       ],
     },
   ],

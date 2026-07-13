@@ -79,6 +79,7 @@ function pageTitle(pathname: string) {
     '/app/admin/participants': 'Participants', '/app/admin/rounds': 'Rounds', '/app/admin/reviews': 'Reviews',
     '/app/admin/forms': 'Forms', '/app/admin/problems': 'Questions', '/app/admin/analytics': 'Analytics', '/app/admin/operations': 'Operations',
     '/app/admin/settings': 'Program settings',
+    '/app/admin/mcp': 'MCP',
   };
   return titles[pathname] ?? 'WTA Dashboard';
 }

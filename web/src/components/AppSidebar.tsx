@@ -29,6 +29,7 @@ const adminItems: NavEntry[] = [
   { label: 'Questions', to: '/app/admin/problems', icon: 'problems' },
   { label: 'Analytics', to: '/app/admin/analytics', icon: 'analytics' },
   { label: 'Operations', to: '/app/admin/operations', icon: 'operations' },
+  { label: 'MCP', to: '/app/admin/mcp', icon: 'mcp' },
   { label: 'Program settings', to: '/app/admin/settings', icon: 'settings' },
 ];
 
