@@ -584,7 +584,7 @@ const wordCount = (value: string) =>
 const previewEnrollment: EnrollmentData = {
   discord: { id: "100000000000000001", username: "alex.example" },
   profile: null,
-  minimumBlurbWords: 100,
+  minimumBlurbWords: 50,
   options: {
     years: ["First", "Second", "Third", "Fourth", "Fifth or greater"],
     programs: [

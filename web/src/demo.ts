@@ -33,7 +33,7 @@ export const demoDashboard: DashboardData = {
   owedReports: [
     { id: 8, kind: 'interviewee_report', deadlineAt: '2026-08-08T03:59:00.000Z', url: '#' },
   ],
-  minimumBlurbWords: 100,
+  minimumBlurbWords: 50,
   options: {
     years: ['First', 'Second', 'Third', 'Fourth', 'Fifth or greater'],
     programs: ['Computer Science', 'Software Engineering', 'Data Science', 'Other'],

@@ -70,7 +70,7 @@ describe('web enrollment cutover', () => {
   it('loads linked Discord identity and reports exact validation errors', async () => {
     const load = await app.request(`/api/enrollment/${enrollmentToken}`, {}, env);
     expect(load.status).toBe(200);
-    expect(await load.json<any>()).toMatchObject({ discord: { id: USER, username: 'test.student' }, profile: null, minimumBlurbWords: 100 });
+    expect(await load.json<any>()).toMatchObject({ discord: { id: USER, username: 'test.student' }, profile: null, minimumBlurbWords: 50 });
 
     const invalid = await app.request(`/api/enrollment/${enrollmentToken}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
