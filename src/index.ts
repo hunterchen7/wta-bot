@@ -24,9 +24,12 @@ app.use('*', async (c, next) => {
     return c.json({ error: 'forbidden_origin' }, 403);
   }
   await next();
+  const pathname = new URL(c.req.url).pathname;
+  const sameOriginPreview = pathname === '/preview' || pathname.startsWith('/preview/');
   c.header('Referrer-Policy', 'no-referrer');
   c.header('X-Content-Type-Options', 'nosniff');
-  c.header('X-Frame-Options', 'DENY');
+  c.header('X-Frame-Options', sameOriginPreview ? 'SAMEORIGIN' : 'DENY');
+  c.header('Content-Security-Policy', sameOriginPreview ? "frame-ancestors 'self'" : "frame-ancestors 'none'");
   c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
   c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
 });

@@ -42,7 +42,13 @@ describe('JSON authentication', () => {
 
     const organizer = await app.request('/preview', { headers: { Cookie: await cookieFor(ADMIN_ID, true) } }, previewEnv);
     expect(organizer.status).toBe(200);
+    expect(organizer.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    expect(organizer.headers.get('content-security-policy')).toBe("frame-ancestors 'self'");
     expect(await organizer.text()).toBe('preview shell');
+
+    const ordinaryPage = await app.request('/health', {}, previewEnv);
+    expect(ordinaryPage.headers.get('x-frame-options')).toBe('DENY');
+    expect(ordinaryPage.headers.get('content-security-policy')).toBe("frame-ancestors 'none'");
   });
 
   it('requests codes without disclosing whether an email is on the roster', async () => {
