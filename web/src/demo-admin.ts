@@ -15,7 +15,7 @@ const participants = names.map((name, index) => ({
   blurb: `Interested in ${index % 2 ? 'product engineering' : 'infrastructure'} roles and building stronger interview communication skills.`, interests: index % 2 ? 'System design and practical interview strategy.' : null, prior_feedback: index % 3 === 0 ? 'More detailed feedback after each round.' : null,
   linkedin_url: index % 2 ? `https://www.linkedin.com/in/student-${index}` : null, other_url: index % 3 === 0 ? `https://github.com/student-${index}` : null,
   resume_filename: index % 2 ? `${name.replace(' ', '-')}-resume.pdf` : null, resume_content_type: index % 2 ? 'application/pdf' : null, resume_bytes: index % 2 ? 182_400 : null, resume_uploaded_at: index % 2 ? now : null,
-  status: index === 8 ? 'held' : index === 10 ? 'paused' : 'active', email_ok: index % 3 ? 1 : 0, pairing_excluded: index === 0 ? 1 : 0, removed_reason: null, created_at: '2026-07-12 12:00:00', updated_at: now,
+  status: index === 8 ? 'held' : index === 10 ? 'paused' : 'active', email_ok: index % 3 ? 1 : 0, pairing_excluded: index === 0 ? 1 : 0, removed_reason: null, created_at: new Date(Date.UTC(2026, 6, 12 + index, 16)).toISOString(), updated_at: new Date(Date.UTC(2026, 7, 1 + index, 18)).toISOString(),
   interviewer_credits: Math.min(3, index % 4), interviewee_credits: Math.min(3, (index + 1) % 4), strikes: index === 8 ? 2 : index === 5 ? 1 : 0,
   reports_owed: index === 2 || index === 7 ? 1 : 0, opted_in: index < 9 ? 1 : 0,
 }));

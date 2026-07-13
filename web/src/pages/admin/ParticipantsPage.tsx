@@ -1,13 +1,47 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import type { ParticipantDetail, ParticipantRow, ParticipantsData } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, formatDate, inputClass, LoadingState, PageIntro, Panel, tableClass, tdClass, thClass } from '../../components/AdminUI';
+import { Icon } from '../../components/Icon';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
 import { SelectControl } from '../../components/SelectControl';
 
 const PARTICIPANT_STATUSES = ['active', 'paused', 'held', 'removed', 'completed'];
 const STATUS_OPTIONS = PARTICIPANT_STATUSES.map((value) => ({ value, label: value }));
+const COLUMN_ORDER_STORAGE_KEY = 'wta:participant-columns:v1';
+const SORT_STORAGE_KEY = 'wta:participant-sort:v1';
+const COLUMN_IDS = ['participant', 'joined', 'updated', 'contact', 'education', 'opportunities', 'experience', 'topics', 'prior_wta', 'blurb', 'interests', 'prior_feedback', 'round', 'progress', 'reports', 'strikes', 'email', 'pairing', 'status'] as const;
+type ColumnId = typeof COLUMN_IDS[number];
+type SortDirection = 'asc' | 'desc';
+type SortState = { column: ColumnId; direction: SortDirection };
+type DropTarget = { column: ColumnId; edge: 'before' | 'after' };
+type SortValue = string | number | null | undefined;
+type ColumnDefinition = { label: string; defaultDirection?: SortDirection; value: (participant: ParticipantRow) => SortValue };
+
+const DEFAULT_COLUMN_ORDER: ColumnId[] = [...COLUMN_IDS];
+const COLUMN_DEFINITIONS: Record<ColumnId, ColumnDefinition> = {
+  participant: { label: 'Participant', value: (participant) => participant.name ?? participant.discord_username ?? participant.discord_id },
+  joined: { label: 'Joined', defaultDirection: 'desc', value: (participant) => dateValue(participant.created_at) },
+  updated: { label: 'Updated', defaultDirection: 'desc', value: (participant) => dateValue(participant.updated_at) },
+  contact: { label: 'Contact', value: (participant) => participant.preferred_email ?? participant.western_email },
+  education: { label: 'Education', value: (participant) => `${participant.year ?? ''}\u0000${participant.program ?? ''}` },
+  opportunities: { label: 'Opportunities', value: (participant) => parseChoices(participant.opportunities).join(' ') },
+  experience: { label: 'Experience', value: (participant) => participant.experience_band },
+  topics: { label: 'Topics', value: (participant) => parseChoices(participant.topics).join(' ') },
+  prior_wta: { label: 'Prior WTA', defaultDirection: 'desc', value: (participant) => participant.prior_wta },
+  blurb: { label: 'Ideal role & motivation', value: (participant) => participant.blurb },
+  interests: { label: 'Other interests', value: (participant) => participant.interests },
+  prior_feedback: { label: 'Prior feedback', value: (participant) => participant.prior_feedback },
+  round: { label: 'Current round', defaultDirection: 'desc', value: (participant) => participant.opted_in },
+  progress: { label: 'Progress', defaultDirection: 'desc', value: (participant) => participant.interviewer_credits + participant.interviewee_credits },
+  reports: { label: 'Reports', defaultDirection: 'desc', value: (participant) => participant.reports_owed },
+  strikes: { label: 'Strikes', defaultDirection: 'desc', value: (participant) => participant.strikes },
+  email: { label: 'Email', defaultDirection: 'desc', value: (participant) => participant.email_ok },
+  pairing: { label: 'Pairing', defaultDirection: 'desc', value: (participant) => participant.pairing_excluded ? 0 : 1 },
+  status: { label: 'Status', value: (participant) => participant.status },
+};
+const sortCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 export function ParticipantsPage() {
   const { data, error, loading, reload } = useAdminData<ParticipantsData>('/participants');
@@ -18,6 +52,10 @@ export function ParticipantsPage() {
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
   const [detail, setDetail] = useState<ParticipantDetail | null>(null); const [detailLoading, setDetailLoading] = useState(false);
   const [bulkOpen, setBulkOpen] = useState<'status' | 'message' | null>(null); const [busy, setBusy] = useState(false); const [syncing, setSyncing] = useState(false); const [notice, setNotice] = useState<string | null>(null);
+  const [columnOrder, setColumnOrder] = useState<ColumnId[]>(readColumnOrder);
+  const [sort, setSort] = useState<SortState>(readSortState);
+  const [draggingColumn, setDraggingColumn] = useState<ColumnId | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
   const options = useMemo(() => ({
     years: uniqueValues(data?.participants.map((row) => row.year) ?? []),
     programs: uniqueValues(data?.participants.map((row) => row.program) ?? []),
@@ -42,17 +80,44 @@ export function ParticipantsPage() {
         && (!needle || searchable.some((value) => String(value ?? '').toLowerCase().includes(needle)));
     });
   }, [attention, data, deferredQuery, email, experience, opportunity, program, roundState, status, topic, year]);
+  const visibleParticipants = useMemo(() => {
+    const rows = filtered.slice();
+    rows.sort((left, right) => compareParticipants(left, right, sort));
+    return rows;
+  }, [filtered, sort]);
+  useEffect(() => { try { localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(columnOrder)); } catch { /* storage unavailable */ } }, [columnOrder]);
+  useEffect(() => { try { localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(sort)); } catch { /* storage unavailable */ } }, [sort]);
   const activeFilters = [status, year, program, experience, opportunity, topic, roundState, attention, email].filter((value) => value !== 'all').length;
   const clearFilters = () => { setStatus('all'); setYear('all'); setProgram('all'); setExperience('all'); setOpportunity('all'); setTopic('all'); setRoundState('all'); setAttention('all'); setEmail('all'); };
   if (loading && !data) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? 'No roster returned.'} onRetry={() => void reload()} />;
 
-  const allVisibleSelected = filtered.length > 0 && filtered.every((row) => selected.has(row.id));
-  const toggleAll = () => setSelected((current) => { const next = new Set(current); if (allVisibleSelected) filtered.forEach((row) => next.delete(row.id)); else filtered.forEach((row) => next.add(row.id)); return next; });
+  const allVisibleSelected = visibleParticipants.length > 0 && visibleParticipants.every((row) => selected.has(row.id));
+  const toggleAll = () => setSelected((current) => { const next = new Set(current); if (allVisibleSelected) visibleParticipants.forEach((row) => next.delete(row.id)); else visibleParticipants.forEach((row) => next.add(row.id)); return next; });
   const openDetail = async (participant: ParticipantRow) => { setDetailLoading(true); setDetail(null); try { setDetail(await adminRequest<ParticipantDetail>(`/participants/${participant.id}`)); } finally { setDetailLoading(false); } };
   const runStatus = async (value: string, note: string) => { setBusy(true); try { const result = await adminRequest<{ updated: number }>('/participants/status', { method: 'POST', body: JSON.stringify({ ids: [...selected], status: value, note }) }); setNotice(`${result.updated} participant${result.updated === 1 ? '' : 's'} updated.`); setSelected(new Set()); setBulkOpen(null); await reload(); } finally { setBusy(false); } };
   const runMessage = async (channel: string, message: string) => { setBusy(true); try { const result = await adminRequest<{ queued: number; skipped: number }>('/participants/message', { method: 'POST', body: JSON.stringify({ ids: [...selected], channel, message }) }); setNotice(`${result.queued} message${result.queued === 1 ? '' : 's'} queued${result.skipped ? `; ${result.skipped} skipped` : ''}.`); setSelected(new Set()); setBulkOpen(null); } finally { setBusy(false); } };
   const syncDiscord = async () => { setSyncing(true); try { const result = await adminRequest<{ queued: number }>('/participants/sync-discord', { method: 'POST', body: '{}' }); setNotice(`${result.queued} Discord identit${result.queued === 1 ? 'y' : 'ies'} queued for refresh. Updated names will appear as the outbox drains.`); } finally { setSyncing(false); } };
+  const sortBy = (column: ColumnId) => setSort((current) => current.column === column
+    ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+    : { column, direction: COLUMN_DEFINITIONS[column].defaultDirection ?? 'asc' });
+  const finishDrag = () => { setDraggingColumn(null); setDropTarget(null); };
+  const dropColumn = (event: ReactDragEvent<HTMLTableCellElement>, target: ColumnId) => {
+    event.preventDefault();
+    const source = draggingColumn ?? asColumnId(event.dataTransfer.getData('text/plain'));
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const edge = event.clientX < bounds.left + bounds.width / 2 ? 'before' : 'after';
+    if (source && source !== target) {
+      setColumnOrder((current) => reorderColumns(current, source, target, edge));
+    }
+    finishDrag();
+  };
+  const nudgeColumn = (column: ColumnId, offset: -1 | 1) => setColumnOrder((current) => {
+    const from = current.indexOf(column); const to = from + offset;
+    if (from < 0 || to < 0 || to >= current.length) return current;
+    const next = current.slice(); [next[from], next[to]] = [next[to]!, next[from]!]; return next;
+  });
+  const customizedColumns = columnOrder.some((column, index) => DEFAULT_COLUMN_ORDER[index] !== column);
 
   return <div className="space-y-7 xl:flex xl:h-[calc(100dvh-9rem)] xl:min-h-[38rem] xl:flex-col xl:space-y-0 xl:gap-7">
     <PageIntro title="Participants" description="Search the roster, inspect a participant’s full history, and take deliberate bulk actions." actions={<><Button variant="secondary" disabled={syncing} onClick={() => void syncDiscord()}>{syncing ? 'Queueing sync…' : 'Sync Discord identities'}</Button><a href="/api/admin/participants.csv" className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">Export CSV</a></>} />
@@ -61,7 +126,8 @@ export function ParticipantsPage() {
       <div className="space-y-3 border-b border-slate-100 p-4 dark:border-border">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
           <input className={`${inputClass} lg:max-w-md`} type="search" placeholder="Search any participant field…" value={query} onChange={(event) => setQuery(event.target.value)} />
-          <div className="text-xs font-semibold text-muted-foreground lg:ml-auto">{filtered.length} of {data.participants.length}</div>
+          <div aria-live="polite" className="text-xs font-semibold text-muted-foreground lg:ml-auto">{filtered.length} of {data.participants.length} · Sorted by {COLUMN_DEFINITIONS[sort.column].label} {sort.direction === 'desc' ? '↓' : '↑'}</div>
+          {customizedColumns ? <button className="text-xs font-bold text-western-700 hover:text-western-900 dark:text-western-300" onClick={() => setColumnOrder(DEFAULT_COLUMN_ORDER.slice())}>Reset columns</button> : null}
           {activeFilters ? <button className="text-xs font-bold text-western-700 hover:text-western-900 dark:text-western-300" onClick={clearFilters}>Clear {activeFilters} filter{activeFilters === 1 ? '' : 's'}</button> : null}
         </div>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
@@ -78,28 +144,10 @@ export function ParticipantsPage() {
       </div>
       {selected.size ? <div className="absolute inset-x-4 bottom-4 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-slate-950/95 px-4 py-2.5 text-white shadow-xl shadow-slate-950/20 backdrop-blur-xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2"><span className="mr-2 text-xs font-bold tabular-nums">{selected.size} selected</span><Button variant="secondary" className="!border-white/10 !bg-white/10 !py-1.5 !text-white hover:!bg-white/15" onClick={() => setBulkOpen('status')}>Change status</Button><Button variant="secondary" className="!border-white/10 !bg-white/10 !py-1.5 !text-white hover:!bg-white/15" onClick={() => setBulkOpen('message')}>Send message</Button><button className="ml-auto text-xs font-bold text-slate-300 hover:text-white" onClick={() => setSelected(new Set())}>Clear</button></div> : null}
       {filtered.length ? <ScrollArea horizontal className="h-[min(62vh,42rem)] overscroll-contain xl:h-auto xl:min-h-0 xl:flex-1"><div className="min-w-max pb-20 pr-3 [&_th]:sticky [&_th]:top-0 [&_th]:z-10"><table className={tableClass}>
-        <thead><tr><th className={`${thClass} w-10`}><input type="checkbox" aria-label="Select visible participants" checked={allVisibleSelected} onChange={toggleAll} /></th><th className={thClass}>Participant</th><th className={thClass}>Contact</th><th className={thClass}>Education</th><th className={thClass}>Opportunities</th><th className={thClass}>Experience</th><th className={thClass}>Topics</th><th className={thClass}>Prior WTA</th><th className={thClass}>Ideal role & motivation</th><th className={thClass}>Other interests</th><th className={thClass}>Prior feedback</th><th className={thClass}>Current round</th><th className={thClass}>Progress</th><th className={thClass}>Reports</th><th className={thClass}>Strikes</th><th className={thClass}>Email</th><th className={thClass}>Pairing</th><th className={thClass}>Status</th><th className={thClass}>Joined</th><th className={thClass}>Updated</th></tr></thead>
-        <tbody>{filtered.map((participant) => <tr key={participant.id} className="group hover:bg-slate-50/70 dark:hover:bg-white/5">
+        <thead><tr><th className={`${thClass} w-10`}><input type="checkbox" aria-label="Select visible participants" checked={allVisibleSelected} onChange={toggleAll} /></th>{columnOrder.map((column) => <SortableColumnHeader key={column} column={column} sort={sort} dragging={draggingColumn === column} dropTarget={dropTarget?.column === column ? dropTarget.edge : null} onSort={sortBy} onDragStart={(event) => { event.dataTransfer.effectAllowed = 'move'; event.dataTransfer.setData('text/plain', column); setDraggingColumn(column); }} onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'move'; const bounds = event.currentTarget.getBoundingClientRect(); const edge = event.clientX < bounds.left + bounds.width / 2 ? 'before' : 'after'; setDropTarget((current) => current?.column === column && current.edge === edge ? current : { column, edge }); }} onDrop={(event) => dropColumn(event, column)} onDragEnd={finishDrag} onNudge={nudgeColumn} />)}</tr></thead>
+        <tbody>{visibleParticipants.map((participant) => <tr key={participant.id} className="group hover:bg-slate-50/70 dark:hover:bg-white/5">
           <td className={tdClass}><input type="checkbox" aria-label={`Select ${participant.name}`} checked={selected.has(participant.id)} onChange={() => setSelected((current) => { const next = new Set(current); if (next.has(participant.id)) next.delete(participant.id); else next.add(participant.id); return next; })} /></td>
-          <td className={tdClass}><button className="cursor-pointer text-left" onClick={() => void openDetail(participant)}><span className="block font-bold text-foreground group-hover:text-western-700 dark:group-hover:text-western-300">{participant.name ?? '(unnamed)'}</span><span className="mt-1 block text-xs font-semibold text-muted-foreground">Nickname: {participant.discord_nickname ?? 'not synced'}</span><span className="block text-xs font-semibold text-indigo-600 dark:text-indigo-300">{participant.discord_username ? `@${participant.discord_username}` : 'Discord not synced'}</span><span className="block font-mono text-[0.65rem] text-muted-foreground">{participant.discord_id}</span></button></td>
-          <td className={tdClass}><a className="block text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={participant.preferred_email ? `mailto:${participant.preferred_email}` : undefined}>{participant.preferred_email ?? '—'}</a><a className="mt-1 block text-xs text-muted-foreground hover:underline" href={participant.western_email ? `mailto:${participant.western_email}` : undefined}>{participant.western_email ?? '—'}</a></td>
-          <td className={tdClass}><span className="block font-semibold text-foreground">{participant.year ?? '—'}</span><span className="mt-1 block text-xs text-muted-foreground">{participant.program ?? '—'}</span></td>
-          <td className={tdClass}><ChoiceList value={participant.opportunities} /></td>
-          <td className={tdClass}>{participant.experience_band ?? '—'}</td>
-          <td className={tdClass}><ChoiceList value={participant.topics} /></td>
-          <td className={tdClass}>{participant.prior_wta ? 'Yes' : 'No'}</td>
-          <td className={tdClass}><TextPreview value={participant.blurb} /></td>
-          <td className={tdClass}><TextPreview value={participant.interests} /></td>
-          <td className={tdClass}><TextPreview value={participant.prior_feedback} /></td>
-          <td className={tdClass}>{data.currentWeek ? <Badge value={participant.opted_in ? `Round ${data.currentWeek.idx}: opted in` : `Round ${data.currentWeek.idx}: not opted in`} /> : <span className="text-muted-foreground">No active round</span>}</td>
-          <td className={tdClass}><span className="font-bold tabular-nums text-slate-800">{participant.interviewer_credits}/3 · {participant.interviewee_credits}/3</span><span className="mt-1 block text-[0.68rem] text-slate-400">interviewer · interviewee</span></td>
-          <td className={tdClass}><SignalCount value={participant.reports_owed} singular="owed" /></td>
-          <td className={tdClass}><SignalCount value={participant.strikes} singular="strike" /></td>
-          <td className={tdClass}>{participant.email_ok ? 'Enabled' : 'Disabled'}</td>
-          <td className={tdClass}>{participant.pairing_excluded ? <Badge value="Excluded" /> : 'Eligible'}</td>
-          <td className={tdClass}><Badge value={participant.status} />{participant.removed_reason ? <span className="mt-1 block max-w-40 text-xs text-muted-foreground">{participant.removed_reason}</span> : null}</td>
-          <td className={tdClass}><span className="whitespace-nowrap text-xs">{formatDate(participant.created_at, false)}</span></td>
-          <td className={tdClass}><span className="whitespace-nowrap text-xs">{formatDate(participant.updated_at, false)}</span></td>
+          {columnOrder.map((column) => <ParticipantCell key={column} column={column} participant={participant} currentWeek={data.currentWeek} onOpen={openDetail} />)}
         </tr>)}</tbody>
       </table></div></ScrollArea> : <EmptyState title="No participants match" description="Try a broader search or a different status filter." />}
     </Panel>
@@ -108,6 +156,97 @@ export function ParticipantsPage() {
     {bulkOpen === 'message' ? <MessageDialog count={selected.size} busy={busy} onClose={() => setBulkOpen(null)} onSubmit={runMessage} /> : null}
   </div>;
 }
+
+function SortableColumnHeader({ column, sort, dragging, dropTarget, onSort, onDragStart, onDragOver, onDrop, onDragEnd, onNudge }: {
+  column: ColumnId;
+  sort: SortState;
+  dragging: boolean;
+  dropTarget: DropTarget['edge'] | null;
+  onSort: (column: ColumnId) => void;
+  onDragStart: (event: ReactDragEvent<HTMLButtonElement>) => void;
+  onDragOver: (event: ReactDragEvent<HTMLTableCellElement>) => void;
+  onDrop: (event: ReactDragEvent<HTMLTableCellElement>) => void;
+  onDragEnd: () => void;
+  onNudge: (column: ColumnId, offset: -1 | 1) => void;
+}) {
+  const definition = COLUMN_DEFINITIONS[column];
+  const active = sort.column === column;
+  const dropClass = dropTarget === 'before' ? 'shadow-[inset_3px_0_0_var(--primary)]' : dropTarget === 'after' ? 'shadow-[inset_-3px_0_0_var(--primary)]' : '';
+  const onHandleKeyDown = (event: ReactKeyboardEvent<HTMLButtonElement>) => {
+    if (!event.altKey || (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight')) return;
+    event.preventDefault(); onNudge(column, event.key === 'ArrowLeft' ? -1 : 1);
+  };
+  return <th aria-sort={active ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'} className={`${thClass} transition-[opacity,box-shadow,background-color] ${dragging ? 'opacity-45' : ''} ${dropClass}`} onDragOver={onDragOver} onDrop={onDrop}>
+    <div className="flex items-center gap-1 whitespace-nowrap">
+      <button type="button" draggable aria-label={`Move ${definition.label} column`} title="Drag to reorder · Alt + arrow keys also work" className="-ml-2 cursor-grab rounded-md p-1 text-muted-foreground/60 transition hover:bg-muted hover:text-foreground active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onDragStart={onDragStart} onDragEnd={onDragEnd} onKeyDown={onHandleKeyDown}><Icon name="grip" className="size-3.5" /></button>
+      <button type="button" aria-label={`Sort by ${definition.label}`} className="group/sort inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-1 text-left transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => onSort(column)}>{definition.label}<Icon name={active ? sort.direction === 'asc' ? 'sortAsc' : 'sortDesc' : 'sort'} className={`size-3.5 transition-opacity ${active ? 'text-western-700 opacity-100 dark:text-western-300' : 'opacity-35 group-hover/sort:opacity-70'}`} /></button>
+    </div>
+  </th>;
+}
+
+function ParticipantCell({ column, participant, currentWeek, onOpen }: { column: ColumnId; participant: ParticipantRow; currentWeek: ParticipantsData['currentWeek']; onOpen: (participant: ParticipantRow) => Promise<void> }) {
+  let content: React.ReactNode;
+  switch (column) {
+    case 'participant': content = <button className="cursor-pointer text-left" onClick={() => void onOpen(participant)}><span className="block font-bold text-foreground group-hover:text-western-700 dark:group-hover:text-western-300">{participant.name ?? '(unnamed)'}</span><span className="mt-1 block text-xs font-semibold text-muted-foreground">Nickname: {participant.discord_nickname ?? 'not synced'}</span><span className="block text-xs font-semibold text-indigo-600 dark:text-indigo-300">{participant.discord_username ? `@${participant.discord_username}` : 'Discord not synced'}</span><span className="block font-mono text-[0.65rem] text-muted-foreground">{participant.discord_id}</span></button>; break;
+    case 'joined': content = <span className="whitespace-nowrap text-xs">{formatDate(participant.created_at, false)}</span>; break;
+    case 'updated': content = <span className="whitespace-nowrap text-xs">{formatDate(participant.updated_at, false)}</span>; break;
+    case 'contact': content = <><a className="block text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={participant.preferred_email ? `mailto:${participant.preferred_email}` : undefined}>{participant.preferred_email ?? '—'}</a><a className="mt-1 block text-xs text-muted-foreground hover:underline" href={participant.western_email ? `mailto:${participant.western_email}` : undefined}>{participant.western_email ?? '—'}</a></>; break;
+    case 'education': content = <><span className="block font-semibold text-foreground">{participant.year ?? '—'}</span><span className="mt-1 block text-xs text-muted-foreground">{participant.program ?? '—'}</span></>; break;
+    case 'opportunities': content = <ChoiceList value={participant.opportunities} />; break;
+    case 'experience': content = participant.experience_band ?? '—'; break;
+    case 'topics': content = <ChoiceList value={participant.topics} />; break;
+    case 'prior_wta': content = participant.prior_wta ? 'Yes' : 'No'; break;
+    case 'blurb': content = <TextPreview value={participant.blurb} />; break;
+    case 'interests': content = <TextPreview value={participant.interests} />; break;
+    case 'prior_feedback': content = <TextPreview value={participant.prior_feedback} />; break;
+    case 'round': content = currentWeek ? <Badge value={participant.opted_in ? `Round ${currentWeek.idx}: opted in` : `Round ${currentWeek.idx}: not opted in`} /> : <span className="text-muted-foreground">No active round</span>; break;
+    case 'progress': content = <><span className="font-bold tabular-nums text-slate-800">{participant.interviewer_credits}/3 · {participant.interviewee_credits}/3</span><span className="mt-1 block text-[0.68rem] text-slate-400">interviewer · interviewee</span></>; break;
+    case 'reports': content = <SignalCount value={participant.reports_owed} singular="owed" />; break;
+    case 'strikes': content = <SignalCount value={participant.strikes} singular="strike" />; break;
+    case 'email': content = participant.email_ok ? 'Enabled' : 'Disabled'; break;
+    case 'pairing': content = participant.pairing_excluded ? <Badge value="Excluded" /> : 'Eligible'; break;
+    case 'status': content = <><Badge value={participant.status} />{participant.removed_reason ? <span className="mt-1 block max-w-40 text-xs text-muted-foreground">{participant.removed_reason}</span> : null}</>; break;
+  }
+  return <td className={tdClass}>{content}</td>;
+}
+
+function compareParticipants(left: ParticipantRow, right: ParticipantRow, sort: SortState) {
+  const definition = COLUMN_DEFINITIONS[sort.column];
+  const a = definition.value(left); const b = definition.value(right);
+  if (a == null || a === '') return b == null || b === '' ? right.id - left.id : 1;
+  if (b == null || b === '') return -1;
+  const compared = typeof a === 'number' && typeof b === 'number' ? a - b : sortCollator.compare(String(a), String(b));
+  return (sort.direction === 'asc' ? compared : -compared) || right.id - left.id;
+}
+
+function reorderColumns(order: ColumnId[], source: ColumnId, target: ColumnId, edge: DropTarget['edge']) {
+  const next = order.filter((column) => column !== source);
+  const targetIndex = next.indexOf(target);
+  if (targetIndex < 0) return order;
+  next.splice(targetIndex + (edge === 'after' ? 1 : 0), 0, source);
+  return next;
+}
+
+function readColumnOrder(): ColumnId[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLUMN_ORDER_STORAGE_KEY) ?? '[]');
+    if (!Array.isArray(saved)) return DEFAULT_COLUMN_ORDER.slice();
+    const known = saved.map(String).filter((value): value is ColumnId => asColumnId(value) != null);
+    return [...new Set(known), ...DEFAULT_COLUMN_ORDER.filter((column) => !known.includes(column))];
+  } catch { return DEFAULT_COLUMN_ORDER.slice(); }
+}
+
+function readSortState(): SortState {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SORT_STORAGE_KEY) ?? 'null');
+    const column = asColumnId(saved?.column); const direction = saved?.direction;
+    if (column && (direction === 'asc' || direction === 'desc')) return { column, direction };
+  } catch { /* use default */ }
+  return { column: 'joined', direction: 'desc' };
+}
+
+function asColumnId(value: unknown): ColumnId | null { return typeof value === 'string' && (COLUMN_IDS as readonly string[]).includes(value) ? value as ColumnId : null; }
+function dateValue(value: string | null | undefined) { if (!value) return null; const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? `${value.replace(' ', 'T')}Z` : value; const time = Date.parse(normalized); return Number.isNaN(time) ? null : time; }
 
 function ParticipantDrawer({ detail, loading, onClose }: { detail: ParticipantDetail | null; loading: boolean; onClose: () => void }) {
   return <Dialog wide title={detail?.participant.name ?? 'Participant'} description={detail ? `Server nickname: ${detail.participant.discord_nickname ?? 'not synced'} · Discord: ${detail.participant.discord_username ? `@${detail.participant.discord_username}` : 'not synced'} · ID ${detail.participant.discord_id}` : 'Loading participant history…'} onClose={onClose}>
