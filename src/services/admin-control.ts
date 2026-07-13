@@ -1,4 +1,6 @@
 import type { Env } from '../env';
+import { enqueue } from '../engine/outbox';
+import { enqueueRepair } from '../engine/repair';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
 import { composeQuestionMarkdown, normalizeAvailableWeeks, parseQuestionMarkdown } from '../question-markdown';
 import { problemBankWorkspace } from './problem-sets';
@@ -96,11 +98,127 @@ export async function setAutomationParticipantStatus(
   return { id: participantId, status };
 }
 
-export async function automationRounds(env: Env, requestedWeekId?: number) {
+type ReversibleParticipantStatus = 'paused' | 'held' | 'active';
+
+export async function setReversibleAutomationParticipantStatus(
+  env: Env,
+  actorId: number,
+  participantId: number,
+  status: ReversibleParticipantStatus,
+  note?: string,
+) {
+  const participant = await env.DB.prepare(
+    'SELECT id, status FROM participants WHERE id = ?1',
+  ).bind(participantId).first<{ id: number; status: string }>();
+  if (!participant) return null;
+  if (participant.status === 'removed' || participant.status === 'completed') return null;
+  if (status === 'active' && !['active', 'paused', 'held'].includes(participant.status)) return null;
+  if (participant.status !== status) {
+    await env.DB.prepare(
+      `UPDATE participants SET status = ?2, removed_reason = NULL, updated_at = datetime('now') WHERE id = ?1`,
+    ).bind(participantId, status).run();
+  }
+  await writeAdminAudit(env, actorId, `automation.participant_${status}`, 'participant', participantId, {
+    previousStatus: participant.status,
+    note: note?.slice(0, 500),
+  });
+  return { id: participantId, previousStatus: participant.status, status };
+}
+
+export async function removeAutomationParticipant(
+  env: Env,
+  actorId: number,
+  participantId: number,
+  reason: string,
+) {
+  const participant = await env.DB.prepare(
+    'SELECT id, discord_id, name, status FROM participants WHERE id = ?1',
+  ).bind(participantId).first<{ id: number; discord_id: string; name: string | null; status: string }>();
+  if (!participant) return null;
+  if (participant.status === 'removed') {
+    return { id: participantId, status: 'removed', alreadyRemoved: true, cancelledSessions: 0, partnersQueued: 0 };
+  }
+
+  const normalizedReason = reason.trim().slice(0, 500);
+  if (!normalizedReason) return null;
+  const now = new Date().toISOString();
+  const { results: sessions } = await env.DB.prepare(
+    `SELECT id, week_id, interviewer_id, interviewee_id, thread_id
+     FROM sessions
+     WHERE state IN ('pending_schedule', 'scheduled')
+       AND (interviewer_id = ?1 OR interviewee_id = ?1)`,
+  ).bind(participantId).all<{
+    id: number; week_id: number; interviewer_id: number; interviewee_id: number; thread_id: string | null;
+  }>();
+
+  let partnersQueued = 0;
+  for (const session of sessions) {
+    await env.DB.prepare(
+      "UPDATE sessions SET state = 'cancelled' WHERE id = ?1 AND state IN ('pending_schedule', 'scheduled')",
+    ).bind(session.id).run();
+    await env.DB.prepare(
+      'DELETE FROM form_instances WHERE session_id = ?1 AND submitted_at IS NULL',
+    ).bind(session.id).run();
+
+    const wasInterviewer = session.interviewer_id === participantId;
+    const partnerId = wasInterviewer ? session.interviewee_id : session.interviewer_id;
+    const need = wasInterviewer ? 'interviewer' : 'interviewee';
+    const existingRepair = await env.DB.prepare(
+      `SELECT id FROM repair_queue
+       WHERE week_id = ?1 AND participant_id = ?2 AND need = ?3 AND state = 'open' LIMIT 1`,
+    ).bind(session.week_id, partnerId, need).first<{ id: number }>();
+    if (!existingRepair) {
+      await enqueueRepair(env, session.week_id, partnerId, need);
+      partnersQueued++;
+    }
+
+    const partner = await env.DB.prepare(
+      'SELECT discord_id FROM participants WHERE id = ?1',
+    ).bind(partnerId).first<{ discord_id: string }>();
+    const message = `Your WTA session with ${participant.name ?? 'your partner'} was cancelled by an organizer. You have been queued for re-pairing.`;
+    if (session.thread_id) {
+      await enqueue(env, 'channel_msg', { channelId: session.thread_id, message: { content: `📕 ${message}` } });
+    }
+    if (partner?.discord_id) {
+      await enqueue(env, 'dm', { userId: partner.discord_id, fallbackKind: 'repair_pairing', message: { content: message } });
+    }
+  }
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `DELETE FROM optins WHERE participant_id = ?1
+       AND week_id IN (SELECT id FROM weeks WHERE match_at > ?2)`,
+    ).bind(participantId, now),
+    env.DB.prepare(
+      "UPDATE repair_queue SET state = 'expired' WHERE participant_id = ?1 AND state = 'open'",
+    ).bind(participantId),
+    env.DB.prepare(
+      `UPDATE participants
+       SET status = 'removed', removed_reason = ?2, updated_at = datetime('now')
+       WHERE id = ?1`,
+    ).bind(participantId, normalizedReason),
+  ]);
+  await enqueue(env, 'dm', {
+    userId: participant.discord_id,
+    message: { content: `An organizer removed you from the current WTA program. Reason: ${normalizedReason}\n\nContact an organizer if you think this is a mistake.` },
+  });
+  await writeAdminAudit(env, actorId, 'automation.participant_removed', 'participant', participantId, {
+    reason: normalizedReason,
+    cancelledSessions: sessions.length,
+    partnersQueued,
+  });
+  return { id: participantId, status: 'removed', alreadyRemoved: false, cancelledSessions: sessions.length, partnersQueued };
+}
+
+export async function automationRounds(env: Env, requestedWeekId?: number, requestedRoundNumber?: number) {
   const cohort = await activeCohort(env);
   if (!cohort) return { cohort: null, weeks: [], selectedWeek: null, sessions: [], optins: [], repairs: [] };
   const weeks = await cohortWeeks(env, cohort.id);
-  const selectedWeek = weeks.find((week) => week.id === requestedWeekId) ?? weeks.at(-1)!;
+  const now = Date.now();
+  const currentWeek = weeks.find((week) => now <= new Date(week.grace_until ?? week.reports_due_at).getTime()) ?? weeks.at(-1)!;
+  const selectedWeek = weeks.find((week) => week.id === requestedWeekId)
+    ?? weeks.find((week) => week.idx === requestedRoundNumber)
+    ?? currentWeek;
   const [sessions, optins, repairs] = await Promise.all([
     env.DB.prepare(
       `SELECT s.*, pi.name AS interviewer_name, pe.name AS interviewee_name,

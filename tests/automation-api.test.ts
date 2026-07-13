@@ -162,18 +162,54 @@ describe('MCP server', () => {
       params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'vitest', version: '1.0' } },
     });
     expect(response.status).toBe(200);
-    expect(await response.json<any>()).toMatchObject({ result: { serverInfo: { name: 'wta-admin', version: '1.0.0' } } });
+    expect(await response.json<any>()).toMatchObject({ result: { serverInfo: { name: 'wta-admin', version: '1.1.0' } } });
   });
 
   it('lists scoped tools and invokes a read tool', async () => {
     const listed = await mcp({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
     expect(listed.status).toBe(200);
-    expect((await listed.json<any>()).result.tools.map((tool: any) => tool.name)).toEqual(expect.arrayContaining([
+    const tools = (await listed.json<any>()).result.tools;
+    expect(tools.map((tool: any) => tool.name)).toEqual(expect.arrayContaining([
       'get_overview', 'list_participants', 'get_participant', 'list_rounds', 'list_problems',
-      'set_participant_status', 'create_problem',
+      'pause_participant', 'hold_participant', 'restore_participant', 'remove_participant', 'create_problem',
     ]));
+    const getParticipant = tools.find((tool: any) => tool.name === 'get_participant');
+    expect(getParticipant.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
+    expect(getParticipant.inputSchema.properties.participantId.description).toContain('not a Discord user ID');
+    expect(tools.find((tool: any) => tool.name === 'list_rounds').inputSchema.properties).toHaveProperty('roundNumber');
+    expect(tools.find((tool: any) => tool.name === 'remove_participant')).toMatchObject({
+      description: expect.stringContaining('queues affected partners for re-pairing'),
+      annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    });
     const called = await mcp({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: { name: 'get_overview', arguments: {} } });
     expect(called.status).toBe(200);
     expect((await called.json<any>()).result.content[0].text).toContain('participants');
+  });
+
+  it('validates safer write contracts and maps available rounds', async () => {
+    const unconfirmedRemoval = await mcp({
+      jsonrpc: '2.0', id: 4, method: 'tools/call',
+      params: { name: 'remove_participant', arguments: { participantId: USER_ID, reason: 'Missing confirmation' } },
+    });
+    const rejectedRemoval = await unconfirmedRemoval.json<any>();
+    expect(rejectedRemoval.result).toMatchObject({ isError: true });
+    expect(rejectedRemoval.result.content[0].text).toContain('Invalid arguments');
+
+    const created = await mcp({
+      jsonrpc: '2.0', id: 5, method: 'tools/call',
+      params: {
+        name: 'create_problem',
+        arguments: {
+          title: 'MCP Tuned Contract Problem',
+          difficulty: 'medium',
+          availableRounds: [2, 3],
+          content: '## Statement\n\nReturn the input.\n\n## Hints\n\nRead carefully.\n\n## Solution\n\nReturn it.',
+        },
+      },
+    });
+    expect((await created.json<any>()).result.content[0].text).toContain('MCP Tuned Contract Problem');
+    expect(await env.DB.prepare(
+      "SELECT available_weeks FROM problems WHERE title = 'MCP Tuned Contract Problem'",
+    ).first()).toEqual({ available_weeks: '[2,3]' });
   });
 });
