@@ -32,10 +32,13 @@ beforeAll(async () => {
   ];
   for (const [number, title, difficulty, rank] of rows) {
     await env.DB.prepare(
-      'INSERT INTO problems (number, title, url, difficulty, difficulty_rank, available_weeks) VALUES (?1, ?2, ?3, ?4, ?5, ?6)',
+      `INSERT INTO problems
+         (number, title, url, difficulty, difficulty_rank, available_weeks, statement_md)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
     )
       .bind(number, title, `https://leetcode.com/problems/${number}`, difficulty, rank,
-        difficulty === 'easy' ? '[1]' : difficulty === 'medium' && (rank ?? 2) < 2.5 ? '[2]' : '[3]')
+        difficulty === 'easy' ? '[1]' : difficulty === 'medium' && (rank ?? 2) < 2.5 ? '[2]' : '[3]',
+        'Complete this self-contained prompt.\n\n### Examples\n\n```text\nInput: sample\nOutput: sample\n```\n\n### Constraints\n\n- Sample constraint.')
       .run();
   }
 });
@@ -116,7 +119,10 @@ describe('problem bank', () => {
     const url = new URL(JSON.parse(dm.payload).message.content.match(/https?:\/\/\S+\/p\/\S+/)![0]);
     const res = await app.request(`/api/problems/${url.pathname.split('/').at(-1)}`, {}, env);
     expect(res.status).toBe(200);
-    expect(await res.json<any>()).toMatchObject({ mode: 'packet', problem: { title: expect.any(String) } });
+    expect(await res.json<any>()).toMatchObject({
+      mode: 'packet',
+      problem: { title: expect.any(String), statement: expect.stringContaining('### Examples') },
+    });
 
     expect((await app.request('/api/problems/garbage', {}, env)).status).toBe(404);
   });

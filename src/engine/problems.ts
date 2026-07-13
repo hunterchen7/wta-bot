@@ -158,8 +158,7 @@ async function deliverProblemPacket(
       content:
         `🎯 Your interviewer packet is ready: **${problem.title}**\n` +
         `${url}\n` +
-        `Problem, solution, and hint ladder inside — read it before the session${session.scheduled_at ? ` (${discordTime(session.scheduled_at)})` : ''}. ` +
-        `Your interviewee sees nothing until it's live. 🤫`,
+        `Problem, solution, and hint ladder inside — read it before the session${session.scheduled_at ? ` (${discordTime(session.scheduled_at)})` : ''}.`,
     },
   });
   await env.DB.prepare('UPDATE sessions SET packet_sent_at = ?2 WHERE id = ?1')
