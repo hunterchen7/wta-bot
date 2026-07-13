@@ -145,6 +145,9 @@ describe('admin operational data', () => {
       packet_sent_at: null,
     });
     expect(rounds.selectedWeek.id).toBe(weekId);
+    expect(rounds.participants).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: STUDENT_ID, name: 'Student Person', discord_username: 'student.account' }),
+    ]));
 
     await env.DB.prepare(
       `INSERT INTO optins (week_id, participant_id) VALUES (?1, ?2), (?1, ?3)`,
@@ -163,6 +166,48 @@ describe('admin operational data', () => {
 });
 
 describe('admin mutations and audit history', () => {
+  it('adds and removes a round-specific extra interviewer without changing normal opt-in', async () => {
+    await env.DB.prepare(
+      `INSERT INTO optins (week_id, participant_id, regular_opt_in)
+       VALUES (?1, ?2, 1)
+       ON CONFLICT(week_id, participant_id) DO UPDATE SET regular_opt_in = 1, extra_interviewer = 0`,
+    ).bind(weekId, STUDENT_ID).run();
+
+    const add = await request(`/api/admin/rounds/${weekId}/extra-interviewer`, {
+      method: 'POST', body: JSON.stringify({ participantId: STUDENT_ID, enabled: true }),
+    });
+    expect(add.status).toBe(200);
+    expect(await env.DB.prepare(
+      'SELECT regular_opt_in, extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(weekId, STUDENT_ID).first()).toEqual({ regular_opt_in: 1, extra_interviewer: 1 });
+
+    const remove = await request(`/api/admin/rounds/${weekId}/extra-interviewer`, {
+      method: 'POST', body: JSON.stringify({ participantId: STUDENT_ID, enabled: false }),
+    });
+    expect(remove.status).toBe(200);
+    expect(await env.DB.prepare(
+      'SELECT regular_opt_in, extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(weekId, STUDENT_ID).first()).toEqual({ regular_opt_in: 1, extra_interviewer: 0 });
+
+    await env.DB.prepare('DELETE FROM optins WHERE week_id = ?1 AND participant_id = ?2').bind(weekId, ADMIN_ID).run();
+    await request(`/api/admin/rounds/${weekId}/extra-interviewer`, {
+      method: 'POST', body: JSON.stringify({ participantId: ADMIN_ID, enabled: true }),
+    });
+    expect(await env.DB.prepare(
+      'SELECT regular_opt_in, extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(weekId, ADMIN_ID).first()).toEqual({ regular_opt_in: 0, extra_interviewer: 1 });
+    await request(`/api/admin/rounds/${weekId}/extra-interviewer`, {
+      method: 'POST', body: JSON.stringify({ participantId: ADMIN_ID, enabled: false }),
+    });
+    expect(await env.DB.prepare(
+      'SELECT id FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(weekId, ADMIN_ID).first()).toBeNull();
+
+    expect(await env.DB.prepare(
+      "SELECT action FROM audit_log WHERE action = 'round.extra_interviewer_changed' ORDER BY id DESC LIMIT 1",
+    ).first()).toEqual({ action: 'round.extra_interviewer_changed' });
+  });
+
   it('queues a Discord identity refresh for the active roster', async () => {
     const response = await app.request('/api/admin/participants/sync-discord', {
       method: 'POST',

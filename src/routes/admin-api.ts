@@ -303,11 +303,11 @@ adminApi.get('/api/admin/rounds', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const cohort = await activeCohort(c.env);
-  if (!cohort) return c.json({ cohort: null, weeks: [], selectedWeek: null, sessions: [], optins: [], repairs: [] });
+  if (!cohort) return c.json({ cohort: null, weeks: [], selectedWeek: null, sessions: [], optins: [], participants: [], repairs: [] });
   const weeks = await cohortWeeks(c.env, cohort.id);
   const requested = Number(c.req.query('week'));
   const selectedWeek = weeks.find((week) => week.id === requested) ?? weeks.at(-1)!;
-  const [sessions, optins, repairs] = await Promise.all([
+  const [sessions, optins, participants, repairs] = await Promise.all([
     c.env.DB.prepare(
       `SELECT s.*, pi.name AS interviewer_name, pe.name AS interviewee_name,
               p.number AS problem_number, p.title AS problem_title, p.difficulty AS problem_difficulty,
@@ -320,11 +320,56 @@ adminApi.get('/api/admin/rounds', async (c) => {
        WHERE o.week_id = ?1 ORDER BY lower(p.name)`,
     ).bind(selectedWeek.id).all<any>(),
     c.env.DB.prepare(
+      `SELECT id, name, discord_username FROM participants
+       WHERE status = 'active' AND pairing_excluded = 0
+       ORDER BY lower(name), id`,
+    ).all<any>(),
+    c.env.DB.prepare(
       `SELECT r.*, p.name FROM repair_queue r JOIN participants p ON p.id = r.participant_id
        WHERE r.week_id = ?1 ORDER BY r.state, r.id`,
     ).bind(selectedWeek.id).all<any>(),
   ]);
-  return c.json({ cohort, weeks, selectedWeek, sessions: sessions.results, optins: optins.results, repairs: repairs.results });
+  return c.json({ cohort, weeks, selectedWeek, sessions: sessions.results, optins: optins.results, participants: participants.results, repairs: repairs.results });
+});
+
+adminApi.post('/api/admin/rounds/:weekId/extra-interviewer', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const weekId = Number(c.req.param('weekId'));
+  const body = await c.req.json<{ participantId?: number; enabled?: boolean }>().catch(() => null);
+  const participantId = Number(body?.participantId);
+  if (!Number.isInteger(weekId) || !Number.isInteger(participantId) || typeof body?.enabled !== 'boolean') {
+    return c.json({ error: 'invalid_request' }, 400);
+  }
+  const eligible = await c.env.DB.prepare(
+    `SELECT p.id FROM participants p JOIN weeks w ON w.id = ?1 JOIN cohorts c ON c.id = w.cohort_id
+     WHERE p.id = ?2 AND p.status = 'active' AND p.pairing_excluded = 0 AND c.status = 'active'`,
+  ).bind(weekId, participantId).first<{ id: number }>();
+  if (!eligible) return c.json({ error: 'not_found', message: 'That round or participant is not eligible for matching.' }, 404);
+
+  if (body.enabled) {
+    await c.env.DB.prepare(
+      `INSERT INTO optins (week_id, participant_id, regular_opt_in, extra_interviewer)
+       VALUES (?1, ?2, 0, 1)
+       ON CONFLICT(week_id, participant_id) DO UPDATE SET extra_interviewer = 1`,
+    ).bind(weekId, participantId).run();
+  } else {
+    const optin = await c.env.DB.prepare(
+      'SELECT regular_opt_in FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(weekId, participantId).first<{ regular_opt_in: number }>();
+    if (optin?.regular_opt_in === 1) {
+      await c.env.DB.prepare(
+        'UPDATE optins SET extra_interviewer = 0 WHERE week_id = ?1 AND participant_id = ?2',
+      ).bind(weekId, participantId).run();
+    } else if (optin) {
+      await c.env.DB.prepare('DELETE FROM optins WHERE week_id = ?1 AND participant_id = ?2')
+        .bind(weekId, participantId).run();
+    }
+  }
+  await audit(c.env, gate.participantId, 'round.extra_interviewer_changed', 'participant', participantId, {
+    weekId, enabled: body.enabled,
+  });
+  return c.json({ ok: true, enabled: body.enabled });
 });
 
 adminApi.get('/api/admin/reviews', async (c) => {

@@ -118,20 +118,23 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
   const cfg = await getSettings(env, ['announce_channel_id', 'threads_channel_id', 'organizer_channel_id']);
 
   const { results: optins } = await env.DB.prepare(
-    `SELECT o.participant_id, o.wants_double, o.standby, p.discord_id, p.name, p.email_ok, p.preferred_email
+    `SELECT o.participant_id, o.wants_double, o.standby, o.regular_opt_in, o.extra_interviewer,
+            p.discord_id, p.name, p.email_ok, p.preferred_email
      FROM optins o JOIN participants p ON p.id = o.participant_id
      WHERE o.week_id = ?1 AND p.status = 'active' AND p.pairing_excluded = 0`,
   )
     .bind(week.id)
-    .all<{ participant_id: number; wants_double: number; standby: number; discord_id: string; name: string | null; email_ok: number; preferred_email: string | null }>();
+    .all<{ participant_id: number; wants_double: number; standby: number; regular_opt_in: number; extra_interviewer: number; discord_id: string; name: string | null; email_ok: number; preferred_email: string | null }>();
 
   // Demands from deficits (DESIGN §3)
   const demands: Demand[] = [];
   for (const o of optins) {
-    const credits = await creditsOf(env, o.participant_id);
-    const d = demandFor(week.idx, credits, o.wants_double === 1);
-    if (d.interviewer > 0 || d.interviewee > 0) {
-      demands.push({ participantId: o.participant_id, interviewer: d.interviewer, interviewee: d.interviewee });
+    const normal = o.regular_opt_in === 1
+      ? demandFor(week.idx, await creditsOf(env, o.participant_id), o.wants_double === 1)
+      : { interviewer: 0, interviewee: 0 };
+    const interviewer = normal.interviewer + (o.extra_interviewer === 1 ? 1 : 0);
+    if (interviewer > 0 || normal.interviewee > 0) {
+      demands.push({ participantId: o.participant_id, interviewer, interviewee: normal.interviewee });
     }
   }
 

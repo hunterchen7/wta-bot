@@ -152,16 +152,26 @@ async function handleOptin(
   }
 
   if (choice === 'out') {
-    await c.env.DB.prepare('DELETE FROM optins WHERE week_id = ?1 AND participant_id = ?2')
-      .bind(weekId, participant.id)
-      .run();
+    const optin = await c.env.DB.prepare(
+      'SELECT extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(weekId, participant.id).first<{ extra_interviewer: number }>();
+    if (optin?.extra_interviewer === 1) {
+      await c.env.DB.prepare(
+        `UPDATE optins SET regular_opt_in = 0, standby = 0, wants_double = 0
+         WHERE week_id = ?1 AND participant_id = ?2`,
+      ).bind(weekId, participant.id).run();
+    } else {
+      await c.env.DB.prepare('DELETE FROM optins WHERE week_id = ?1 AND participant_id = ?2')
+        .bind(weekId, participant.id)
+        .run();
+    }
     return c.json(ephemeral(`Sitting out round ${week.idx} — no penalty. Catch up with a double later if you like.`));
   }
 
   await c.env.DB.prepare(
-    `INSERT INTO optins (week_id, participant_id, standby, wants_double)
-     VALUES (?1, ?2, ?3, ?4)
-     ON CONFLICT(week_id, participant_id) DO UPDATE SET standby = ?3, wants_double = ?4`,
+    `INSERT INTO optins (week_id, participant_id, standby, wants_double, regular_opt_in)
+     VALUES (?1, ?2, ?3, ?4, 1)
+     ON CONFLICT(week_id, participant_id) DO UPDATE SET standby = ?3, wants_double = ?4, regular_opt_in = 1`,
   )
     .bind(weekId, participant.id, choice === 'standby' ? 1 : 0, choice === 'double' ? 1 : 0)
     .run();

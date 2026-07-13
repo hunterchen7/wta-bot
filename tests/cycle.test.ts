@@ -159,6 +159,21 @@ describe('full weekly cycle', () => {
       const res = await sendInteraction(signer, button(`optin:${week1!.id}:in`, id), OVERRIDES);
       expect(((await res.json()) as any).data.content).toContain("You're in");
     }
+    const alice = await env.DB.prepare('SELECT id FROM participants WHERE discord_id = ?1').bind('101').first<{ id: number }>();
+    await env.DB.prepare(
+      'UPDATE optins SET extra_interviewer = 1 WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(week1!.id, alice!.id).run();
+    await sendInteraction(signer, button(`optin:${week1!.id}:out`, '101'), OVERRIDES);
+    expect(await env.DB.prepare(
+      'SELECT regular_opt_in, extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(week1!.id, alice!.id).first()).toEqual({ regular_opt_in: 0, extra_interviewer: 1 });
+    await sendInteraction(signer, button(`optin:${week1!.id}:in`, '101'), OVERRIDES);
+    expect(await env.DB.prepare(
+      'SELECT regular_opt_in, extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(week1!.id, alice!.id).first()).toEqual({ regular_opt_in: 1, extra_interviewer: 1 });
+    await env.DB.prepare(
+      'UPDATE optins SET extra_interviewer = 0 WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(week1!.id, alice!.id).run();
     // one standby volunteer among them
     await sendInteraction(signer, button(`optin:${week1!.id}:standby`, '104'), OVERRIDES);
 
