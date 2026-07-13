@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState } from 'react';
 import type { ParticipantDetail, ParticipantRow, ParticipantsData } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, formatDate, inputClass, LoadingState, PageIntro, Panel, tableClass, tdClass, thClass } from '../../components/AdminUI';
@@ -124,12 +124,41 @@ function ParticipantDrawer({ detail, loading, onClose }: { detail: ParticipantDe
   </Dialog>;
 }
 function ParticipantSurveyLinks({ session }: { session: ParticipantDetail['sessions'][number] }) {
+  const [copyState, setCopyState] = useState<{ id: number; status: 'copied' | 'failed' } | null>(null);
+  useEffect(() => {
+    if (!copyState) return;
+    const timer = window.setTimeout(() => setCopyState(null), 1800);
+    return () => window.clearTimeout(timer);
+  }, [copyState]);
+  const copyLink = async (id: number, url: string) => {
+    try {
+      await copyText(new URL(url, window.location.origin).href);
+      setCopyState({ id, status: 'copied' });
+    } catch {
+      setCopyState({ id, status: 'failed' });
+    }
+  };
   if (!session.forms.length) return <p className="mt-2 text-xs text-slate-500 dark:text-muted-foreground">This participant’s survey link will appear within 30 minutes of the scheduled session.</p>;
   return <div className="mt-2 flex flex-wrap gap-2">{session.forms.map((form) => {
     const label = form.kind === 'interviewer_report' ? 'Interviewer survey' : 'Interviewee survey';
     if (!form.url) return <span key={form.id} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-500 dark:bg-muted dark:text-muted-foreground">{label} · link expired</span>;
-    return <a key={form.id} href={form.url} target="_blank" rel="noreferrer" className="inline-flex items-center rounded-lg border border-western-200 bg-western-50 px-2.5 py-1.5 text-xs font-bold text-western-800 transition hover:border-western-300 hover:bg-western-100 dark:border-western-800/70 dark:bg-western-950/40 dark:text-western-200 dark:hover:bg-western-900/50">{form.submitted_at ? `${label} · submitted ↗` : `Open ${label.toLowerCase()} ↗`}</a>;
+    const state = copyState?.id === form.id ? copyState.status : null;
+    return <div key={form.id} className="flex items-center gap-1.5"><div className="inline-flex overflow-hidden rounded-lg border border-western-200 bg-western-50 dark:border-western-800/70 dark:bg-western-950/40"><button type="button" onClick={() => void copyLink(form.id, form.url!)} className="cursor-pointer px-2.5 py-1.5 text-xs font-bold text-western-800 transition hover:bg-western-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-western-500 focus-visible:ring-inset dark:text-western-200 dark:hover:bg-western-900/50">{state === 'copied' ? 'Copied!' : state === 'failed' ? 'Copy failed' : `Copy ${label.toLowerCase()} link`}</button><a aria-label={`Open ${label.toLowerCase()}`} href={form.url} target="_blank" rel="noreferrer" title="Open survey" className="inline-flex items-center border-l border-western-200 px-2 py-1.5 text-xs font-black text-western-700 transition hover:bg-western-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-western-500 focus-visible:ring-inset dark:border-western-800/70 dark:text-western-300 dark:hover:bg-western-900/50">↗</a></div>{form.submitted_at ? <span className="text-[0.68rem] font-bold text-emerald-700 dark:text-emerald-400">Submitted</span> : null}</div>;
   })}</div>;
+}
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    try { await navigator.clipboard.writeText(value); return; } catch { /* fall through */ }
+  }
+  const field = document.createElement('textarea');
+  field.value = value;
+  field.setAttribute('readonly', '');
+  field.style.cssText = 'position:fixed;inset:0 auto auto 0;opacity:0;pointer-events:none';
+  document.body.appendChild(field);
+  field.select();
+  const copied = document.execCommand('copy');
+  field.remove();
+  if (!copied) throw new Error('Clipboard access was denied.');
 }
 function Fact({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) { return <div className="rounded-xl bg-slate-50 p-3"><div className="text-[0.65rem] font-black uppercase tracking-wider text-slate-400">{label}</div><div className="mt-1 text-sm font-bold text-slate-800">{children ?? value}</div></div>; }
 function DetailSection({ title, children }: { title: string; children: React.ReactNode }) { return <section className="rounded-xl border border-slate-200 p-4"><SectionTitle>{title}</SectionTitle><dl className="divide-y divide-slate-100">{children}</dl></section>; }
