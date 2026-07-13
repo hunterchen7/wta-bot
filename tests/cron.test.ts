@@ -14,4 +14,18 @@ describe('cron tick', () => {
     const after = await env.DB.prepare('SELECT count(*) AS n FROM job_runs').first<{ n: number }>();
     expect(after?.n).toBe(2);
   });
+
+  it('drains work created just after the scheduled tick timestamp', async () => {
+    const tickStartedAt = new Date(Date.now() - 2_000);
+    const queuedAt = new Date(tickStartedAt.getTime() + 1_000);
+    const inserted = await env.DB.prepare(
+      `INSERT INTO outbox (kind, payload, run_after)
+       VALUES ('dm', '{"userId":"missing-test-user","message":{"content":"same-tick delivery"}}', ?1)`,
+    ).bind(queuedAt.toISOString()).run();
+
+    await tick(env, tickStartedAt);
+
+    expect(await env.DB.prepare('SELECT done_at, attempts FROM outbox WHERE id = ?1')
+      .bind(inserted.meta.last_row_id).first()).toEqual({ done_at: expect.any(String), attempts: 0 });
+  });
 });

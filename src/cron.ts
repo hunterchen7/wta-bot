@@ -60,7 +60,10 @@ export async function tick(env: Env, now: Date): Promise<void> {
   await cleanupOrphanedRecordings(env, now).catch((err) => console.error('recording cleanup failed:', err));
 
   const budget = Math.max(1, Number(env.OUTBOX_BUDGET ?? 20) || 20);
-  await drainOutbox(env, executeOutbox, budget, now);
+  // Jobs above enqueue rows using the wall clock, which can be a few seconds
+  // later than the scheduled event timestamp. Drain against the wall clock too
+  // so work created during this tick is not deferred to the next 15-minute run.
+  await drainOutbox(env, executeOutbox, budget, new Date());
 }
 
 export async function claim(env: Env, jobKey: string, now: Date): Promise<boolean> {
