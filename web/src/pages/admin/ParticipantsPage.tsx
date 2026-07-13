@@ -1,8 +1,9 @@
-import { useDeferredValue, useEffect, useMemo, useState, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useDeferredValue, useEffect, useMemo, useState, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import type { ParticipantDetail, ParticipantRow, ParticipantsData } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, formatDate, inputClass, LoadingState, PageIntro, Panel, tableClass, tdClass, thClass } from '../../components/AdminUI';
 import { Icon } from '../../components/Icon';
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
 import { SelectControl } from '../../components/SelectControl';
@@ -91,7 +92,9 @@ export function ParticipantsPage() {
   useEffect(() => { try { localStorage.setItem(COLUMN_ORDER_STORAGE_KEY, JSON.stringify(columnOrder)); } catch { /* storage unavailable */ } }, [columnOrder]);
   useEffect(() => { try { localStorage.setItem(SORT_STORAGE_KEY, JSON.stringify(sort)); } catch { /* storage unavailable */ } }, [sort]);
   const activeFilters = [status, year, program, experience, opportunity, topic, roundState, attention, email].filter((value) => value !== 'all').length;
+  const secondaryActiveFilters = [year, program, experience, opportunity, topic, email].filter((value) => value !== 'all').length;
   const clearFilters = () => { setStatus('all'); setYear('all'); setProgram('all'); setExperience('all'); setOpportunity('all'); setTopic('all'); setRoundState('all'); setAttention('all'); setEmail('all'); };
+  const clearSecondaryFilters = () => { setYear('all'); setProgram('all'); setExperience('all'); setOpportunity('all'); setTopic('all'); setEmail('all'); };
   if (loading && !data) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? 'No roster returned.'} onRetry={() => void reload()} />;
 
@@ -131,18 +134,26 @@ export function ParticipantsPage() {
           <input className={`${inputClass} lg:max-w-md`} type="search" placeholder="Search any participant field…" value={query} onChange={(event) => setQuery(event.target.value)} />
           <div aria-live="polite" className="text-xs font-semibold text-muted-foreground lg:ml-auto">{filtered.length} of {data.participants.length} · Sorted by {COLUMN_DEFINITIONS[sort.column].label} {sort.direction === 'desc' ? '↓' : '↑'}</div>
           {customizedColumns ? <button className="text-xs font-bold text-western-700 hover:text-western-900 dark:text-western-300" onClick={() => setColumnOrder(DEFAULT_COLUMN_ORDER.slice())}>Reset columns</button> : null}
-          {activeFilters ? <button className="text-xs font-bold text-western-700 hover:text-western-900 dark:text-western-300" onClick={clearFilters}>Clear {activeFilters} filter{activeFilters === 1 ? '' : 's'}</button> : null}
         </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-          <SelectControl label="Status" value={status} onChange={setStatus} options={[{ value: 'all', label: 'All statuses' }, ...STATUS_OPTIONS]} />
-          <SelectControl label="Incoming year" value={year} onChange={setYear} options={filterOptions('All years', options.years)} />
-          <SelectControl label="Program" value={program} onChange={setProgram} options={filterOptions('All programs', options.programs)} />
-          <SelectControl label="Interview experience" value={experience} onChange={setExperience} options={filterOptions('All experience levels', options.experience)} />
-          <SelectControl label="Opportunity" value={opportunity} onChange={setOpportunity} options={filterOptions('All opportunities', options.opportunities)} />
-          <SelectControl label="Topic" value={topic} onChange={setTopic} options={filterOptions('All topics', options.topics)} />
-          <SelectControl label="Current round" value={roundState} onChange={setRoundState} options={[{ value: 'all', label: 'Any round status' }, { value: 'in', label: 'Opted in' }, { value: 'out', label: 'Not opted in' }]} />
-          <SelectControl label="Needs attention" value={attention} onChange={setAttention} options={[{ value: 'all', label: 'Any attention state' }, { value: 'any', label: 'Anything outstanding' }, { value: 'reports', label: 'Reports owed' }, { value: 'strikes', label: 'Has strikes' }, { value: 'clear', label: 'Nothing outstanding' }]} />
-          <SelectControl label="Email reminders" value={email} onChange={setEmail} options={[{ value: 'all', label: 'Any reminder setting' }, { value: 'enabled', label: 'Enabled' }, { value: 'disabled', label: 'Disabled' }]} />
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <SelectControl className="h-9 sm:w-44" label="Status" value={status} onChange={setStatus} options={[{ value: 'all', label: 'All statuses' }, ...STATUS_OPTIONS]} />
+          <SelectControl className="h-9 sm:w-44" label="Current round" value={roundState} onChange={setRoundState} options={[{ value: 'all', label: 'Any round status' }, { value: 'in', label: 'Opted in' }, { value: 'out', label: 'Not opted in' }]} />
+          <SelectControl className="h-9 sm:w-48" label="Needs attention" value={attention} onChange={setAttention} options={[{ value: 'all', label: 'Any attention state' }, { value: 'any', label: 'Anything outstanding' }, { value: 'reports', label: 'Reports owed' }, { value: 'strikes', label: 'Has strikes' }, { value: 'clear', label: 'Nothing outstanding' }]} />
+          <Popover>
+            <PopoverTrigger asChild><Button variant="secondary" className="h-9 w-full justify-start rounded-xl px-3.5 sm:w-auto sm:justify-center"><Icon name="filter" className="size-4" />More filters{secondaryActiveFilters ? <span className="rounded-full bg-western-100 px-1.5 py-0.5 text-[0.65rem] font-black leading-none text-western-800 dark:bg-western-900/70 dark:text-western-200">{secondaryActiveFilters}</span> : null}</Button></PopoverTrigger>
+            <PopoverContent align="start" className="w-[calc(100vw-2rem)] overflow-hidden p-0 sm:w-[34rem]">
+              <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3"><div><div className="text-sm font-black text-foreground">More filters</div><div className="mt-0.5 text-xs text-muted-foreground">Narrow by enrollment and contact details.</div></div>{secondaryActiveFilters ? <button type="button" className="shrink-0 text-xs font-bold text-western-700 hover:text-western-900 dark:text-western-300" onClick={clearSecondaryFilters}>Clear</button> : null}</div>
+              <div className="grid gap-3 p-4 sm:grid-cols-2">
+                <FilterField label="Incoming year"><SelectControl label="Incoming year" value={year} onChange={setYear} options={filterOptions('All years', options.years)} /></FilterField>
+                <FilterField label="Program"><SelectControl label="Program" value={program} onChange={setProgram} options={filterOptions('All programs', options.programs)} /></FilterField>
+                <FilterField label="Interview experience"><SelectControl label="Interview experience" value={experience} onChange={setExperience} options={filterOptions('All experience levels', options.experience)} /></FilterField>
+                <FilterField label="Opportunity"><SelectControl label="Opportunity" value={opportunity} onChange={setOpportunity} options={filterOptions('All opportunities', options.opportunities)} /></FilterField>
+                <FilterField label="Topic"><SelectControl label="Topic" value={topic} onChange={setTopic} options={filterOptions('All topics', options.topics)} /></FilterField>
+                <FilterField label="Email reminders"><SelectControl label="Email reminders" value={email} onChange={setEmail} options={[{ value: 'all', label: 'Any reminder setting' }, { value: 'enabled', label: 'Enabled' }, { value: 'disabled', label: 'Disabled' }]} /></FilterField>
+              </div>
+            </PopoverContent>
+          </Popover>
+          {activeFilters ? <button className="self-start px-2 py-2 text-xs font-bold text-western-700 hover:text-western-900 sm:self-auto dark:text-western-300" onClick={clearFilters}>Clear all <span className="sr-only">{activeFilters} active filter{activeFilters === 1 ? '' : 's'}</span></button> : null}
         </div>
       </div>
       {selected.size ? <div className="absolute inset-x-4 bottom-4 z-20 flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-slate-950/95 px-4 py-2.5 text-white shadow-xl shadow-slate-950/20 backdrop-blur-xl motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-2"><span className="mr-2 text-xs font-bold tabular-nums">{selected.size} selected</span><Button variant="secondary" className="!border-white/10 !bg-white/10 !py-1.5 !text-white hover:!bg-white/15" onClick={() => setBulkOpen('status')}>Change status</Button><Button variant="secondary" className="!border-white/10 !bg-white/10 !py-1.5 !text-white hover:!bg-white/15" onClick={() => setBulkOpen('message')}>Send message</Button><button className="ml-auto text-xs font-bold text-slate-300 hover:text-white" onClick={() => setSelected(new Set())}>Clear</button></div> : null}
@@ -158,6 +169,10 @@ export function ParticipantsPage() {
     {bulkOpen === 'status' ? <StatusDialog count={selected.size} busy={busy} onClose={() => setBulkOpen(null)} onSubmit={runStatus} /> : null}
     {bulkOpen === 'message' ? <MessageDialog count={selected.size} busy={busy} onClose={() => setBulkOpen(null)} onSubmit={runMessage} /> : null}
   </div>;
+}
+
+function FilterField({ label, children }: { label: string; children: ReactNode }) {
+  return <div><div className="mb-1.5 text-[0.68rem] font-black uppercase tracking-[0.12em] text-muted-foreground">{label}</div>{children}</div>;
 }
 
 function SortableColumnHeader({ column, sort, dragging, dropTarget, onSort, onDragStart, onDragOver, onDrop, onDragEnd, onNudge }: {
