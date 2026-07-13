@@ -260,43 +260,111 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
   return { sessions: result.edges.length, unmatched: result.unmatched.length };
 }
 
+type ReminderSession = {
+  id: number; interviewer_id: number; interviewee_id: number; thread_id: string | null;
+  scheduled_at: string; reminder_sent_at: string | null; reports_due_at: string;
+  grace_until: string | null; week_idx: number;
+  interviewer_name: string | null; interviewee_name: string | null;
+};
+
+async function ensureReportLinks(env: Env, origin: string, session: ReminderSession) {
+  const deadline = session.grace_until ?? session.reports_due_at;
+  const secret = env.FORM_SIGNING_SECRET;
+  if (!secret) return [];
+  const links: Array<{ side: 'interviewer' | 'interviewee'; discordId: string; partnerName: string; url: string }> = [];
+  for (const side of ['interviewer', 'interviewee'] as const) {
+    const assignee = side === 'interviewer' ? session.interviewer_id : session.interviewee_id;
+    const kind = `${side}_report`;
+    let form = await env.DB.prepare(
+      'SELECT id FROM form_instances WHERE session_id = ?1 AND kind = ?2 LIMIT 1',
+    ).bind(session.id, kind).first<{ id: number }>();
+    if (!form) {
+      const inserted = await env.DB.prepare(
+        `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at)
+         VALUES (?1, ?2, ?3, ?4, ?5)`,
+      ).bind(kind, session.id, assignee, crypto.randomUUID(), deadline).run();
+      form = { id: Number(inserted.meta.last_row_id) };
+    }
+    const who = await env.DB.prepare('SELECT discord_id FROM participants WHERE id = ?1')
+      .bind(assignee).first<{ discord_id: string }>();
+    if (!who) continue;
+    const token = await signToken(secret, `f:${form.id}`, new Date(new Date(deadline).getTime() + 7 * 86400_000));
+    links.push({
+      side,
+      discordId: who.discord_id,
+      partnerName: side === 'interviewer' ? session.interviewee_name ?? 'your interviewee' : session.interviewer_name ?? 'your interviewer',
+      url: `${origin}/f/${token}`,
+    });
+  }
+  return links;
+}
+
+/** One reminder in the cron tick that lands 15–30 minutes before the session. */
+export async function preInterviewReminderScan(env: Env, origin: string, now = new Date()): Promise<number> {
+  const windowStart = new Date(now.getTime() + 15 * 60_000).toISOString();
+  const windowEnd = new Date(now.getTime() + 30 * 60_000).toISOString();
+  const { results } = await env.DB.prepare(
+    `SELECT s.id, s.interviewer_id, s.interviewee_id, s.thread_id, s.scheduled_at, s.reminder_sent_at,
+            w.reports_due_at, w.grace_until, w.idx AS week_idx,
+            pi.name AS interviewer_name, pe.name AS interviewee_name
+     FROM sessions s JOIN weeks w ON w.id = s.week_id
+     JOIN participants pi ON pi.id = s.interviewer_id
+     JOIN participants pe ON pe.id = s.interviewee_id
+     WHERE s.state = 'scheduled' AND s.reminder_sent_at IS NULL
+       AND s.scheduled_at > ?1 AND s.scheduled_at <= ?2`,
+  ).bind(windowStart, windowEnd).all<ReminderSession>();
+
+  for (const session of results) {
+    const links = await ensureReportLinks(env, origin, session);
+    if (links.length !== 2) continue;
+    for (const link of links) {
+      await enqueue(env, 'dm', {
+        userId: link.discordId,
+        fallbackKind: 'session_reminder',
+        message: {
+          content:
+            `⏰ Your WTA session with **${link.partnerName}** starts ${discordTime(session.scheduled_at, 'R')} (${discordTime(session.scheduled_at)}).\n` +
+            `You are the **${link.side}**. Keep your ${link.side} feedback form handy for afterward: ${link.url}`,
+        },
+      });
+    }
+    if (session.thread_id) {
+      await enqueue(env, 'channel_msg', {
+        channelId: session.thread_id,
+        message: { content: `⏰ Session starts ${discordTime(session.scheduled_at, 'R')}. Your role-specific feedback forms were sent by DM.` },
+      });
+    }
+    await env.DB.prepare('UPDATE sessions SET reminder_sent_at = ?2 WHERE id = ?1 AND reminder_sent_at IS NULL')
+      .bind(session.id, now.toISOString()).run();
+  }
+  return results.length;
+}
+
 /** Sessions whose scheduled time has arrived get their two report forms. */
 export async function formDropScan(env: Env, origin: string, now = new Date()): Promise<number> {
   const { results } = await env.DB.prepare(
-    `SELECT s.id, s.week_id, s.interviewer_id, s.interviewee_id, s.thread_id,
-            w.reports_due_at, w.grace_until, w.idx AS week_idx
+    `SELECT s.id, s.interviewer_id, s.interviewee_id, s.thread_id, s.scheduled_at, s.reminder_sent_at,
+            w.reports_due_at, w.grace_until, w.idx AS week_idx,
+            pi.name AS interviewer_name, pe.name AS interviewee_name
      FROM sessions s JOIN weeks w ON w.id = s.week_id
+     JOIN participants pi ON pi.id = s.interviewer_id
+     JOIN participants pe ON pe.id = s.interviewee_id
      WHERE s.state = 'scheduled' AND s.scheduled_at <= ?1
-       AND NOT EXISTS (SELECT 1 FROM form_instances f WHERE f.session_id = s.id)`,
+       AND s.forms_released_at IS NULL`,
   )
     .bind(now.toISOString())
-    .all<any>();
+    .all<ReminderSession>();
 
   for (const s of results) {
-    const deadline = s.grace_until ?? s.reports_due_at;
-    for (const side of ['interviewer', 'interviewee'] as const) {
-      const assignee = side === 'interviewer' ? s.interviewer_id : s.interviewee_id;
-      const kind = `${side}_report`;
-      const ins = await env.DB.prepare(
-        `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)`,
-      )
-        .bind(kind, s.id, assignee, crypto.randomUUID(), deadline)
-        .run();
-      const instanceId = Number(ins.meta.last_row_id);
-      const secret = env.FORM_SIGNING_SECRET;
-      if (!secret) continue;
-      const token = await signToken(secret, `f:${instanceId}`, new Date(new Date(deadline).getTime() + 7 * 86400_000));
-      const url = `${origin}/f/${token}`;
-      const who = await env.DB.prepare('SELECT discord_id FROM participants WHERE id = ?1')
-        .bind(assignee)
-        .first<{ discord_id: string }>();
-      if (who) {
+    const links = await ensureReportLinks(env, origin, s);
+    if (links.length !== 2) continue;
+    if (!s.reminder_sent_at) {
+      for (const link of links) {
         await enqueue(env, 'dm', {
-          userId: who.discord_id,
+          userId: link.discordId,
           fallbackKind: 'form_link',
           message: {
-            content: `📝 Your **${side} report** for today's round-${s.week_idx} session: ${url}\nDue ${discordTime(deadline)} — your session credit needs it.`,
+            content: `📝 Your **${link.side} report** for today's round-${s.week_idx} session: ${link.url}\nDue ${discordTime(s.grace_until ?? s.reports_due_at)} — your session credit needs it.`,
           },
         });
       }
@@ -304,9 +372,15 @@ export async function formDropScan(env: Env, origin: string, now = new Date()): 
     if (s.thread_id) {
       await enqueue(env, 'channel_msg', {
         channelId: s.thread_id,
-        message: { content: `🕑 Session time! Report-form links just went out by DM (due ${discordTime(s.grace_until ?? s.reports_due_at)}). Good luck! 🎤` },
+        message: {
+          content: s.reminder_sent_at
+            ? `🕑 Session time! Your role-specific feedback forms are in the reminder DMs above (due ${discordTime(s.grace_until ?? s.reports_due_at)}). Good luck! 🎤`
+            : `🕑 Session time! Report-form links just went out by DM (due ${discordTime(s.grace_until ?? s.reports_due_at)}). Good luck! 🎤`,
+        },
       });
     }
+    await env.DB.prepare('UPDATE sessions SET forms_released_at = ?2 WHERE id = ?1 AND forms_released_at IS NULL')
+      .bind(s.id, now.toISOString()).run();
   }
   return results.length;
 }

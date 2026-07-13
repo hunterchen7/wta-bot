@@ -136,7 +136,14 @@ describe('admin operational data', () => {
     expect(detail.sessions[0]).toMatchObject({ id: 9201, problem_title: 'Two Sum' });
 
     const rounds = await (await request(`/api/admin/rounds?week=${weekId}`)).json<any>();
-    expect(rounds.sessions[0]).toMatchObject({ id: 9201, interviewer_name: 'Admin Person' });
+    expect(rounds.sessions[0]).toMatchObject({
+      id: 9201,
+      interviewer_name: 'Admin Person',
+      problem_number: null,
+      problem_title: 'Two Sum',
+      problem_difficulty: 'easy',
+      packet_sent_at: null,
+    });
     expect(rounds.selectedWeek.id).toBe(weekId);
 
     await env.DB.prepare(
@@ -301,6 +308,9 @@ describe('admin mutations and audit history', () => {
   });
 
   it('surfaces operations and retries dead outbox rows', async () => {
+    const heartbeat = new Date().toISOString();
+    await env.DB.prepare("INSERT INTO job_runs (job_key, ran_at) VALUES (?1, ?2)")
+      .bind(`tick:${heartbeat.slice(0, 16)}`, heartbeat).run();
     await env.DB.prepare(
       `INSERT INTO outbox (id, kind, payload, run_after, attempts, last_error) VALUES
         (9501, 'email', '{}', ?1, 5, 'mail failed'),
@@ -309,6 +319,7 @@ describe('admin mutations and audit history', () => {
     const operations = await (await request('/api/admin/operations')).json<any>();
     expect(operations.outbox).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9501, attempts: 5, payload: '{}', dismissed_at: null })]));
     expect(operations.outbox).toEqual(expect.arrayContaining([expect.objectContaining({ id: 9502, participant_name: 'Student Person' })]));
+    expect(operations.cron).toMatchObject({ status: 'healthy', lastTickAt: heartbeat, expectedEveryMinutes: 15 });
 
     const dismiss = await request('/api/admin/operations/outbox/9501/dismiss', { method: 'POST', body: '{}' });
     expect(dismiss.status).toBe(200);

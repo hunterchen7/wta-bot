@@ -1,5 +1,5 @@
 import { COMMANDS } from './discord/commands';
-import { closeAndMatch, deadlineSweep, formDropScan, openOptin, optinReminder, scheduleNudge } from './engine/cycle';
+import { closeAndMatch, deadlineSweep, formDropScan, openOptin, optinReminder, preInterviewReminderScan, scheduleNudge } from './engine/cycle';
 import { weeklyDigest } from './engine/digest';
 import { executeOutbox } from './engine/executor';
 import { drainOutbox } from './engine/outbox';
@@ -46,6 +46,7 @@ export async function tick(env: Env, now: Date): Promise<void> {
       await due(`digest:${w.id}`, a.digest_at, () => weeklyDigest(env, w));
     }
 
+    await preInterviewReminderScan(env, origin, now).catch((err) => console.error('preInterviewReminderScan failed:', err));
     await formDropScan(env, origin, now).catch((err) => console.error('formDropScan failed:', err));
     await deadlineSweep(env, origin, now).catch((err) => console.error('deadlineSweep failed:', err));
     await repairScan(env, now).catch((err) => console.error('repairScan failed:', err));

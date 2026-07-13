@@ -202,7 +202,7 @@ async function handleSessionButton(
       textInput({
         id: 'time',
         label: 'Time (24-hour, Toronto)',
-        description: 'Use a half-hour time, such as 09:00 or 19:30.',
+        description: 'Enter a time such as 09:10 or 19:45.',
         placeholder: '19:30',
         value: rescheduling && session.scheduled_at
           ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(session.scheduled_at))
@@ -236,8 +236,8 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
   if (!week) return c.json(ephemeral('This round no longer exists.'));
   const date = modalValue(values, 'date');
   const time = modalValue(values, 'time').trim();
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(?:[01]\d|2[0-3]):(?:00|30)$/.test(time)) {
-    return c.json(ephemeral('Enter the time in 24-hour format using a half-hour increment, such as `09:00` or `19:30`.'));
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+    return c.json(ephemeral('Enter a valid time in 24-hour format, such as `09:10` or `19:45`.'));
   }
   const when = parseTorontoLocal(`${date} ${time}`);
   if (!when) return c.json(ephemeral('That date does not exist in Toronto time. Choose another date.'));
@@ -254,7 +254,9 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
     return c.json(ephemeral(`That's past the round deadline (${formatToronto(deadline)} Toronto). Pick an earlier slot.`));
   }
   const wasScheduled = session.state === 'scheduled';
-  await c.env.DB.prepare("UPDATE sessions SET scheduled_at = ?1, state = 'scheduled' WHERE id = ?2")
+  await c.env.DB.prepare(
+    "UPDATE sessions SET scheduled_at = ?1, state = 'scheduled', reminder_sent_at = NULL, forms_released_at = NULL WHERE id = ?2",
+  )
     .bind(when.toISOString(), sessionId)
     .run();
   let problemSent = false;

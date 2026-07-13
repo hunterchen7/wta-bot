@@ -4,7 +4,7 @@
 
 import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { closeAndMatch, formDropScan } from '../src/engine/cycle';
+import { closeAndMatch, formDropScan, preInterviewReminderScan } from '../src/engine/cycle';
 import { executeOutbox } from '../src/engine/executor';
 import { drainOutbox } from '../src/engine/outbox';
 import { repairScan } from '../src/engine/repair';
@@ -234,19 +234,19 @@ describe('full weekly cycle', () => {
     );
     expect(((await tooEarly.json()) as any).data.content).toContain('before this session');
 
-    const invalidIncrement = await sendInteraction(
+    const invalidTime = await sendInteraction(
       signer,
       {
-        type: 5, id: 'invalid-increment', token: 't', guild_id: GUILD,
+        type: 5, id: 'invalid-time', token: 't', guild_id: GUILD,
         data: {
           custom_id: `sess:${s0.id}:schedmodal`,
-          components: [selectField('date', '2026-09-16'), textField('time', '19:15')],
+          components: [selectField('date', '2026-09-16'), textField('time', '24:15')],
         },
         ...asUser(interviewerDiscord.discord_id),
       },
       OVERRIDES,
     );
-    expect(((await invalidIncrement.json()) as any).data.content).toContain('half-hour increment');
+    expect(((await invalidTime.json()) as any).data.content).toContain('valid time');
 
     const sched = await sendInteraction(
       signer,
@@ -289,7 +289,30 @@ describe('full weekly cycle', () => {
     ) as Record<string, any>;
     expect(reschedulerFields.time.value).toBe('19:30');
 
-    // --- form drop once the session time arrives ---------------------------------
+    // --- 30-minute reminder creates and sends the correct role-specific forms -----
+    expect(await preInterviewReminderScan(env, 'https://example.test', new Date('2026-09-16T23:01:00Z'))).toBe(1);
+    expect(await preInterviewReminderScan(env, 'https://example.test', new Date('2026-09-16T23:05:00Z'))).toBe(0);
+    const reminderForms = await env.DB.prepare(
+      'SELECT kind, assignee_id FROM form_instances WHERE session_id = ?1 ORDER BY kind',
+    ).bind(s0.id).all<any>();
+    expect(reminderForms.results).toEqual([
+      { kind: 'interviewee_report', assignee_id: s0.interviewee_id },
+      { kind: 'interviewer_report', assignee_id: s0.interviewer_id },
+    ]);
+    const reminders = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'dm' AND payload LIKE '%session_reminder%' ORDER BY id",
+    ).all<{ payload: string }>();
+    expect(reminders.results).toHaveLength(2);
+    const reminderPayloads = reminders.results.map((row) => JSON.parse(row.payload));
+    expect(reminderPayloads).toEqual(expect.arrayContaining([
+      expect.objectContaining({ userId: interviewerDiscord.discord_id, fallbackKind: 'session_reminder' }),
+    ]));
+    expect(reminderPayloads.map((payload) => payload.message.content)).toEqual(expect.arrayContaining([
+      expect.stringContaining('You are the **interviewer**'),
+      expect.stringContaining('You are the **interviewee**'),
+    ]));
+
+    // --- form release at session time reuses the same two form instances ----------
     const dropped = await formDropScan(env, 'https://example.test', new Date('2026-09-16T23:31:00Z'));
     expect(dropped).toBe(1);
     const forms = await env.DB.prepare(
@@ -298,6 +321,7 @@ describe('full weekly cycle', () => {
       .bind(s0.id)
       .all<any>();
     expect(forms.results.map((f: any) => f.kind)).toEqual(['interviewee_report', 'interviewer_report']);
+    expect(await formDropScan(env, 'https://example.test', new Date('2026-09-16T23:32:00Z'))).toBe(0);
 
     // --- a different session goes wrong: interviewee reports interviewer ghosted --
     const s1 = sessions[1]!;

@@ -309,7 +309,8 @@ adminApi.get('/api/admin/rounds', async (c) => {
   const selectedWeek = weeks.find((week) => week.id === requested) ?? weeks.at(-1)!;
   const [sessions, optins, repairs] = await Promise.all([
     c.env.DB.prepare(
-      `SELECT s.*, pi.name AS interviewer_name, pe.name AS interviewee_name, p.title AS problem_title,
+      `SELECT s.*, pi.name AS interviewer_name, pe.name AS interviewee_name,
+              p.number AS problem_number, p.title AS problem_title, p.difficulty AS problem_difficulty,
               (SELECT count(*) FROM form_instances f WHERE f.session_id = s.id AND f.submitted_at IS NOT NULL) AS reports_in
        FROM sessions s JOIN participants pi ON pi.id = s.interviewer_id JOIN participants pe ON pe.id = s.interviewee_id
        LEFT JOIN problems p ON p.id = s.problem_id WHERE s.week_id = ?1 ORDER BY s.id`,
@@ -516,7 +517,15 @@ adminApi.get('/api/admin/operations', async (c) => {
     c.env.DB.prepare('SELECT * FROM job_runs ORDER BY ran_at DESC LIMIT 100').all<any>(),
     c.env.DB.prepare(`SELECT a.*, p.name AS actor_name FROM audit_log a LEFT JOIN participants p ON p.id = a.actor_participant_id ORDER BY a.id DESC LIMIT 100`).all<any>(),
   ]);
-  return c.json({ outbox: outbox.results, notifications: notifications.results, jobs: jobs.results, audit: auditRows.results });
+  const lastTick = jobs.results.find((row) => String(row.job_key).startsWith('tick:')) ?? null;
+  const ageMinutes = lastTick ? Math.max(0, Math.round((Date.now() - new Date(lastTick.ran_at).getTime()) / 60_000)) : null;
+  const cron = {
+    status: !lastTick ? 'never_run' : ageMinutes! <= 30 ? 'healthy' : 'late',
+    lastTickAt: lastTick?.ran_at ?? null,
+    ageMinutes,
+    expectedEveryMinutes: 15,
+  };
+  return c.json({ outbox: outbox.results, notifications: notifications.results, jobs: jobs.results, audit: auditRows.results, cron });
 });
 
 adminApi.post('/api/admin/operations/outbox/:id/retry', async (c) => {

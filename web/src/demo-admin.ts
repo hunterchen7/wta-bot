@@ -31,11 +31,11 @@ const overview: OverviewData = {
 };
 
 const sessions = [
-  { id: 41, round: 2, interviewer_name: 'Alex Chen', interviewee_name: 'Jordan Lee', state: 'completed', scheduled_at: '2026-08-10T23:00:00.000Z', origin: 'match', reports_in: 2, review_state: 'none', problem_title: 'Merge Intervals' },
-  { id: 42, round: 2, interviewer_name: 'Maya Singh', interviewee_name: 'Sam Wilson', state: 'scheduled', scheduled_at: '2026-08-15T18:30:00.000Z', origin: 'match', reports_in: 0, review_state: 'none', problem_title: 'Valid Parentheses' },
-  { id: 43, round: 2, interviewer_name: 'Taylor Kim', interviewee_name: 'Priya Patel', state: 'pending_schedule', scheduled_at: null, origin: 'match', reports_in: 0, review_state: 'none', problem_title: null },
-  { id: 44, round: 2, interviewer_name: 'Noah Martin', interviewee_name: 'Amara Okafor', state: 'broken', scheduled_at: null, origin: 'match', reports_in: 0, review_state: 'none', problem_title: 'Number of Islands' },
-  { id: 45, round: 2, interviewer_name: 'Leo Zhang', interviewee_name: 'Sofia Rodriguez', state: 'scheduled', scheduled_at: '2026-08-16T20:00:00.000Z', origin: 'repair', reports_in: 0, review_state: 'none', problem_title: 'Product of Array Except Self' },
+  { id: 41, round: 2, interviewer_name: 'Alex Chen', interviewee_name: 'Jordan Lee', state: 'completed', scheduled_at: '2026-08-10T23:00:00.000Z', origin: 'match', reports_in: 2, review_state: 'none', problem_number: 56, problem_title: 'Merge Intervals', problem_difficulty: 'medium', packet_sent_at: '2026-08-09T17:00:00.000Z' },
+  { id: 42, round: 2, interviewer_name: 'Maya Singh', interviewee_name: 'Sam Wilson', state: 'scheduled', scheduled_at: '2026-08-15T18:30:00.000Z', origin: 'match', reports_in: 0, review_state: 'none', problem_number: 20, problem_title: 'Valid Parentheses', problem_difficulty: 'easy', packet_sent_at: '2026-08-13T14:00:00.000Z' },
+  { id: 43, round: 2, interviewer_name: 'Taylor Kim', interviewee_name: 'Priya Patel', state: 'pending_schedule', scheduled_at: null, origin: 'match', reports_in: 0, review_state: 'none', problem_number: null, problem_title: null, problem_difficulty: null, packet_sent_at: null },
+  { id: 44, round: 2, interviewer_name: 'Noah Martin', interviewee_name: 'Amara Okafor', state: 'broken', scheduled_at: null, origin: 'match', reports_in: 0, review_state: 'none', problem_number: 200, problem_title: 'Number of Islands', problem_difficulty: 'medium', packet_sent_at: null },
+  { id: 45, round: 2, interviewer_name: 'Leo Zhang', interviewee_name: 'Sofia Rodriguez', state: 'scheduled', scheduled_at: '2026-08-16T20:00:00.000Z', origin: 'repair', reports_in: 0, review_state: 'none', problem_number: 238, problem_title: 'Product of Array Except Self', problem_difficulty: 'medium', packet_sent_at: null },
 ];
 
 const problems: ProblemsData['problems'] = [
@@ -52,8 +52,9 @@ const operations: OperationsData = {
     { id: 201, kind: 'channel_msg', payload: JSON.stringify({ channelId: '100000000000000099', message: { content: 'Round 2 is open.' } }), participant_name: null, attempts: 0, run_after: now, done_at: '2026-08-13T13:59:00.000Z', dismissed_at: null, last_error: null, created_at: now },
   ],
   notifications: [{ id: 12, name: 'Maya Singh', channel: 'email', kind: 'pairing', status: 'sent', created_at: now }, { id: 11, name: 'Jordan Lee', channel: 'dm', kind: 'scheduling_nudge', status: 'sent', created_at: now }],
-  jobs: [{ id: 3, job_key: 'round:2:nudge:1', ran_at: now }, { id: 2, job_key: 'round:2:match', ran_at: '2026-08-08T22:15:00.000Z' }],
+  jobs: [{ id: 4, job_key: 'tick:2026-08-13T14:00', ran_at: now }, { id: 3, job_key: 'nudge:12', ran_at: now }, { id: 2, job_key: 'match:12', ran_at: '2026-08-08T22:15:00.000Z' }],
   audit: overview.recentAudit,
+  cron: { status: 'healthy', lastTickAt: now, ageMinutes: 2, expectedEveryMinutes: 15 },
 };
 
 export async function adminDemoRequest(path: string, init?: RequestInit): Promise<unknown> {
