@@ -4,6 +4,7 @@ import type { Env } from '../env';
 import { fieldsFor, validate, type Field } from '../forms/schema';
 import { verifyFormToken, verifyToken } from '../forms/token';
 import { sessionFrom } from './web';
+import { isCurrentOrganizer } from '../organizers';
 
 // Signed report and problem links now hydrate React pages. This module exposes
 // data and mutations only; it intentionally contains no HTML rendering.
@@ -195,7 +196,9 @@ forms.delete('/api/forms/:token/recording/:id', async (c) => {
 forms.get('/api/recordings/:id', async (c) => {
   if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
   const session = await sessionFrom(c);
-  if (!session?.organizer) return c.json({ error: 'forbidden' }, session ? 403 : 401);
+  if (!session?.organizer || !(await isCurrentOrganizer(c.env, session.participantId))) {
+    return c.json({ error: 'forbidden' }, session ? 403 : 401);
+  }
   const asset = await c.env.DB.prepare(
     "SELECT object_key FROM recording_assets WHERE id = ?1 AND status = 'uploaded' AND cleanup_started_at IS NULL",
   ).bind(Number(c.req.param('id'))).first<{ object_key: string }>();

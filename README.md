@@ -7,7 +7,8 @@ React/Tailwind web application, backed by D1.
 **Docs:** [DESIGN.md](DESIGN.md) (what & why) ·
 [docs/SETUP.md](docs/SETUP.md) (from-zero install: Discord app, Cloudflare,
 local dev, troubleshooting) · [docs/OPERATIONS.md](docs/OPERATIONS.md)
-(runbook: deploys, secrets, data, recovery).
+(runbook: deploys, secrets, data, recovery) ·
+[docs/ADMIN_API.md](docs/ADMIN_API.md) (scoped Admin API + MCP access).
 
 ## Stack
 
@@ -78,7 +79,8 @@ applied migration.
 (Remove / Excuse / Keep) · packet swap.
 
 **Web:** `/login` (email code) → dashboard; `/join` returns a signed web
-enrollment link; `/preview` opens interactive read-only form previews.
+enrollment link; `/preview` opens interactive read-only form previews; organizers
+manage their personal, resettable automation credential under **Admin → MCP**.
 
 ## Where to edit what
 

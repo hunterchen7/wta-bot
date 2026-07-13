@@ -69,9 +69,9 @@ describe('POST /discord', () => {
 });
 
 describe('GET /health', () => {
-  it('reports ok with an empty roster', async () => {
+  it('reports health without exposing roster size', async () => {
     const res = await app.request('/health', {}, env);
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, participants: 0 });
+    expect(await res.json()).toEqual({ ok: true });
   });
 });

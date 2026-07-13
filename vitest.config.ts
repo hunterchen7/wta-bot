@@ -12,6 +12,7 @@ export default defineConfig(async () => {
           bindings: {
             TEST_MIGRATIONS: migrations,
             FORM_SIGNING_SECRET: 'test-signing-secret',
+            DASHBOARD_ADMINS: 'admin@example.com,org@example.com,ivy@example.com,practice@example.com,api-admin@example.com',
           },
         },
       }),

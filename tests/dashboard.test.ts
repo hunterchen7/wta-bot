@@ -45,15 +45,15 @@ describe('JSON authentication', () => {
     expect(await organizer.text()).toBe('preview shell');
   });
 
-  it('requests codes for roster emails and gives field guidance for unknown emails', async () => {
+  it('requests codes without disclosing whether an email is on the roster', async () => {
     const known = await jsonPost('/api/auth/request-code', { email: 'stu@example.com' });
     expect(known.status).toBe(200);
     expect(await known.json<any>()).toMatchObject({ ok: true, email: 'stu@example.com', expiresInMinutes: 10 });
     expect(await env.DB.prepare('SELECT id FROM login_codes WHERE participant_id = ?1').bind(STUDENT_ID).first()).not.toBeNull();
 
     const unknown = await jsonPost('/api/auth/request-code', { email: 'nobody@example.com' });
-    expect(unknown.status).toBe(404);
-    expect(await unknown.json<any>()).toMatchObject({ error: 'not_found', fieldErrors: { email: expect.any(String) } });
+    expect(unknown.status).toBe(200);
+    expect(await unknown.json<any>()).toMatchObject({ ok: true, email: 'nobody@example.com', expiresInMinutes: 10 });
   });
 
   it('verifies a valid code, sets a session cookie, and counts invalid attempts', async () => {
@@ -77,7 +77,7 @@ describe('JSON authentication', () => {
       .bind(STUDENT_ID, await hashLoginCode(STUDENT_ID, '222333'), new Date(Date.now() + 600_000).toISOString()).run();
     const login = await jsonPost('/api/auth/verify-code', { email: 'stu@example.com', code: '222333' }, undefined, { DASHBOARD_ADMINS: 'STU@example.com' });
     const cookie = login.headers.get('set-cookie')!.split(';')[0]!;
-    expect((await app.request('/api/admin/overview', { headers: { Cookie: cookie } }, env)).status).toBe(200);
+    expect((await app.request('/api/admin/overview', { headers: { Cookie: cookie } }, { ...env, DASHBOARD_ADMINS: 'stu@example.com' })).status).toBe(200);
 
     const magic = await signToken(env.FORM_SIGNING_SECRET!, `magic:${STUDENT_ID}:0`, new Date(Date.now() + 60_000));
     const response = await app.request(`/auth/${magic}`, {}, env);

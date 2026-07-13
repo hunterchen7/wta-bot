@@ -7,11 +7,29 @@ import { web } from './routes/web';
 import { api } from './routes/api';
 import { adminApi } from './routes/admin-api';
 import { publicApi } from './routes/public-api';
+import { automationApi } from './routes/automation-api';
+import { mcpRoutes } from './routes/mcp';
 import { tick } from './cron';
 import { executeOutbox } from './engine/executor';
 import { drainOutbox } from './engine/outbox';
 
 export const app = new Hono<{ Bindings: Env }>();
+
+app.use('*', async (c, next) => {
+  const method = c.req.method.toUpperCase();
+  const unsafe = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+  const hasBrowserSession = (c.req.header('cookie') ?? '').includes('wta_sess=');
+  const origin = c.req.header('origin');
+  if (unsafe && hasBrowserSession && origin && origin !== new URL(c.req.url).origin) {
+    return c.json({ error: 'forbidden_origin' }, 403);
+  }
+  await next();
+  c.header('Referrer-Policy', 'no-referrer');
+  c.header('X-Content-Type-Options', 'nosniff');
+  c.header('X-Frame-Options', 'DENY');
+  c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  c.header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+});
 
 // After any POST (interaction, form submit, login, API write), flush a few
 // outbox rows in the background so user-triggered emails/DMs go out within
@@ -34,10 +52,8 @@ app.use('*', async (c, next) => {
 });
 
 app.get('/health', async (c) => {
-  const row = await c.env.DB.prepare('SELECT count(*) AS n FROM participants')
-    .first<{ n: number }>()
-    .catch(() => null);
-  return c.json({ ok: true, participants: row?.n ?? null });
+  const database = await c.env.DB.prepare('SELECT 1 AS ok').first().catch(() => null);
+  return database ? c.json({ ok: true }) : c.json({ ok: false }, 503);
 });
 
 app.post('/discord', handleInteraction);
@@ -52,6 +68,8 @@ app.route('/', exportRoutes);
 app.route('/', web);
 app.route('/', api);
 app.route('/', adminApi);
+app.route('/', automationApi);
+app.route('/', mcpRoutes);
 app.route('/', publicApi);
 
 export default {

@@ -10,7 +10,17 @@ import { listParticipants, participantsToCsv } from '../participants';
 import { composeQuestionMarkdown, normalizeAvailableWeeks, parseQuestionMarkdown } from '../question-markdown';
 import { currentProgramPhase, programTimeline } from '../program-calendar';
 import { generateProblemSet, ProblemSetError, problemBankWorkspace, replaceProblemSet } from '../services/problem-sets';
+import { writeAdminAudit as audit } from '../services/admin-audit';
+import {
+  ADMIN_SCOPES,
+  createAdminToken,
+  decryptAdminToken,
+  normalizeAdminScopes,
+  PERSONAL_MCP_TOKEN_NAME,
+  PERSONAL_MCP_TOKEN_SCOPES,
+} from '../services/admin-tokens';
 import { sessionFrom, type SessionUser } from './web';
+import { isCurrentOrganizer } from '../organizers';
 
 export const adminApi = new Hono<{ Bindings: Env }>();
 
@@ -25,28 +35,10 @@ const MAX_PREVIEW_RECORDING_BYTES = 2 * 1024 * 1024 * 1024;
 async function requireOrganizer(c: any): Promise<SessionUser | Response> {
   const session = await sessionFrom(c);
   if (!session) return c.json({ error: 'unauthorized' }, 401);
-  if (!session.organizer) return c.json({ error: 'forbidden' }, 403);
+  if (!session.organizer || !(await isCurrentOrganizer(c.env, session.participantId))) {
+    return c.json({ error: 'forbidden' }, 403);
+  }
   return session;
-}
-
-async function audit(
-  env: Env,
-  actorId: number,
-  action: string,
-  targetType?: string,
-  targetId?: string | number,
-  detail?: unknown,
-) {
-  await env.DB.prepare(
-    `INSERT INTO audit_log (actor_participant_id, action, target_type, target_id, detail)
-     VALUES (?1, ?2, ?3, ?4, ?5)`,
-  ).bind(
-    actorId,
-    action,
-    targetType ?? null,
-    targetId == null ? null : String(targetId),
-    detail == null ? null : JSON.stringify(detail),
-  ).run();
 }
 
 adminApi.get('/api/admin/previews/:kind', async (c) => {
@@ -646,6 +638,114 @@ adminApi.get('/api/admin/settings', async (c) => {
   });
 });
 
+adminApi.get('/api/admin/api-tokens', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const { results } = await c.env.DB.prepare(
+    `SELECT id, name, token_prefix, scopes, expires_at, last_used_at, revoked_at, created_at
+     FROM admin_api_tokens WHERE actor_participant_id = ?1
+     ORDER BY id DESC`,
+  ).bind(gate.participantId).all<any>();
+  return c.json({
+    scopes: ADMIN_SCOPES,
+    tokens: results.map((row) => ({ ...row, scopes: safeJsonList(row.scopes) })),
+  });
+});
+
+adminApi.get('/api/admin/mcp-token', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  c.header('Cache-Control', 'private, no-store');
+  const row = await c.env.DB.prepare(
+    `SELECT id, token_ciphertext, token_prefix, scopes, last_used_at, created_at
+     FROM admin_api_tokens
+     WHERE actor_participant_id = ?1 AND purpose = 'personal_mcp' AND revoked_at IS NULL
+       AND (expires_at IS NULL OR expires_at > ?2)
+     ORDER BY id DESC LIMIT 1`,
+  ).bind(gate.participantId, new Date().toISOString()).first<{
+    id: number; token_ciphertext: string; token_prefix: string; scopes: string; last_used_at: string | null; created_at: string;
+  }>();
+  const origin = (c.env.PUBLIC_ORIGIN || new URL(c.req.url).origin).replace(/\/$/, '');
+  return c.json({
+    mcpUrl: `${origin}/mcp`,
+    token: row ? await decryptAdminToken(c.env, row.token_ciphertext) : null,
+    credential: row ? {
+      id: row.id,
+      tokenPrefix: row.token_prefix,
+      scopes: safeJsonList(row.scopes),
+      lastUsedAt: row.last_used_at,
+      createdAt: row.created_at,
+    } : null,
+  });
+});
+
+adminApi.post('/api/admin/mcp-token/reset', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  c.header('Cache-Control', 'private, no-store');
+  const created = await createAdminToken(
+    c.env,
+    gate.participantId,
+    PERSONAL_MCP_TOKEN_NAME,
+    PERSONAL_MCP_TOKEN_SCOPES,
+    null,
+    'personal_mcp',
+  );
+  const revokedAt = new Date().toISOString();
+  await c.env.DB.prepare(
+    `UPDATE admin_api_tokens SET revoked_at = ?3
+     WHERE actor_participant_id = ?1 AND purpose = 'personal_mcp'
+       AND id != ?2 AND revoked_at IS NULL`,
+  ).bind(gate.participantId, created.id, revokedAt).run();
+  await audit(c.env, gate.participantId, 'mcp_token.reset', 'api_token', created.id, {
+    scopes: PERSONAL_MCP_TOKEN_SCOPES,
+  });
+  const origin = (c.env.PUBLIC_ORIGIN || new URL(c.req.url).origin).replace(/\/$/, '');
+  return c.json({
+    ok: true,
+    mcpUrl: `${origin}/mcp`,
+    token: created.token,
+    credential: {
+      id: created.id,
+      tokenPrefix: created.prefix,
+      scopes: PERSONAL_MCP_TOKEN_SCOPES,
+      lastUsedAt: null,
+      createdAt: revokedAt,
+    },
+  }, 201);
+});
+
+adminApi.post('/api/admin/api-tokens', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const body = await c.req.json<{ name?: string; scopes?: string[]; expiresInDays?: number | null }>().catch(() => null);
+  const name = String(body?.name ?? '').trim();
+  const scopes = normalizeAdminScopes(body?.scopes);
+  const days = body?.expiresInDays == null ? null : Number(body.expiresInDays);
+  if (!name || name.length > 80 || !scopes || (days != null && (!Number.isInteger(days) || days < 1 || days > 365))) {
+    return c.json({ error: 'invalid_request', message: 'Choose a name, valid scopes, and an expiry up to 365 days.' }, 400);
+  }
+  const expiresAt = days == null ? null : new Date(Date.now() + days * 86400_000).toISOString();
+  const created = await createAdminToken(c.env, gate.participantId, name, scopes, expiresAt);
+  await audit(c.env, gate.participantId, 'api_token.created', 'api_token', created.id, { name, scopes, expiresAt });
+  return c.json({ ok: true, ...created, name, scopes, expiresAt }, 201);
+});
+
+adminApi.delete('/api/admin/api-tokens/:id', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) return c.json({ error: 'invalid_id' }, 400);
+  const revokedAt = new Date().toISOString();
+  const result = await c.env.DB.prepare(
+    `UPDATE admin_api_tokens SET revoked_at = ?3
+     WHERE id = ?1 AND actor_participant_id = ?2 AND revoked_at IS NULL`,
+  ).bind(id, gate.participantId, revokedAt).run();
+  if (!result.meta.changes) return c.json({ error: 'not_found' }, 404);
+  await audit(c.env, gate.participantId, 'api_token.revoked', 'api_token', id);
+  return c.json({ ok: true, revokedAt });
+});
+
 adminApi.post('/api/admin/settings', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
@@ -656,6 +756,15 @@ adminApi.post('/api/admin/settings', async (c) => {
   await audit(c.env, gate.participantId, 'program.settings_updated', 'settings', undefined, Object.fromEntries(entries));
   return c.json({ ok: true, updated: entries.length });
 });
+
+function safeJsonList(value: string): string[] {
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
 
 adminApi.post('/api/admin/cohorts', async (c) => {
   const gate = await requireOrganizer(c);

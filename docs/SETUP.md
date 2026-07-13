@@ -33,7 +33,7 @@ cp .dev.vars.example .dev.vars      # fill in after §2
 npm run migrate:local               # local D1 with full schema
 npm run typecheck && npm test       # should be fully green before you change anything
 npm run dev                         # http://localhost:8787 (pick another port if taken: npx wrangler dev --port 8799)
-curl localhost:8787/health          # {"ok":true,"participants":0}
+curl localhost:8787/health          # {"ok":true}
 ```
 
 Rules of the road:
@@ -135,7 +135,7 @@ codes only appear in `wrangler tail` logs**.
 
 ## 5. Verify the install
 
-- `https://wta.hunterchen.ca/health` → `{"ok":true,...}`
+- `https://wta.hunterchen.ca/health` → `{"ok":true}`
 - `/join` in your server → three-modal intake walks through; `/health`
   participant count increments when you finish
 - `/export` (as an admin) → CSV link that downloads

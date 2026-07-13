@@ -17,7 +17,7 @@
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
     "run_worker_first": [
-      "/health", "/discord*", "/api/*", "/logout", "/auth/*",
+      "/health", "/discord*", "/mcp", "/api/*", "/logout", "/auth/*",
       "/dashboard*", "/export/*", "/preview*"
     ]
   },

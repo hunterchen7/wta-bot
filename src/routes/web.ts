@@ -1,11 +1,9 @@
 import { Hono } from 'hono';
 import { getCookie, setCookie } from 'hono/cookie';
-import { getSetting } from '../config';
-import { DiscordRest } from '../discord/rest';
 import { sendEmail } from '../email';
 import type { Env } from '../env';
 import { signToken, verifyToken } from '../forms/token';
-import { excludeOrganizerFromPairing, isWhitelistedAdmin } from '../organizers';
+import { excludeOrganizerFromPairing, isCurrentOrganizer, isWhitelistedAdmin } from '../organizers';
 
 // Authentication is the only browser concern that still needs a Worker route:
 // everything visible is rendered by the React app, while this module owns OTPs
@@ -41,7 +39,8 @@ web.get('/api/auth/session', async (c) => {
     .bind(session.participantId)
     .first<{ id: number }>();
   if (!participant) return c.json({ authenticated: false }, 401);
-  return c.json({ authenticated: true, organizer: session.organizer, redirect: '/app' });
+  const organizer = session.organizer && await isCurrentOrganizer(c.env, session.participantId);
+  return c.json({ authenticated: true, organizer, redirect: '/app' });
 });
 
 web.post('/api/auth/request-code', async (c) => {
@@ -54,7 +53,8 @@ web.post('/api/auth/request-code', async (c) => {
     'SELECT id, preferred_email, name FROM participants WHERE lower(preferred_email) = ?1',
   ).bind(email).first<{ id: number; preferred_email: string; name: string | null }>();
   if (!participant) {
-    return c.json({ error: 'not_found', message: 'That email is not on the WTA roster.', fieldErrors: { email: 'Use the email from your WTA enrollment.' } }, 404);
+    // Do not reveal which addresses are on the participant roster.
+    return c.json({ ok: true, email, expiresInMinutes: CODE_TTL_MIN });
   }
 
   const recent = await c.env.DB.prepare(
@@ -131,7 +131,7 @@ const serveOrganizerPreview = async (c: any) => {
     const url = new URL(c.req.url);
     return c.redirect(`/login?next=${encodeURIComponent(`${url.pathname}${url.search}`)}`);
   }
-  if (!session.organizer) return c.redirect('/app');
+  if (!session.organizer || !(await isCurrentOrganizer(c.env, session.participantId))) return c.redirect('/app');
   if (!c.env.ASSETS) return c.text('Preview assets are unavailable.', 503);
   return c.env.ASSETS.fetch(c.req.raw);
 };
@@ -167,13 +167,7 @@ async function setSessionCookie(c: any, participantId: number, organizer: boolea
 }
 
 async function checkOrganizer(env: Env, discordId: string): Promise<boolean> {
-  const roleId = await getSetting(env, 'organizer_role_id');
-  const guildId = env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
-  if (!roleId || !guildId || !env.DISCORD_TOKEN) return false;
-  try {
-    const member = await new DiscordRest(env.DISCORD_TOKEN).getGuildMember(guildId, discordId);
-    return member.roles.includes(roleId);
-  } catch {
-    return false;
-  }
+  const participant = await env.DB.prepare('SELECT id FROM participants WHERE discord_id = ?1')
+    .bind(discordId).first<{ id: number }>();
+  return participant ? isCurrentOrganizer(env, participant.id) : false;
 }
