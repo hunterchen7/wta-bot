@@ -1,7 +1,8 @@
 import type { Env } from '../env';
 import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS, wordCount } from '../intake';
 import { enqueue } from '../engine/outbox';
-import { excludeOrganizerFromPairing, isWhitelistedAdmin } from '../organizers';
+import { discordFirstName } from '../names';
+import { excludeOrganizerFromPairing, isCurrentOrganizer, isWhitelistedAdmin } from '../organizers';
 
 export type ParticipantSettingsInput = {
   name: string;
@@ -37,10 +38,10 @@ export async function updateParticipantSettings(
   }
 
   const current = await env.DB.prepare(
-    'SELECT discord_id, name, preferred_email, email_ok FROM participants WHERE id = ?1',
+    'SELECT discord_id, discord_nickname, name, preferred_email, email_ok FROM participants WHERE id = ?1',
   )
     .bind(participantId)
-    .first<{ discord_id: string; name: string | null; preferred_email: string | null; email_ok: number }>();
+    .first<{ discord_id: string; discord_nickname: string | null; name: string | null; preferred_email: string | null; email_ok: number }>();
   if (!current) return { ok: false, status: 404, code: 'not_found', message: 'Participant not found.' };
 
   const duplicate = await env.DB.prepare(
@@ -52,14 +53,19 @@ export async function updateParticipantSettings(
     return { ok: false, status: 409, code: 'duplicate_email', message: 'That preferred email belongs to another WTA profile.', fieldErrors: { preferredEmail: 'This email is already used by another WTA profile.' } };
   }
 
+  const organizer = isWhitelistedAdmin(env, current.preferred_email)
+    || isWhitelistedAdmin(env, input.preferredEmail)
+    || await isCurrentOrganizer(env, participantId);
+  const discordNickname = organizer ? current.discord_nickname : discordFirstName(input.name);
   await env.DB.prepare(
-    `UPDATE participants SET name = ?1, discord_nickname = ?1, preferred_email = ?2, western_email = ?3,
-       year = ?4, program = ?5, opportunities = ?6, prior_wta = ?7,
-       experience_band = ?8, topics = ?9, blurb = ?10, interests = ?11,
-       prior_feedback = ?12, email_ok = ?13, updated_at = datetime('now') WHERE id = ?14`,
+    `UPDATE participants SET name = ?1, discord_nickname = ?2, preferred_email = ?3, western_email = ?4,
+       year = ?5, program = ?6, opportunities = ?7, prior_wta = ?8,
+       experience_band = ?9, topics = ?10, blurb = ?11, interests = ?12,
+       prior_feedback = ?13, email_ok = ?14, updated_at = datetime('now') WHERE id = ?15`,
   )
     .bind(
       input.name,
+      discordNickname,
       input.preferredEmail,
       input.westernEmail,
       input.year,
@@ -76,15 +82,14 @@ export async function updateParticipantSettings(
     )
     .run();
 
-  const organizerEmail = isWhitelistedAdmin(env, current.preferred_email) || isWhitelistedAdmin(env, input.preferredEmail);
-  if (organizerEmail) await excludeOrganizerFromPairing(env, participantId);
-  if (input.name !== current.name && !organizerEmail) {
+  if (organizer) await excludeOrganizerFromPairing(env, participantId);
+  if (input.name !== current.name && !organizer) {
     const guildId = env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
     if (guildId) {
       await enqueue(env, 'nickname', {
         guildId,
         userId: current.discord_id,
-        nick: input.name.slice(0, 32),
+        nick: discordFirstName(input.name),
       });
     }
   }

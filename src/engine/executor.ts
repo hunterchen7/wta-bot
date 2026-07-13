@@ -2,6 +2,8 @@ import { getSetting } from '../config';
 import { DiscordRest } from '../discord/rest';
 import { sendEmail } from '../email';
 import type { Env } from '../env';
+import { discordFirstName } from '../names';
+import { isCurrentOrganizer } from '../organizers';
 import type { OutboxKind } from './outbox';
 import { enqueue } from './outbox';
 
@@ -47,12 +49,13 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
 
     case 'nickname':
       {
-        const organizerRoleId = await getSetting(env, 'organizer_role_id');
-        if (organizerRoleId) {
-          const member = await needRest().getGuildMember(payload.guildId, payload.userId);
-          if (member.roles.includes(organizerRoleId)) return;
-        }
-        await needRest().setNickname(payload.guildId, payload.userId, payload.nick);
+        const nickname = discordFirstName(payload.nick);
+        if (!nickname) throw new Error('nickname payload did not contain a usable name');
+        const participant = await env.DB.prepare('SELECT id FROM participants WHERE discord_id = ?1')
+          .bind(payload.userId)
+          .first<{ id: number }>();
+        if (participant && await isCurrentOrganizer(env, participant.id)) return;
+        await needRest().setNickname(payload.guildId, payload.userId, nickname);
       }
       return;
 

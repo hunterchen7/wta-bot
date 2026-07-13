@@ -63,13 +63,13 @@ describe('web enrollment cutover', () => {
     expect(response.status).toBe(200);
     expect(await response.json<any>()).toMatchObject({ ok: true, created: true });
     const participant = await env.DB.prepare('SELECT * FROM participants WHERE discord_id = ?1').bind(USER).first<any>();
-    expect(participant).toMatchObject({ discord_username: 'test.student', discord_nickname: 'Test Student', name: 'Test Student', preferred_email: 'test@example.com', topics: '["dsa","system_design"]', email_ok: 1, status: 'active' });
+    expect(participant).toMatchObject({ discord_username: 'test.student', discord_nickname: 'Test', name: 'Test Student', preferred_email: 'test@example.com', topics: '["dsa","system_design"]', email_ok: 1, status: 'active' });
 
     const { results } = await env.DB.prepare("SELECT kind, payload FROM outbox WHERE kind IN ('role_add','nickname','email') ORDER BY id").all<any>();
     expect(results.map((row) => row.kind)).toEqual(expect.arrayContaining(['role_add', 'nickname', 'email']));
     expect(results.map((row) => JSON.parse(row.payload))).toEqual(expect.arrayContaining([
       expect.objectContaining({ guildId: GUILD, userId: USER, roleId: 'participant-role' }),
-      expect.objectContaining({ guildId: GUILD, userId: USER, nick: 'Test Student' }),
+      expect.objectContaining({ guildId: GUILD, userId: USER, nick: 'Test' }),
       expect.objectContaining({ to: 'test@example.com' }),
     ]));
   });

@@ -5,7 +5,8 @@ import { activeCohort, cohortWeeks } from '../engine/weeks';
 import type { Env } from '../env';
 import { verifyToken } from '../forms/token';
 import { BLURB_MIN_WORDS, EXPERIENCE, OPPORTUNITIES, PROGRAMS, TOPICS, YEARS } from '../intake';
-import { excludeOrganizerFromPairing, isWhitelistedAdmin } from '../organizers';
+import { discordFirstName } from '../names';
+import { excludeOrganizerFromPairing, isCurrentOrganizer, isWhitelistedAdmin } from '../organizers';
 import { getParticipant, upsertParticipant } from '../participants';
 import {
   enqueueEmailConfirmation,
@@ -64,9 +65,13 @@ publicApi.post('/api/enrollment/:token', async (c) => {
   ).bind(input.preferredEmail, identity.discordId).first();
   if (duplicate) return c.json({ error: 'duplicate_email', message: 'That email belongs to another WTA profile.', fieldErrors: { preferredEmail: 'Use a different email address.' } }, 409);
 
+  const organizer = isWhitelistedAdmin(c.env, before?.preferred_email)
+    || isWhitelistedAdmin(c.env, input.preferredEmail)
+    || (before ? await isCurrentOrganizer(c.env, before.id) : false);
+  const discordNickname = organizer ? before?.discord_nickname ?? null : discordFirstName(input.name);
   await upsertParticipant(c.env, identity.discordId, {
     discord_username: identity.username,
-    discord_nickname: input.name,
+    discord_nickname: discordNickname,
     name: input.name,
     preferred_email: input.preferredEmail,
     western_email: input.westernEmail,
@@ -83,13 +88,12 @@ publicApi.post('/api/enrollment/:token', async (c) => {
     status: 'active',
   });
 
-  const organizerEmail = isWhitelistedAdmin(c.env, before?.preferred_email) || isWhitelistedAdmin(c.env, input.preferredEmail);
-  if (organizerEmail) {
+  if (organizer) {
     const organizer = await getParticipant(c.env, identity.discordId);
     if (organizer) await excludeOrganizerFromPairing(c.env, organizer.id);
   }
-  if (identity.guildId && input.name !== before?.name && !organizerEmail) {
-    await enqueue(c.env, 'nickname', { guildId: identity.guildId, userId: identity.discordId, nick: input.name.slice(0, 32) });
+  if (identity.guildId && input.name !== before?.name && !organizer) {
+    await enqueue(c.env, 'nickname', { guildId: identity.guildId, userId: identity.discordId, nick: discordFirstName(input.name) });
   }
   if (input.emailOk && (before?.email_ok !== 1 || before.preferred_email?.toLowerCase() !== input.preferredEmail)) {
     await enqueueEmailConfirmation(c.env, input.preferredEmail, input.name);

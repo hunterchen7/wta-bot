@@ -149,7 +149,9 @@ describe('participant dashboard API', () => {
 
     const save = await jsonPost('/api/settings', { name: 'Student Updated', preferredEmail: 'student.updated@example.com', westernEmail: 'stu@uwo.ca', year: 'Fourth', program: 'Data Science', experience: '3-4', opportunities: ['internships', 'new_grad'], topics: ['dsa', 'practice'], priorWta: true, emailOk: true, blurb: 'I want to build reliable systems and learn how great engineering teams work. '.repeat(15), interests: 'Distributed systems', priorFeedback: 'More structured feedback' }, cookie);
     expect(save.status).toBe(200);
-    expect(await env.DB.prepare('SELECT name, preferred_email, email_ok, discord_username, discord_nickname FROM participants WHERE id = ?1').bind(STUDENT_ID).first()).toEqual({ name: 'Student Updated', preferred_email: 'student.updated@example.com', email_ok: 1, discord_username: 'student.user', discord_nickname: 'Student Updated' });
+    expect(await env.DB.prepare('SELECT name, preferred_email, email_ok, discord_username, discord_nickname FROM participants WHERE id = ?1').bind(STUDENT_ID).first()).toEqual({ name: 'Student Updated', preferred_email: 'student.updated@example.com', email_ok: 1, discord_username: 'student.user', discord_nickname: 'Student' });
+    const nickname = await env.DB.prepare("SELECT payload FROM outbox WHERE kind = 'nickname' AND json_extract(payload, '$.userId') = '401' ORDER BY id DESC LIMIT 1").first<{ payload: string }>();
+    expect(JSON.parse(nickname!.payload)).toMatchObject({ nick: 'Student' });
     const confirmation = await env.DB.prepare("SELECT payload FROM outbox WHERE kind = 'email' AND payload LIKE '%subscribed%' ORDER BY id DESC LIMIT 1").first<any>();
     expect(JSON.parse(confirmation.payload).to).toBe('student.updated@example.com');
   });
