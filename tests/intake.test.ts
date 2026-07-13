@@ -26,6 +26,7 @@ const validProfile = {
   topics: ['dsa', 'system_design'], priorWta: false, emailOk: true,
   blurb: 'I want to build dependable infrastructure and become much better at explaining technical decisions under pressure. '.repeat(12),
   interests: 'Distributed systems', priorFeedback: '',
+  linkedinUrl: 'https://www.linkedin.com/in/test-student', otherUrl: 'https://github.com/test-student',
 };
 
 beforeAll(async () => {
@@ -88,7 +89,7 @@ describe('web enrollment cutover', () => {
     expect(response.status).toBe(200);
     expect(await response.json<any>()).toMatchObject({ ok: true, created: true });
     const participant = await env.DB.prepare('SELECT * FROM participants WHERE discord_id = ?1').bind(USER).first<any>();
-    expect(participant).toMatchObject({ discord_username: 'test.student', discord_nickname: 'Test', name: 'Test Student', preferred_email: 'test@example.com', topics: '["dsa","system_design"]', email_ok: 1, status: 'active' });
+    expect(participant).toMatchObject({ discord_username: 'test.student', discord_nickname: 'Test', name: 'Test Student', preferred_email: 'test@example.com', topics: '["dsa","system_design"]', linkedin_url: 'https://www.linkedin.com/in/test-student', other_url: 'https://github.com/test-student', email_ok: 1, status: 'active' });
 
     const { results } = await env.DB.prepare("SELECT kind, payload FROM outbox WHERE kind IN ('role_add','nickname','email') ORDER BY id").all<any>();
     expect(results.map((row) => row.kind)).toEqual(expect.arrayContaining(['role_add', 'nickname', 'email']));
@@ -97,6 +98,48 @@ describe('web enrollment cutover', () => {
       expect.objectContaining({ guildId: GUILD, userId: USER, nick: 'Test' }),
       expect.objectContaining({ to: 'test@example.com' }),
     ]));
+  });
+
+  it('stores, serves, replaces, and removes a private resume through the enrollment link', async () => {
+    const invalid = await app.request(`/api/enrollment/${enrollmentToken}/resume`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-WTA-Filename': encodeURIComponent('resume.exe') },
+      body: new TextEncoder().encode('not a resume'),
+    }, env);
+    expect(invalid.status).toBe(400);
+    expect(await invalid.json<any>()).toMatchObject({ error: 'unsupported_resume_type' });
+
+    const firstBytes = new TextEncoder().encode('%PDF-1.4\nfirst private resume');
+    const uploaded = await app.request(`/api/enrollment/${enrollmentToken}/resume`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/pdf', 'X-WTA-Filename': encodeURIComponent('Test Student Resume.pdf') },
+      body: firstBytes,
+    }, env);
+    expect(uploaded.status).toBe(200);
+    expect(await uploaded.json<any>()).toMatchObject({ resume: { filename: 'Test Student Resume.pdf', contentType: 'application/pdf', bytes: firstBytes.byteLength } });
+    const first = await env.DB.prepare('SELECT resume_object_key, resume_filename FROM participants WHERE discord_id = ?1').bind(USER).first<any>();
+    expect(first.resume_object_key).toMatch(/^resumes\/\d+\//);
+    expect(await env.RECORDINGS!.get(first.resume_object_key)).not.toBeNull();
+
+    const downloaded = await app.request(`/api/enrollment/${enrollmentToken}/resume`, {}, env);
+    expect(downloaded.status).toBe(200);
+    expect(downloaded.headers.get('cache-control')).toBe('private, no-store');
+    expect(downloaded.headers.get('content-disposition')).toContain('attachment;');
+    expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(firstBytes);
+
+    const replacementBytes = new TextEncoder().encode('{\\rtf1 replacement resume}');
+    const replaced = await app.request(`/api/enrollment/${enrollmentToken}/resume`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/rtf', 'X-WTA-Filename': encodeURIComponent('resume.rtf') },
+      body: replacementBytes,
+    }, env);
+    expect(replaced.status).toBe(200);
+    expect(await env.RECORDINGS!.get(first.resume_object_key)).toBeNull();
+
+    const removed = await app.request(`/api/enrollment/${enrollmentToken}/resume`, { method: 'DELETE' }, env);
+    expect(removed.status).toBe(200);
+    expect(await env.DB.prepare('SELECT resume_object_key, resume_filename FROM participants WHERE discord_id = ?1').bind(USER).first()).toEqual({ resume_object_key: null, resume_filename: null });
+    expect((await app.request(`/api/enrollment/${enrollmentToken}/resume`, {}, env)).status).toBe(404);
   });
 
   it('prefills edits and refreshes the stored Discord username on later interactions', async () => {

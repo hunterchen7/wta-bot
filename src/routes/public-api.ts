@@ -14,6 +14,15 @@ import {
   validateParticipantSettings,
   type ParticipantSettingsInput,
 } from '../services/participant-settings';
+import {
+  participantResume,
+  readResumeBody,
+  removeParticipantResume,
+  resumeDownloadHeaders,
+  resumeSummary,
+  ResumeUploadError,
+  uploadParticipantResume,
+} from '../services/resumes';
 
 export const publicApi = new Hono<{ Bindings: Env }>();
 
@@ -42,6 +51,7 @@ publicApi.get('/api/enrollment/:token', async (c) => {
   return c.json({
     discord: { id: identity.discordId, username: participant?.discord_username ?? identity.username ?? null },
     profile: participant ? profileFromParticipant(participant) : null,
+    resume: resumeSummary(participant),
     options: enrollmentOptions,
     minimumBlurbWords: BLURB_MIN_WORDS,
   });
@@ -84,6 +94,8 @@ publicApi.post('/api/enrollment/:token', async (c) => {
     blurb: input.blurb,
     interests: input.interests || null,
     prior_feedback: input.priorFeedback || null,
+    linkedin_url: input.linkedinUrl || null,
+    other_url: input.otherUrl || null,
     email_ok: input.emailOk ? 1 : 0,
     status: 'active',
   });
@@ -101,7 +113,46 @@ publicApi.post('/api/enrollment/:token', async (c) => {
   if (!before?.topics) await finishEnrollment(c.env, identity.guildId, identity.discordId, input.name);
 
   const participant = await getParticipant(c.env, identity.discordId);
-  return c.json({ ok: true, created: !before?.topics, profile: participant ? profileFromParticipant(participant) : null });
+  return c.json({
+    ok: true,
+    created: !before?.topics,
+    profile: participant ? profileFromParticipant(participant) : null,
+    resume: resumeSummary(participant),
+  });
+});
+
+publicApi.put('/api/enrollment/:token/resume', async (c) => {
+  const participant = await enrollmentParticipant(c.env, c.req.param('token'));
+  if (!participant) return c.json({ error: 'invalid_link', message: 'This enrollment link is invalid or the profile has not been saved yet.' }, 404);
+  try {
+    const resume = await uploadParticipantResume(
+      c.env,
+      participant.id,
+      c.req.header('x-wta-filename'),
+      await readResumeBody(c.req.raw),
+    );
+    return c.json({ ok: true, resume });
+  } catch (cause) {
+    return publicResumeError(c, cause);
+  }
+});
+
+publicApi.delete('/api/enrollment/:token/resume', async (c) => {
+  const participant = await enrollmentParticipant(c.env, c.req.param('token'));
+  if (!participant) return c.json({ error: 'invalid_link', message: 'This enrollment link is invalid or expired.' }, 404);
+  await removeParticipantResume(c.env, participant.id);
+  return c.json({ ok: true, resume: null });
+});
+
+publicApi.get('/api/enrollment/:token/resume', async (c) => {
+  const participant = await enrollmentParticipant(c.env, c.req.param('token'));
+  if (!participant) return c.json({ error: 'invalid_link', message: 'This enrollment link is invalid or expired.' }, 404);
+  try {
+    const { object, summary } = await participantResume(c.env, participant.id);
+    return new Response(object.body, { headers: resumeDownloadHeaders(summary) });
+  } catch (cause) {
+    return publicResumeError(c, cause);
+  }
 });
 
 const enrollmentOptions = { years: YEARS, programs: PROGRAMS, experience: EXPERIENCE, opportunities: OPPORTUNITIES, topics: TOPICS };
@@ -125,7 +176,21 @@ function profileFromParticipant(participant: any): ParticipantSettingsInput {
     year: participant.year ?? '', program: participant.program ?? '', experience: participant.experience_band ?? '',
     opportunities: list(participant.opportunities), topics: list(participant.topics), priorWta: participant.prior_wta === 1,
     emailOk: participant.email_ok === 1, blurb: participant.blurb ?? '', interests: participant.interests ?? '', priorFeedback: participant.prior_feedback ?? '',
+    linkedinUrl: participant.linkedin_url ?? '', otherUrl: participant.other_url ?? '',
   };
+}
+
+async function enrollmentParticipant(env: Env, token: string) {
+  const identity = await enrollmentIdentity(env, token);
+  if (!identity) return null;
+  const participant = await getParticipant(env, identity.discordId);
+  if (!participant || (participant.status === 'removed' && (participant as any).removed_reason !== 'withdrew')) return null;
+  return participant;
+}
+
+function publicResumeError(c: any, cause: unknown) {
+  if (cause instanceof ResumeUploadError) return c.json({ error: cause.code, message: cause.message }, cause.status);
+  throw cause;
 }
 
 async function finishEnrollment(env: Env, guildId: string | null, discordId: string, name: string) {

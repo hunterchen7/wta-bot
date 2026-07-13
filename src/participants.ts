@@ -17,6 +17,13 @@ export type Participant = {
   blurb: string | null;
   interests: string | null;
   prior_feedback: string | null;
+  linkedin_url: string | null;
+  other_url: string | null;
+  resume_object_key: string | null;
+  resume_filename: string | null;
+  resume_content_type: string | null;
+  resume_bytes: number | null;
+  resume_uploaded_at: string | null;
   email_ok: number;
   pairing_excluded: number;
   status: string;
@@ -69,6 +76,11 @@ const CSV_COLUMNS = [
   'prior_wta',
   'experience_band',
   'topics',
+  'linkedin_url',
+  'other_url',
+  'resume_filename',
+  'resume_bytes',
+  'resume_uploaded_at',
   'email_ok',
   'pairing_excluded',
   'status',

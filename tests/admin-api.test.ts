@@ -52,6 +52,15 @@ beforeAll(async () => {
        (9401, 'interviewee_report', 9201, ?1, 'admin-api-ie', ?2, ?3, '{"video_url":"https://example.com/video","rating_experience":"4"}'),
        (9402, 'interviewer_report', 9201, ?4, 'admin-api-ir', ?2, ?3, '{}')`,
   ).bind(STUDENT_ID, new Date(Date.now() + 86400_000).toISOString(), new Date().toISOString(), ADMIN_ID).run();
+  const resumeKey = `resumes/${STUDENT_ID}/admin-test.pdf`;
+  const resumeBytes = new TextEncoder().encode('%PDF-1.4\nadmin-visible private resume');
+  await env.RECORDINGS!.put(resumeKey, resumeBytes, { httpMetadata: { contentType: 'application/pdf' } });
+  await env.DB.prepare(
+    `UPDATE participants SET linkedin_url = 'https://www.linkedin.com/in/student-person',
+      other_url = 'https://student.example.com', resume_object_key = ?2,
+      resume_filename = 'Student Person Resume.pdf', resume_content_type = 'application/pdf',
+      resume_bytes = ?3, resume_uploaded_at = ?4 WHERE id = ?1`,
+  ).bind(STUDENT_ID, resumeKey, resumeBytes.byteLength, new Date().toISOString()).run();
 });
 
 describe('admin JSON API authorization', () => {
@@ -133,10 +142,19 @@ describe('admin operational data', () => {
 
     const detail = await (await request(`/api/admin/participants/${STUDENT_ID}`)).json<any>();
     expect(detail.participant.name).toBe('Student Person');
+    expect(detail.participant).toMatchObject({ linkedin_url: 'https://www.linkedin.com/in/student-person', other_url: 'https://student.example.com', resume: { filename: 'Student Person Resume.pdf' } });
+    expect(detail.participant.resume_object_key).toBeUndefined();
     expect(detail.sessions[0]).toMatchObject({ id: 9201, problem_title: 'Two Sum' });
     expect(detail.sessions[0].forms).toEqual([
       expect.objectContaining({ id: 9401, kind: 'interviewee_report', session_id: 9201, submitted_at: expect.any(String), url: expect.stringMatching(/^\/f\/f:9401\./) }),
     ]);
+
+    expect((await app.request(`/api/admin/participants/${STUDENT_ID}/resume`, {}, env)).status).toBe(401);
+    expect((await request(`/api/admin/participants/${STUDENT_ID}/resume`, {}, false)).status).toBe(403);
+    const resume = await request(`/api/admin/participants/${STUDENT_ID}/resume`);
+    expect(resume.status).toBe(200);
+    expect(resume.headers.get('content-disposition')).toContain('Student_Person_Resume.pdf');
+    expect(new TextDecoder().decode(await resume.arrayBuffer())).toContain('admin-visible private resume');
 
     const rounds = await (await request(`/api/admin/rounds?week=${weekId}`)).json<any>();
     expect(rounds.sessions[0]).toMatchObject({

@@ -21,6 +21,7 @@ import {
 } from '../services/admin-tokens';
 import { sessionFrom, type SessionUser } from './web';
 import { isCurrentOrganizer } from '../organizers';
+import { participantResume, resumeDownloadHeaders, resumeSummary, ResumeUploadError } from '../services/resumes';
 
 export const adminApi = new Hono<{ Bindings: Env }>();
 
@@ -185,6 +186,7 @@ adminApi.get('/api/admin/participants', async (c) => {
   const { results } = await c.env.DB.prepare(
     `SELECT p.id, p.discord_id, p.discord_username, p.discord_nickname, p.name, p.preferred_email, p.western_email, p.year, p.program,
             p.opportunities, p.prior_wta, p.experience_band, p.topics, p.blurb, p.interests, p.prior_feedback,
+            p.linkedin_url, p.other_url, p.resume_filename, p.resume_content_type, p.resume_bytes, p.resume_uploaded_at,
             p.status, p.email_ok, p.pairing_excluded, p.removed_reason, p.created_at, p.updated_at,
             (SELECT count(*) FROM sessions s WHERE s.interviewer_id = p.id AND s.interviewer_credited = 1) AS interviewer_credits,
             (SELECT count(*) FROM sessions s WHERE s.interviewee_id = p.id AND s.interviewee_credited = 1) AS interviewee_credits,
@@ -204,6 +206,20 @@ adminApi.get('/api/admin/participants.csv', async (c) => {
     'Content-Type': 'text/csv; charset=utf-8',
     'Content-Disposition': 'attachment; filename="wta-participants.csv"',
   });
+});
+
+adminApi.get('/api/admin/participants/:id/resume', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) return c.json({ error: 'invalid_id' }, 400);
+  try {
+    const { object, summary } = await participantResume(c.env, id);
+    return new Response(object.body, { headers: resumeDownloadHeaders(summary) });
+  } catch (cause) {
+    if (cause instanceof ResumeUploadError) return c.json({ error: cause.code, message: cause.message }, cause.status);
+    throw cause;
+  }
 });
 
 adminApi.post('/api/admin/participants/sync-discord', async (c) => {
@@ -271,8 +287,9 @@ adminApi.get('/api/admin/participants/:id', async (c) => {
     current.push(form);
     formsBySession.set(form.session_id, current);
   }
+  const { resume_object_key: _resumeObjectKey, ...safeParticipant } = participant;
   return c.json({
-    participant,
+    participant: { ...safeParticipant, resume: resumeSummary(participant) },
     sessions: sessions.results.map((session) => ({ ...session, forms: formsBySession.get(session.id) ?? [] })),
     incidents: incidents.results,
     audit: auditRows.results,

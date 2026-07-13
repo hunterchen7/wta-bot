@@ -18,6 +18,8 @@ export type ParticipantSettingsInput = {
   blurb: string;
   interests: string;
   priorFeedback: string;
+  linkedinUrl: string;
+  otherUrl: string;
 };
 
 export type ParticipantSettingsResult =
@@ -61,7 +63,8 @@ export async function updateParticipantSettings(
     `UPDATE participants SET name = ?1, discord_nickname = ?2, preferred_email = ?3, western_email = ?4,
        year = ?5, program = ?6, opportunities = ?7, prior_wta = ?8,
        experience_band = ?9, topics = ?10, blurb = ?11, interests = ?12,
-       prior_feedback = ?13, email_ok = ?14, updated_at = datetime('now') WHERE id = ?15`,
+       prior_feedback = ?13, linkedin_url = ?14, other_url = ?15, email_ok = ?16,
+       updated_at = datetime('now') WHERE id = ?17`,
   )
     .bind(
       input.name,
@@ -77,6 +80,8 @@ export async function updateParticipantSettings(
       input.blurb,
       input.interests || null,
       input.priorFeedback || null,
+      input.linkedinUrl || null,
+      input.otherUrl || null,
       input.emailOk ? 1 : 0,
       participantId,
     )
@@ -116,6 +121,8 @@ export function normalizeParticipantSettings(input: ParticipantSettingsInput): P
     blurb: String(input.blurb ?? '').trim(),
     interests: String(input.interests ?? '').trim(),
     priorFeedback: String(input.priorFeedback ?? '').trim(),
+    linkedinUrl: normalizeOptionalUrl(input.linkedinUrl),
+    otherUrl: normalizeOptionalUrl(input.otherUrl),
     priorWta: input.priorWta === true,
     emailOk: input.emailOk === true,
   };
@@ -141,7 +148,34 @@ export function validateParticipantSettings(input: ParticipantSettingsInput): Re
   else if (input.blurb.length > 2000) errors.blurb = 'Dream company and role response must be 2,000 characters or fewer.';
   if (input.interests.length > 1000) errors.interests = 'Learning interests must be 1,000 characters or fewer.';
   if (input.priorFeedback.length > 1000) errors.priorFeedback = 'Prior feedback must be 1,000 characters or fewer.';
+  if (input.linkedinUrl && !isAllowedUrl(input.linkedinUrl)) errors.linkedinUrl = 'Enter a full LinkedIn URL beginning with https://.';
+  else if (input.linkedinUrl && !isLinkedInUrl(input.linkedinUrl)) errors.linkedinUrl = 'Enter a LinkedIn profile URL.';
+  else if (input.linkedinUrl.length > 1000) errors.linkedinUrl = 'LinkedIn URL must be 1,000 characters or fewer.';
+  if (input.otherUrl && !isAllowedUrl(input.otherUrl)) errors.otherUrl = 'Enter a full website URL beginning with https://.';
+  else if (input.otherUrl.length > 1000) errors.otherUrl = 'Website URL must be 1,000 characters or fewer.';
   return errors;
+}
+
+function normalizeOptionalUrl(value: unknown) {
+  return String(value ?? '').trim();
+}
+
+function isAllowedUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && Boolean(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLinkedInUrl(value: string) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    return hostname === 'linkedin.com' || hostname.endsWith('.linkedin.com');
+  } catch {
+    return false;
+  }
 }
 
 export async function enqueueEmailConfirmation(env: Env, to: string, name: string) {

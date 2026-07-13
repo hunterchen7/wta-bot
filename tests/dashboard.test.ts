@@ -147,19 +147,49 @@ describe('participant dashboard API', () => {
 
   it('returns exact field errors and saves all participant settings together', async () => {
     const cookie = await cookieFor(STUDENT_ID, false);
-    const invalid = await jsonPost('/api/settings', { name: '', preferredEmail: 'bad', westernEmail: '', year: '', program: '', experience: '', opportunities: [], topics: [], priorWta: false, emailOk: false, blurb: '', interests: '', priorFeedback: '' }, cookie);
+    const invalid = await jsonPost('/api/settings', { name: '', preferredEmail: 'bad', westernEmail: '', year: '', program: '', experience: '', opportunities: [], topics: [], priorWta: false, emailOk: false, blurb: '', interests: '', priorFeedback: '', linkedinUrl: 'https://example.com/not-linkedin', otherUrl: 'javascript:alert(1)' }, cookie);
     expect(invalid.status).toBe(400);
     const errors = (await invalid.json<any>()).fieldErrors;
-    expect(errors).toMatchObject({ name: expect.any(String), preferredEmail: expect.any(String), opportunities: expect.any(String), topics: expect.any(String), blurb: expect.any(String) });
+    expect(errors).toMatchObject({ name: expect.any(String), preferredEmail: expect.any(String), opportunities: expect.any(String), topics: expect.any(String), blurb: expect.any(String), linkedinUrl: expect.any(String), otherUrl: expect.any(String) });
     expect(errors.blurb).toContain('currently 0');
 
-    const save = await jsonPost('/api/settings', { name: 'Student Updated', preferredEmail: 'student.updated@example.com', westernEmail: 'stu@uwo.ca', year: 'Fourth', program: 'Data Science', experience: '3-4', opportunities: ['internships', 'new_grad'], topics: ['dsa', 'practice'], priorWta: true, emailOk: true, blurb: 'I want to build reliable systems and learn how great engineering teams work. '.repeat(15), interests: 'Distributed systems', priorFeedback: 'More structured feedback' }, cookie);
+    const save = await jsonPost('/api/settings', { name: 'Student Updated', preferredEmail: 'student.updated@example.com', westernEmail: 'stu@uwo.ca', year: 'Fourth', program: 'Data Science', experience: '3-4', opportunities: ['internships', 'new_grad'], topics: ['dsa', 'practice'], priorWta: true, emailOk: true, blurb: 'I want to build reliable systems and learn how great engineering teams work. '.repeat(15), interests: 'Distributed systems', priorFeedback: 'More structured feedback', linkedinUrl: 'https://www.linkedin.com/in/student-updated', otherUrl: 'https://student.example.com' }, cookie);
     expect(save.status).toBe(200);
-    expect(await env.DB.prepare('SELECT name, preferred_email, email_ok, discord_username, discord_nickname FROM participants WHERE id = ?1').bind(STUDENT_ID).first()).toEqual({ name: 'Student Updated', preferred_email: 'student.updated@example.com', email_ok: 1, discord_username: 'student.user', discord_nickname: 'Student' });
+    expect(await env.DB.prepare('SELECT name, preferred_email, linkedin_url, other_url, email_ok, discord_username, discord_nickname FROM participants WHERE id = ?1').bind(STUDENT_ID).first()).toEqual({ name: 'Student Updated', preferred_email: 'student.updated@example.com', linkedin_url: 'https://www.linkedin.com/in/student-updated', other_url: 'https://student.example.com', email_ok: 1, discord_username: 'student.user', discord_nickname: 'Student' });
     const nickname = await env.DB.prepare("SELECT payload FROM outbox WHERE kind = 'nickname' AND json_extract(payload, '$.userId') = '401' ORDER BY id DESC LIMIT 1").first<{ payload: string }>();
     expect(JSON.parse(nickname!.payload)).toMatchObject({ nick: 'Student' });
     const confirmation = await env.DB.prepare("SELECT payload FROM outbox WHERE kind = 'email' AND payload LIKE '%subscribed%' ORDER BY id DESC LIMIT 1").first<any>();
     expect(JSON.parse(confirmation.payload).to).toBe('student.updated@example.com');
+  });
+
+  it('keeps dashboard resume uploads private and removable', async () => {
+    const cookie = await cookieFor(STUDENT_ID, false);
+    const oversized = await app.request('/api/settings/resume', {
+      method: 'PUT',
+      headers: { Cookie: cookie, 'Content-Type': 'application/pdf', 'Content-Length': String(10 * 1024 * 1024 + 1), 'X-WTA-Filename': encodeURIComponent('too-large.pdf') },
+      body: new TextEncoder().encode('%PDF-1.7'),
+    }, env);
+    expect(oversized.status).toBe(413);
+    const bytes = new TextEncoder().encode('%PDF-1.7\nstudent dashboard resume');
+    const uploaded = await app.request('/api/settings/resume', {
+      method: 'PUT',
+      headers: { Cookie: cookie, 'Content-Type': 'application/pdf', 'X-WTA-Filename': encodeURIComponent('student-resume.pdf') },
+      body: bytes,
+    }, env);
+    expect(uploaded.status).toBe(200);
+    expect(await uploaded.json<any>()).toMatchObject({ resume: { filename: 'student-resume.pdf', bytes: bytes.byteLength } });
+
+    expect((await app.request('/api/settings/resume', {}, env)).status).toBe(401);
+    const downloaded = await app.request('/api/settings/resume', { headers: { Cookie: cookie } }, env);
+    expect(downloaded.status).toBe(200);
+    expect(new Uint8Array(await downloaded.arrayBuffer())).toEqual(bytes);
+
+    const dashboard = await (await app.request('/api/dashboard', { headers: { Cookie: cookie } }, env)).json<any>();
+    expect(dashboard.participant.resume).toMatchObject({ filename: 'student-resume.pdf', bytes: bytes.byteLength });
+    expect(JSON.stringify(dashboard)).not.toContain('resume_object_key');
+
+    expect((await app.request('/api/settings/resume', { method: 'DELETE', headers: { Cookie: cookie } }, env)).status).toBe(200);
+    expect((await app.request('/api/settings/resume', { headers: { Cookie: cookie } }, env)).status).toBe(404);
   });
 
   it('does not try to manage an organizer’s Discord nickname', async () => {
@@ -167,7 +197,7 @@ describe('participant dashboard API', () => {
     const save = await jsonPost('/api/settings', {
       name: 'Organizer Updated', preferredEmail: 'org@example.com', westernEmail: 'org@uwo.ca', year: 'Fourth', program: 'Software Engineering', experience: '3-4',
       opportunities: ['new_grad'], topics: ['system_design'], priorWta: false, emailOk: false,
-      blurb: 'I want to help participants practice realistic interviews and give precise feedback that makes each round more useful. '.repeat(12), interests: '', priorFeedback: '',
+      blurb: 'I want to help participants practice realistic interviews and give precise feedback that makes each round more useful. '.repeat(12), interests: '', priorFeedback: '', linkedinUrl: '', otherUrl: '',
     }, await cookieFor(ADMIN_ID, true), { DASHBOARD_ADMINS: 'org@example.com' });
     expect(save.status).toBe(200);
     const after = await env.DB.prepare("SELECT count(*) AS n FROM outbox WHERE kind = 'nickname' AND json_extract(payload, '$.userId') = '402'").first<{ n: number }>();

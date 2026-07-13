@@ -6,6 +6,15 @@ import { updateParticipantSettings, type ParticipantSettingsInput } from '../ser
 import { sessionFrom } from './web';
 import { activeCohort } from '../engine/weeks';
 import { currentProgramPhase, programTimeline } from '../program-calendar';
+import {
+  participantResume,
+  readResumeBody,
+  removeParticipantResume,
+  resumeDownloadHeaders,
+  resumeSummary,
+  ResumeUploadError,
+  uploadParticipantResume,
+} from '../services/resumes';
 
 export const api = new Hono<{ Bindings: Env }>();
 
@@ -120,6 +129,9 @@ api.get('/api/dashboard', async (c) => {
       blurb: participant.blurb ?? '',
       interests: participant.interests ?? '',
       priorFeedback: participant.prior_feedback ?? '',
+      linkedinUrl: participant.linkedin_url ?? '',
+      otherUrl: participant.other_url ?? '',
+      resume: resumeSummary(participant),
       emailOk: participant.email_ok === 1,
       status: participant.status,
     },
@@ -171,3 +183,42 @@ api.post('/api/settings', async (c) => {
   if (!result.ok) return c.json({ error: result.code, message: result.message, fieldErrors: result.fieldErrors }, result.status);
   return c.json({ ok: true });
 });
+
+api.put('/api/settings/resume', async (c) => {
+  const session = await sessionFrom(c);
+  if (!session) return c.json({ error: 'unauthorized' }, 401);
+  try {
+    const resume = await uploadParticipantResume(
+      c.env,
+      session.participantId,
+      c.req.header('x-wta-filename'),
+      await readResumeBody(c.req.raw),
+    );
+    return c.json({ ok: true, resume });
+  } catch (cause) {
+    return resumeError(c, cause);
+  }
+});
+
+api.delete('/api/settings/resume', async (c) => {
+  const session = await sessionFrom(c);
+  if (!session) return c.json({ error: 'unauthorized' }, 401);
+  await removeParticipantResume(c.env, session.participantId);
+  return c.json({ ok: true, resume: null });
+});
+
+api.get('/api/settings/resume', async (c) => {
+  const session = await sessionFrom(c);
+  if (!session) return c.json({ error: 'unauthorized' }, 401);
+  try {
+    const { object, summary } = await participantResume(c.env, session.participantId);
+    return new Response(object.body, { headers: resumeDownloadHeaders(summary) });
+  } catch (cause) {
+    return resumeError(c, cause);
+  }
+});
+
+function resumeError(c: any, cause: unknown) {
+  if (cause instanceof ResumeUploadError) return c.json({ error: cause.code, message: cause.message }, cause.status);
+  throw cause;
+}
