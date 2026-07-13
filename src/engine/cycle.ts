@@ -299,9 +299,10 @@ async function ensureReportLinks(env: Env, origin: string, session: ReminderSess
   return links;
 }
 
-/** One reminder in the cron tick that lands 15–30 minutes before the session. */
+/** One reminder on the first cron tick within 30 minutes of the session.
+ *  Normally this lands 15–30 minutes ahead; the wider lower bound catches
+ *  sessions that were only scheduled after their ideal reminder tick passed. */
 export async function preInterviewReminderScan(env: Env, origin: string, now = new Date()): Promise<number> {
-  const windowStart = new Date(now.getTime() + 15 * 60_000).toISOString();
   const windowEnd = new Date(now.getTime() + 30 * 60_000).toISOString();
   const { results } = await env.DB.prepare(
     `SELECT s.id, s.interviewer_id, s.interviewee_id, s.thread_id, s.scheduled_at, s.reminder_sent_at,
@@ -312,7 +313,7 @@ export async function preInterviewReminderScan(env: Env, origin: string, now = n
      JOIN participants pe ON pe.id = s.interviewee_id
      WHERE s.state = 'scheduled' AND s.reminder_sent_at IS NULL
        AND s.scheduled_at > ?1 AND s.scheduled_at <= ?2`,
-  ).bind(windowStart, windowEnd).all<ReminderSession>();
+  ).bind(now.toISOString(), windowEnd).all<ReminderSession>();
 
   for (const session of results) {
     const links = await ensureReportLinks(env, origin, session);

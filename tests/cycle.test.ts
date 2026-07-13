@@ -302,8 +302,10 @@ describe('full weekly cycle', () => {
     expect(reschedulerFields.time.value).toBe('19:30');
 
     // --- 30-minute reminder creates and sends the correct role-specific forms -----
-    expect(await preInterviewReminderScan(env, 'https://example.test', new Date('2026-09-16T23:01:00Z'))).toBe(1);
-    expect(await preInterviewReminderScan(env, 'https://example.test', new Date('2026-09-16T23:05:00Z'))).toBe(0);
+    // A late confirmation still gets the next available reminder tick even
+    // though the ideal 15–30 minute window has already passed.
+    expect(await preInterviewReminderScan(env, 'https://example.test', new Date('2026-09-16T23:16:00Z'))).toBe(1);
+    expect(await preInterviewReminderScan(env, 'https://example.test', new Date('2026-09-16T23:20:00Z'))).toBe(0);
     const reminderForms = await env.DB.prepare(
       'SELECT kind, assignee_id FROM form_instances WHERE session_id = ?1 ORDER BY kind',
     ).bind(s0.id).all<any>();
