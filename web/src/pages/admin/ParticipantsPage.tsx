@@ -222,8 +222,8 @@ function ParticipantCell({ column, participant, currentWeek, onOpen, onPreviewRe
     case 'joined': content = <RosterDateTime value={participant.created_at} />; break;
     case 'updated': content = <RosterDateTime value={participant.updated_at} />; break;
     case 'contact': content = <><a className="block text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={participant.preferred_email ? `mailto:${participant.preferred_email}` : undefined}>{participant.preferred_email ?? '—'}</a><a className="mt-1 block text-xs text-muted-foreground hover:underline" href={participant.western_email ? `mailto:${participant.western_email}` : undefined}>{participant.western_email ?? '—'}</a></>; break;
-    case 'linkedin': content = <ProfileLink value={participant.linkedin_url} label="Open profile" />; break;
-    case 'other_link': content = <ProfileLink value={participant.other_url} label="Open link" />; break;
+    case 'linkedin': content = <ProfileLink value={participant.linkedin_url} />; break;
+    case 'other_link': content = <ProfileLink value={participant.other_url} />; break;
     case 'resume': content = participant.resume_filename && participant.resume_content_type ? <button type="button" aria-label={`Preview ${participant.resume_filename} for ${participant.name ?? 'unnamed participant'}`} className="block max-w-56 cursor-pointer text-left text-xs font-semibold text-western-700 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-western-300" title={`Preview ${participant.resume_filename}`} onClick={() => onPreviewResume(resumeTargetFromRow(participant))}><span className="block truncate">{participant.resume_filename}</span><span className="mt-1 block font-normal text-muted-foreground">{formatBytes(participant.resume_bytes)}{participant.resume_uploaded_at ? ` · ${formatDate(participant.resume_uploaded_at, false)}` : ''} · Preview</span></button> : <span className="text-muted-foreground">—</span>; break;
     case 'education': content = <><span className="block font-semibold text-foreground">{participant.year ?? '—'}</span><span className="mt-1 block text-xs text-muted-foreground">{participant.program ?? '—'}</span></>; break;
     case 'opportunities': content = <ChoiceList value={participant.opportunities} />; break;
@@ -358,8 +358,7 @@ function formatChoices(value: unknown) { const choices = parseChoices(value); re
 function formatChoice(value: string) { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function uniqueValues(values: Array<string | null | undefined>) { return [...new Set(values.filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b)); }
 function filterOptions(allLabel: string, values: string[]) { return [{ value: 'all', label: allLabel }, ...values.map((value) => ({ value, label: formatChoice(value) }))]; }
-function ProfileLink({ value, label }: { value: string | null; label: string }) { if (!value) return <span className="text-muted-foreground">—</span>; return <a className="block max-w-52 text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={value} target="_blank" rel="noreferrer"><span className="block">{label} ↗</span><span className="mt-1 block truncate font-normal text-muted-foreground">{urlLabel(value)}</span></a>; }
-function urlLabel(value: string) { try { return new URL(value).hostname.replace(/^www\./, ''); } catch { return value; } }
+function ProfileLink({ value }: { value: string | null }) { if (!value) return <span className="text-muted-foreground">—</span>; return <a aria-label={`Open ${value}`} className="block max-w-64 truncate text-xs font-semibold text-western-700 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-western-300" href={value} target="_blank" rel="noreferrer" title={value}>{value}</a>; }
 function resumeTargetFromRow(participant: ParticipantRow): ResumePreviewTarget {
   return {
     participantId: participant.id,
