@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { generateWeekSet, packetScan, pickProblem, reserveProblem, swapProblem } from '../src/engine/problems';
+import { generateWeekSet, packetScan, pickProblem, reserveProblem } from '../src/engine/problems';
 import { createCohort } from '../src/engine/weeks';
 import { app } from '../src/index';
 
@@ -119,16 +119,6 @@ describe('problem bank', () => {
     expect(await res.json<any>()).toMatchObject({ mode: 'packet', problem: { title: expect.any(String) } });
 
     expect((await app.request('/api/problems/garbage', {}, env)).status).toBe(404);
-  });
-
-  it('swap re-picks (interviewer only), avoiding the current problem', async () => {
-    const before = await env.DB.prepare('SELECT problem_id FROM sessions WHERE id = ?1').bind(sessionId).first<any>();
-    const denied = await swapProblem(env, sessionId, '302', 'https://example.test');
-    expect(denied).toContain('Only the interviewer');
-    const ok = await swapProblem(env, sessionId, '301', 'https://example.test');
-    expect(ok).toContain('Swapped');
-    const after = await env.DB.prepare('SELECT problem_id FROM sessions WHERE id = ?1').bind(sessionId).first<any>();
-    expect(after.problem_id).not.toBe(before.problem_id);
   });
 
   it('serves the public question-bank API with the current round set', async () => {

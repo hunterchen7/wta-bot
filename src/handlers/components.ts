@@ -29,7 +29,7 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
   if (optin) return handleOptin(c, interaction, Number(optin[1]), optin[2] as any);
 
   // ---- session thread buttons ---------------------------------------------
-  const sess = /^sess:(\d+):(sched|cancel|noshow)$/.exec(id);
+  const sess = /^sess:(\d+):(sched|cancel|noshow|cancel-confirm|noshow-confirm|action-dismiss)$/.exec(id);
   if (sess) return handleSessionButton(c, interaction, Number(sess[1]), sess[2] as any);
 
   // ---- incident case-file buttons (organizers) ----------------------------
@@ -104,10 +104,7 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
 
   const swap = /^swap:(\d+)$/.exec(id);
   if (swap) {
-    const { swapProblem } = await import('../engine/problems');
-    const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
-    const message = await swapProblem(c.env, Number(swap[1]), user.id, origin);
-    return c.json(ephemeral(message));
+    return c.json(ephemeral('Problem swapping is no longer available. Use the assigned problem for this session.'));
   }
 
   return c.json(ephemeral('🚧 Not implemented yet.'));
@@ -177,7 +174,7 @@ async function handleSessionButton(
   c: Ctx,
   interaction: Interaction,
   sessionId: number,
-  action: 'sched' | 'cancel' | 'noshow',
+  action: 'sched' | 'cancel' | 'noshow' | 'cancel-confirm' | 'noshow-confirm' | 'action-dismiss',
 ) {
   const user = interactionUser(interaction)!;
   const session = await getSession(c.env, sessionId);
@@ -216,7 +213,25 @@ async function handleSessionButton(
   if (session.state === 'broken' || session.state === 'cancelled') {
     return c.json(ephemeral('Already handled — this session is closed.'));
   }
-  const result = await reportIncident(c.env, session, action === 'cancel' ? 'late_cancel' : 'ghost', user.id);
+  if (action === 'action-dismiss') {
+    return c.json({
+      type: ResponseType.UPDATE_MESSAGE,
+      data: { content: 'No changes made. The session is still open.', components: [] },
+    });
+  }
+  if (action === 'cancel' || action === 'noshow') {
+    const cancelling = action === 'cancel';
+    return c.json(ephemeral(
+      cancelling
+        ? '**Confirm that you cannot make this session.** This closes the session, records that you cancelled, and puts your partner into the priority repair queue.'
+        : '**Confirm this no-show report.** This closes the session, records a no-show against your partner, and puts you into the priority repair queue. Only continue if they missed the agreed session.',
+      [buttonRow([
+        { id: `sess:${sessionId}:${cancelling ? 'cancel-confirm' : 'noshow-confirm'}`, label: cancelling ? 'Yes, I cannot make it' : 'Confirm no-show', style: 4 },
+        { id: `sess:${sessionId}:action-dismiss`, label: 'Go back', style: 2 },
+      ])],
+    ));
+  }
+  const result = await reportIncident(c.env, session, action === 'cancel-confirm' ? 'late_cancel' : 'ghost', user.id);
   return c.json(ephemeral(result.message));
 }
 

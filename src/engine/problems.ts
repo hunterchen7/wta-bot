@@ -1,7 +1,6 @@
 import type { Env } from '../env';
 import { signToken } from '../forms/token';
 import { discordTime } from '../time';
-import { buttonRow } from '../discord/components';
 import { enqueue } from './outbox';
 
 // Problem bank (DESIGN §6). Each question explicitly declares the round
@@ -103,7 +102,7 @@ export async function packetScan(env: Env, origin: string, now = new Date()): Pr
       : await pickProblem(env, s.week_id, s.interviewer_id, s.interviewee_id);
     if (!problem) continue; // set exhausted — organizers see it in the digest
     if (!s.problem_id && !(await reserveProblem(env, s.id, problem.id))) continue;
-    await deliverProblemPacket(env, s, problem, origin, false);
+    await deliverProblemPacket(env, s, problem, origin);
     delivered++;
   }
   return delivered;
@@ -123,19 +122,8 @@ export async function deliverSessionProblem(env: Env, sessionId: number, origin:
     : await pickProblem(env, session.week_id, session.interviewer_id, session.interviewee_id);
   if (!problem) return false;
   if (!session.problem_id && !(await reserveProblem(env, session.id, problem.id))) return false;
-  await deliverProblemPacket(env, session, problem, origin, false);
+  await deliverProblemPacket(env, session, problem, origin);
   return true;
-}
-
-export async function assignProblem(
-  env: Env,
-  session: { id: number; week_id: number; interviewer_id: number; interviewee_id: number; scheduled_at?: string | null },
-  problem: { id: number; title: string },
-  origin: string,
-  isSwap: boolean,
-): Promise<string> {
-  await reserveProblem(env, session.id, problem.id, true);
-  return deliverProblemPacket(env, session, problem, origin, isSwap);
 }
 
 async function deliverProblemPacket(
@@ -143,7 +131,6 @@ async function deliverProblemPacket(
   session: { id: number; interviewer_id: number; scheduled_at?: string | null },
   problem: { id: number; title: string },
   origin: string,
-  isSwap: boolean,
 ): Promise<string> {
   await env.DB.prepare(
     `INSERT INTO exposures (participant_id, problem_id, role, session_id)
@@ -169,33 +156,15 @@ async function deliverProblemPacket(
     fallbackKind: 'packet',
     message: {
       content:
-        `🎯 ${isSwap ? 'New problem after your swap' : 'Your interviewer packet is ready'}: **${problem.title}**\n` +
+        `🎯 Your interviewer packet is ready: **${problem.title}**\n` +
         `${url}\n` +
         `Problem, solution, and hint ladder inside — read it before the session${session.scheduled_at ? ` (${discordTime(session.scheduled_at)})` : ''}. ` +
         `Your interviewee sees nothing until it's live. 🤫`,
-      components: [buttonRow([{ id: `swap:${session.id}`, label: 'Swap problem', style: 2 }])],
     },
   });
   await env.DB.prepare('UPDATE sessions SET packet_sent_at = ?2 WHERE id = ?1')
     .bind(session.id, new Date().toISOString()).run();
   return url;
-}
-
-/** Interviewer-requested swap: re-pick excluding the current problem. */
-export async function swapProblem(env: Env, sessionId: number, requesterDiscordId: string, origin: string): Promise<string> {
-  const s = await env.DB.prepare(
-    `SELECT s.id, s.week_id, s.interviewer_id, s.interviewee_id, s.problem_id, s.scheduled_at, p.discord_id AS interviewer_discord
-     FROM sessions s JOIN participants p ON p.id = s.interviewer_id WHERE s.id = ?1`,
-  )
-    .bind(sessionId)
-    .first<any>();
-  if (!s) return 'Session not found.';
-  if (s.interviewer_discord !== requesterDiscordId) return 'Only the interviewer can swap the problem.';
-  if (s.scheduled_at && new Date(s.scheduled_at) < new Date()) return 'The session already started — no swaps now.';
-  const next = await pickProblem(env, s.week_id, s.interviewer_id, s.interviewee_id, s.problem_id);
-  if (!next) return 'No other eligible problem left in this week\'s set — ping an organizer.';
-  await assignProblem(env, s, next, origin, true);
-  return `Swapped ✅ — new packet DM incoming: **${next.title}**.`;
 }
 
 /** After the interviewee files their report: exposure + solution link.

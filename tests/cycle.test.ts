@@ -277,6 +277,18 @@ describe('full weekly cycle', () => {
       "SELECT count(*) AS n FROM outbox WHERE kind = 'dm' AND payload LIKE '%interviewer packet is ready%'",
     ).first()).toEqual({ n: 1 });
 
+    const cancelPrompt = await sendInteraction(
+      signer,
+      button(`sess:${s0.id}:cancel`, interviewerDiscord.discord_id),
+      OVERRIDES,
+    );
+    const cancelPromptJson = (await cancelPrompt.json()) as any;
+    expect(cancelPromptJson.data.content).toContain('Confirm that you cannot make this session');
+    expect(cancelPromptJson.data.components[0].components[0]).toMatchObject({
+      custom_id: `sess:${s0.id}:cancel-confirm`, label: 'Yes, I cannot make it', style: 4,
+    });
+    expect(await env.DB.prepare('SELECT state FROM sessions WHERE id = ?1').bind(s0.id).first()).toEqual({ state: 'scheduled' });
+
     const rescheduler = await sendInteraction(
       signer,
       button(`sess:${s0.id}:sched`, interviewerDiscord.discord_id),
@@ -328,9 +340,21 @@ describe('full weekly cycle', () => {
     const victimDiscord = await env.DB.prepare('SELECT discord_id FROM participants WHERE id = ?1')
       .bind(s1.interviewee_id)
       .first<any>();
-    const noshow = await sendInteraction(
+    const noshowPrompt = await sendInteraction(
       signer,
       button(`sess:${s1.id}:noshow`, victimDiscord.discord_id),
+      OVERRIDES,
+    );
+    const prompt = (await noshowPrompt.json()) as any;
+    expect(prompt.data.content).toContain('Confirm this no-show report');
+    expect(prompt.data.components[0].components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ custom_id: `sess:${s1.id}:noshow-confirm`, style: 4 }),
+      expect.objectContaining({ custom_id: `sess:${s1.id}:action-dismiss`, style: 2 }),
+    ]));
+    expect(await env.DB.prepare('SELECT state FROM sessions WHERE id = ?1').bind(s1.id).first()).not.toEqual({ state: 'broken' });
+    const noshow = await sendInteraction(
+      signer,
+      button(`sess:${s1.id}:noshow-confirm`, victimDiscord.discord_id),
       OVERRIDES,
     );
     expect(((await noshow.json()) as any).data.content).toContain('priority');
@@ -374,7 +398,7 @@ describe('full weekly cycle', () => {
       .bind(s2.interviewee_id)
       .first<any>();
     if (s2.interviewer_id === s1.interviewer_id) {
-      await sendInteraction(signer, button(`sess:${s2.id}:noshow`, victim2.discord_id), OVERRIDES);
+      await sendInteraction(signer, button(`sess:${s2.id}:noshow-confirm`, victim2.discord_id), OVERRIDES);
       const held = await env.DB.prepare('SELECT status FROM participants WHERE id = ?1')
         .bind(s1.interviewer_id)
         .first<any>();

@@ -72,7 +72,7 @@ Three incident kinds are tracked distinctly: **ghost** (confirmed time, didn't s
 - **Week-3 variance guard:** last year W3 problems varied too much in difficulty — unacceptable for the qualifying week. The W3 generator enforces a tight `difficulty_rank` band (e.g. all picks within ±0.2), the set gets a mandatory admin sign-off before the week opens, and the digest reports pass-rate per problem so a rogue-hard problem is visible immediately.
 - **Bank page:** the week's set is served as a page on the same web rail (per-person signed link, same token mechanics as forms) — who receives the link (all participants vs interviewers only) is the visibility knob below.
 - **Visibility change from last year:** week's *topics* are public for study guidance **[OPEN]**; actual problems are private. The interviewer gets the packet at **T−24h** via signed page.
-- **Assignment:** bot proposes a problem filtered by the **exposure ledger** — the interviewee has never received it *or conducted it* (covers returning participants and reused banks). Interviewer can swap via buttons to another eligible problem **[OPEN — or fully free choice]**; final pick recorded automatically.
+- **Assignment:** the bot assigns a problem filtered by the **exposure ledger** — the interviewee has never received it *or conducted it* (covers returning participants and reused banks). The assigned problem is final for that session and recorded automatically.
 - After the interviewee's report lands, they're DM'd the solution page.
 
 ## 7. Notifications
@@ -169,7 +169,7 @@ Server entry uses Discord's native verification level, Rules Screening, and Auto
 4. Week-3 grace window — default +4 days, repair/reports only.
 5. Alumni round v1 = eligibility tracking only.
 6. Matching soft preferences (experience band, intern/new-grad) — or pure random.
-7. Problem set size (rec 4–6), topics-public compromise, auto-suggest-with-swap vs free choice, location of last year's materials.
+7. Problem set size (rec 4–6), topics-public compromise, location of last year's materials.
 8. Interviewer form fields (need access or paste).
 9. ~~Domain/subdomain + sender address~~ — settled: `wta.hunterchen.ca`, mail from `wta@hunterchen.ca`.
 10. Cohort start date → milestone dates.
