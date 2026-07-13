@@ -44,8 +44,18 @@ async function dynamicFields(env: Env, instance: LoadedInstance): Promise<Field[
   if (assigned?.problem_id) return base;
   const { results } = await env.DB.prepare(
     `SELECT p.id, p.title, p.number FROM week_problem_sets wps JOIN problems p ON p.id = wps.problem_id
-     WHERE wps.week_id = (SELECT week_id FROM sessions WHERE id = ?1) ORDER BY p.id`,
-  ).bind(instance.session_id).all<{ id: number; title: string; number: number | null }>();
+     WHERE wps.week_id = (SELECT week_id FROM sessions WHERE id = ?1)
+       AND NOT EXISTS (
+         SELECT 1 FROM exposures e
+         WHERE e.problem_id = p.id AND e.participant_id IN (?2, ?3)
+       )
+       AND NOT EXISTS (
+         SELECT 1 FROM sessions seen
+         WHERE seen.problem_id = p.id
+           AND (seen.interviewer_id IN (?2, ?3) OR seen.interviewee_id IN (?2, ?3))
+       )
+     ORDER BY p.id`,
+  ).bind(instance.session_id, instance.interviewer_id, instance.interviewee_id).all<{ id: number; title: string; number: number | null }>();
   if (!results.length) return base;
   const picker: Field = {
     id: 'problem_used', label: 'Which interview question did you choose?', type: 'select', required: true,

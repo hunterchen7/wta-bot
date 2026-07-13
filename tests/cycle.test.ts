@@ -137,6 +137,15 @@ describe('full weekly cycle', () => {
        ('threads_channel_id', '555'), ('announce_channel_id', '556'), ('organizer_channel_id', '557')
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ).run();
+    for (let index = 1; index <= 4; index++) {
+      await env.DB.prepare(
+        `INSERT INTO problems (id, title, difficulty, available_weeks)
+         VALUES (?1, ?2, 'easy', '[1]')`,
+      ).bind(8800 + index, `Round one problem ${index}`).run();
+      await env.DB.prepare(
+        'INSERT INTO week_problem_sets (week_id, problem_id) VALUES (?1, ?2)',
+      ).bind(week1!.id, 8800 + index).run();
+    }
 
     // --- everyone opts in ------------------------------------------------------
     for (const id of ['101', '102', '103', '104']) {
@@ -157,9 +166,22 @@ describe('full weekly cycle', () => {
       .bind(week1!.id)
       .all<any>();
     expect(sessions).toHaveLength(4);
+    expect(sessions.every((session) => session.problem_id != null)).toBe(true);
     expect(sessions.some((session) =>
       session.interviewer_id === organizer!.id || session.interviewee_id === organizer!.id,
     )).toBe(false);
+    for (const discordId of ['101', '102', '103', '104']) {
+      const participant = await env.DB.prepare(
+        'SELECT id FROM participants WHERE discord_id = ?1',
+      ).bind(discordId).first<{ id: number }>();
+      const assigned = sessions
+        .filter((session) => session.interviewer_id === participant!.id || session.interviewee_id === participant!.id)
+        .map((session) => session.problem_id);
+      expect(new Set(assigned).size).toBe(assigned.length);
+    }
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM outbox WHERE kind = 'dm' AND payload LIKE '%packet%'",
+    ).first()).toEqual({ n: 0 });
 
     // thread fanout + pairing DMs queued
     const outboxKinds = await env.DB.prepare(

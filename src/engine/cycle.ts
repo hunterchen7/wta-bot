@@ -5,6 +5,7 @@ import { signToken } from '../forms/token';
 import { matchWeek, type Demand } from '../matching';
 import { discordTime } from '../time';
 import { enqueue, enqueueMany } from './outbox';
+import { pickProblem, reserveProblem } from './problems';
 import { creditsOf, demandFor } from './progress';
 import type { Cohort, Week } from './weeks';
 
@@ -158,6 +159,8 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
       .bind(week.id, edge.interviewerId, edge.intervieweeId)
       .run();
     const sessionId = Number(ins.meta.last_row_id);
+    const problem = await pickProblem(env, week.id, edge.interviewerId, edge.intervieweeId);
+    if (problem) await reserveProblem(env, sessionId, problem.id);
     const interviewer = byId.get(edge.interviewerId)!;
     const interviewee = byId.get(edge.intervieweeId)!;
 

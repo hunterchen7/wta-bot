@@ -36,8 +36,9 @@ export async function generateWeekSet(
   return { chosen: pool, poolSize: pool.length };
 }
 
-/** Pick a problem for a session: from the week set, unseen by the interviewee
- *  (any role), preferring unseen by the interviewer too. */
+/** Pick a problem for a session only when neither participant has seen it.
+ *  Assigned sessions count immediately, so a participant's interviewer packet
+ *  can never become the problem they later receive as an interviewee (or vice versa). */
 export async function pickProblem(
   env: Env,
   weekId: number,
@@ -45,45 +46,69 @@ export async function pickProblem(
   intervieweeId: number,
   excludeProblemId?: number,
 ): Promise<{ id: number; title: string } | null> {
-  const base = `
+  return env.DB.prepare(
+    `
     SELECT p.id, p.title FROM week_problem_sets wps
     JOIN problems p ON p.id = wps.problem_id AND p.active = 1
     WHERE wps.week_id = ?1
-      AND p.id NOT IN (SELECT problem_id FROM exposures WHERE participant_id = ?2)
-      AND (?4 IS NULL OR p.id != ?4)`;
-  // Preferred: also unseen by the interviewer
-  const preferred = await env.DB.prepare(
-    `${base} AND p.id NOT IN (SELECT problem_id FROM exposures WHERE participant_id = ?3)
-     ORDER BY RANDOM() LIMIT 1`,
+      AND NOT EXISTS (
+        SELECT 1 FROM exposures e
+        WHERE e.problem_id = p.id AND e.participant_id IN (?2, ?3)
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM sessions seen
+        WHERE seen.problem_id = p.id
+          AND (seen.interviewer_id IN (?2, ?3) OR seen.interviewee_id IN (?2, ?3))
+      )
+      AND (?4 IS NULL OR p.id != ?4)
+    ORDER BY RANDOM() LIMIT 1`,
   )
-    .bind(weekId, intervieweeId, interviewerId, excludeProblemId ?? null)
-    .first<{ id: number; title: string }>();
-  if (preferred) return preferred;
-  return env.DB.prepare(`${base} ORDER BY RANDOM() LIMIT 1`)
     .bind(weekId, intervieweeId, interviewerId, excludeProblemId ?? null)
     .first<{ id: number; title: string }>();
 }
 
-/** T-24h packet sweep: assign problems + DM the interviewer their packet. */
+/** Reserve a problem without revealing it. Matching and repair flows use this
+ *  immediately so both of a participant's role assignments remain distinct. */
+export async function reserveProblem(
+  env: Env,
+  sessionId: number,
+  problemId: number,
+  replace = false,
+): Promise<boolean> {
+  const result = await env.DB.prepare(
+    replace
+      ? 'UPDATE sessions SET problem_id = ?1, packet_sent_at = NULL WHERE id = ?2'
+      : 'UPDATE sessions SET problem_id = ?1 WHERE id = ?2 AND problem_id IS NULL',
+  ).bind(problemId, sessionId).run();
+  return Number(result.meta.changes ?? 0) > 0;
+}
+
+/** T-24h packet sweep: reveal pre-assigned problems to interviewers. Legacy
+ *  unassigned sessions are reserved here as a safe deployment fallback. */
 export async function packetScan(env: Env, origin: string, now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() + 24 * 3600_000).toISOString();
   const { results } = await env.DB.prepare(
-    `SELECT s.id, s.week_id, s.interviewer_id, s.interviewee_id, s.scheduled_at, w.idx
+    `SELECT s.id, s.week_id, s.interviewer_id, s.interviewee_id, s.scheduled_at,
+            s.problem_id, p.title AS problem_title, w.idx
      FROM sessions s JOIN weeks w ON w.id = s.week_id
-     WHERE s.state = 'scheduled' AND s.problem_id IS NULL AND s.scheduled_at <= ?1
+     LEFT JOIN problems p ON p.id = s.problem_id
+     WHERE s.state = 'scheduled' AND s.packet_sent_at IS NULL AND s.scheduled_at <= ?1
        AND EXISTS (SELECT 1 FROM week_problem_sets wps WHERE wps.week_id = s.week_id)`,
   )
     .bind(cutoff)
     .all<any>();
 
-  let assigned = 0;
+  let delivered = 0;
   for (const s of results) {
-    const problem = await pickProblem(env, s.week_id, s.interviewer_id, s.interviewee_id);
+    const problem = s.problem_id
+      ? { id: Number(s.problem_id), title: String(s.problem_title) }
+      : await pickProblem(env, s.week_id, s.interviewer_id, s.interviewee_id);
     if (!problem) continue; // set exhausted — organizers see it in the digest
-    await assignProblem(env, s, problem, origin, false);
-    assigned++;
+    if (!s.problem_id && !(await reserveProblem(env, s.id, problem.id))) continue;
+    await deliverProblemPacket(env, s, problem, origin, false);
+    delivered++;
   }
-  return assigned;
+  return delivered;
 }
 
 export async function assignProblem(
@@ -93,11 +118,24 @@ export async function assignProblem(
   origin: string,
   isSwap: boolean,
 ): Promise<string> {
-  await env.DB.prepare('UPDATE sessions SET problem_id = ?1 WHERE id = ?2')
-    .bind(problem.id, session.id)
-    .run();
+  await reserveProblem(env, session.id, problem.id, true);
+  return deliverProblemPacket(env, session, problem, origin, isSwap);
+}
+
+async function deliverProblemPacket(
+  env: Env,
+  session: { id: number; interviewer_id: number; scheduled_at?: string | null },
+  problem: { id: number; title: string },
+  origin: string,
+  isSwap: boolean,
+): Promise<string> {
   await env.DB.prepare(
-    `INSERT INTO exposures (participant_id, problem_id, role, session_id) VALUES (?1, ?2, 'interviewer', ?3)`,
+    `INSERT INTO exposures (participant_id, problem_id, role, session_id)
+     SELECT ?1, ?2, 'interviewer', ?3
+     WHERE NOT EXISTS (
+       SELECT 1 FROM exposures
+       WHERE participant_id = ?1 AND problem_id = ?2 AND role = 'interviewer' AND session_id = ?3
+     )`,
   )
     .bind(session.interviewer_id, problem.id, session.id)
     .run();
@@ -122,6 +160,8 @@ export async function assignProblem(
       components: [buttonRow([{ id: `swap:${session.id}`, label: 'Swap problem', style: 2 }])],
     },
   });
+  await env.DB.prepare('UPDATE sessions SET packet_sent_at = ?2 WHERE id = ?1')
+    .bind(session.id, new Date().toISOString()).run();
   return url;
 }
 

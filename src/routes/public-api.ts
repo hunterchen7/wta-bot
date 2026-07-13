@@ -130,7 +130,9 @@ async function finishEnrollment(env: Env, guildId: string | null, discordId: str
     await enqueue(env, 'role_add', { guildId, userId: discordId, roleId: settings.participant_role_id });
   }
   if (settings.organizer_channel_id) {
-    const count = await env.DB.prepare("SELECT count(*) AS n FROM participants WHERE topics IS NOT NULL AND status = 'active'").first<{ n: number }>();
+    const count = await env.DB.prepare(
+      "SELECT count(*) AS n FROM participants WHERE topics IS NOT NULL AND status = 'active' AND pairing_excluded = 0",
+    ).first<{ n: number }>();
     await enqueue(env, 'channel_msg', {
       channelId: settings.organizer_channel_id,
       message: { content: `🎓 **${name}** (<@${discordId}>) enrolled through the web app — ${count?.n ?? '?'} total.` },

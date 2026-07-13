@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { generateWeekSet, packetScan, pickProblem, swapProblem } from '../src/engine/problems';
+import { generateWeekSet, packetScan, pickProblem, reserveProblem, swapProblem } from '../src/engine/problems';
 import { createCohort } from '../src/engine/weeks';
 import { app } from '../src/index';
 
@@ -86,6 +86,36 @@ describe('problem bank', () => {
     expect(payload.message.content).toContain('/p/');
   });
 
+  it('keeps a reserved problem private until the 24-hour delivery window', async () => {
+    const now = new Date();
+    const scheduledAt = new Date(now.getTime() + 48 * 3600_000).toISOString();
+    const problem = await pickProblem(env, weekIds[1]!, 1, 2);
+    expect(problem).not.toBeNull();
+    const ins = await env.DB.prepare(
+      `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, scheduled_at)
+       VALUES (?1, 1, 2, 'scheduled', ?2)`,
+    ).bind(weekIds[1], scheduledAt).run();
+    const reservedSessionId = Number(ins.meta.last_row_id);
+    expect(await reserveProblem(env, reservedSessionId, problem!.id)).toBe(true);
+
+    expect(await packetScan(env, 'https://example.test', now)).toBe(0);
+    expect(await env.DB.prepare(
+      'SELECT problem_id, packet_sent_at FROM sessions WHERE id = ?1',
+    ).bind(reservedSessionId).first()).toEqual({ problem_id: problem!.id, packet_sent_at: null });
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM exposures WHERE session_id = ?1 AND role = 'interviewer'",
+    ).bind(reservedSessionId).first()).toEqual({ n: 0 });
+
+    expect(await packetScan(env, 'https://example.test', new Date(now.getTime() + 25 * 3600_000))).toBe(1);
+    const delivered = await env.DB.prepare(
+      'SELECT packet_sent_at FROM sessions WHERE id = ?1',
+    ).bind(reservedSessionId).first<{ packet_sent_at: string | null }>();
+    expect(delivered?.packet_sent_at).not.toBeNull();
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM exposures WHERE session_id = ?1 AND role = 'interviewer'",
+    ).bind(reservedSessionId).first()).toEqual({ n: 1 });
+  });
+
   it('serves packet data to the signed React link and refuses garbage', async () => {
     const dm = await env.DB.prepare(
       "SELECT payload FROM outbox WHERE kind = 'dm' AND payload LIKE '%/p/%' ORDER BY id DESC LIMIT 1",
@@ -137,11 +167,8 @@ describe('problem bank', () => {
     const form = await res.json<any>();
     const problemField = form.fields.find((field: any) => field.id === 'problem_used');
     expect(problemField.label).toContain('Which interview question');
-    expect(problemField.options.map((option: any) => option.label)).toEqual(expect.arrayContaining([expect.stringContaining('LRU Cache')]));
-
-    const set = await env.DB.prepare('SELECT problem_id FROM week_problem_sets WHERE week_id = ?1 LIMIT 1')
-      .bind(weekIds[2])
-      .first<any>();
+    expect(problemField.options.length).toBeGreaterThan(0);
+    const selectedProblemId = Number(problemField.options[0].value);
     const submit = await app.request(
       `/api/forms/${token}`,
       {
@@ -163,7 +190,7 @@ describe('problem bank', () => {
           time_complexity: 'yes',
           space_complexity: 'yes',
           additional_test_cases: 'yes',
-          problem_used: String(set.problem_id),
+          problem_used: String(selectedProblemId),
           rating_problem_solving: '4',
           rating_communication: '4',
           rating_code_quality: '4',
@@ -177,7 +204,7 @@ describe('problem bank', () => {
     );
     expect(submit.status).toBe(200);
     const s = await env.DB.prepare('SELECT problem_id FROM sessions WHERE id = ?1').bind(sid).first<any>();
-    expect(s.problem_id).toBe(set.problem_id);
+    expect(s.problem_id).toBe(selectedProblemId);
     const exp = await env.DB.prepare(
       "SELECT count(*) AS n FROM exposures WHERE session_id = ?1 AND role = 'interviewer'",
     )
@@ -186,22 +213,56 @@ describe('problem bank', () => {
     expect(exp.n).toBe(1);
   });
 
-  it('never hands the interviewee a problem they have seen', async () => {
-    // Expose Quinn (participant 2) to every W3 problem except one.
+  it('does not fall back to a problem already seen by the interviewer', async () => {
     const { results: set } = await env.DB.prepare(
       'SELECT problem_id FROM week_problem_sets WHERE week_id = ?1',
     )
       .bind(weekIds[2])
       .all<any>();
-    for (const row of set.slice(0, set.length - 1)) {
+    const interviewerExposure = await env.DB.prepare(
+      `SELECT e.problem_id FROM exposures e
+       JOIN week_problem_sets wps ON wps.problem_id = e.problem_id
+       WHERE e.participant_id = 1 AND wps.week_id = ?1 LIMIT 1`,
+    ).bind(weekIds[2]).first<{ problem_id: number }>();
+    expect(interviewerExposure).not.toBeNull();
+    for (const row of set.filter((candidate) => candidate.problem_id !== interviewerExposure!.problem_id)) {
       await env.DB.prepare(
         "INSERT INTO exposures (participant_id, problem_id, role) VALUES (2, ?1, 'interviewee')",
       )
         .bind(row.problem_id)
         .run();
     }
-    const remaining = set[set.length - 1]!.problem_id;
-    const pick = await pickProblem(env, weekIds[2]!, 1, 2);
-    expect(pick?.id).toBe(remaining);
+    expect(await pickProblem(env, weekIds[2]!, 1, 2)).toBeNull();
+  });
+
+  it('never assigns someone the problem from their other-role session', async () => {
+    const { results: set } = await env.DB.prepare(
+      'SELECT problem_id FROM week_problem_sets WHERE week_id = ?1 ORDER BY problem_id',
+    )
+      .bind(weekIds[0])
+      .all<{ problem_id: number }>();
+    expect(set).toHaveLength(3);
+
+    await env.DB.prepare(
+      `INSERT INTO participants (id, discord_id, name, preferred_email, topics, status)
+       VALUES (3003, '303', 'Riley', 'riley@example.com', '["dsa"]', 'active')`,
+    ).run();
+
+    const assignedAsInterviewee = set[0]!.problem_id;
+    await env.DB.prepare(
+      `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, problem_id)
+       VALUES (?1, 3003, 1, 'scheduled', ?2)`,
+    ).bind(weekIds[0], assignedAsInterviewee).run();
+
+    const alternative = await pickProblem(env, weekIds[0]!, 1, 2);
+    expect(alternative).not.toBeNull();
+    expect(alternative!.id).not.toBe(assignedAsInterviewee);
+
+    for (const row of set.slice(1)) {
+      await env.DB.prepare(
+        "INSERT INTO exposures (participant_id, problem_id, role) VALUES (1, ?1, 'interviewer')",
+      ).bind(row.problem_id).run();
+    }
+    expect(await pickProblem(env, weekIds[0]!, 1, 2)).toBeNull();
   });
 });

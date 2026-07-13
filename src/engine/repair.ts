@@ -2,6 +2,7 @@ import { getSettings } from '../config';
 import type { Env } from '../env';
 import { discordTime } from '../time';
 import { sessionButtons } from './cycle';
+import { pickProblem, reserveProblem } from './problems';
 import { enqueue } from './outbox';
 import { getWeek } from './weeks';
 
@@ -146,6 +147,8 @@ export async function spawnSession(
     .bind(weekId, interviewerId, intervieweeId, origin)
     .run();
   const sessionId = Number(ins.meta.last_row_id);
+  const problem = await pickProblem(env, weekId, interviewerId, intervieweeId);
+  if (problem) await reserveProblem(env, sessionId, problem.id);
 
   const week = await getWeek(env, weekId);
   const people = await env.DB.prepare(

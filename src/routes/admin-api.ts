@@ -150,7 +150,10 @@ adminApi.get('/api/admin/overview', async (c) => {
   const currentWeek = currentProgramWeek(weeks);
 
   const [statuses, matchingParticipants, sessionStates, openForms, incidents, repairs, reviews, pendingOutbox, failedOutbox, recentAudit] = await Promise.all([
-    c.env.DB.prepare('SELECT status, count(*) AS n FROM participants GROUP BY status ORDER BY status').all<any>(),
+    c.env.DB.prepare(
+      `SELECT CASE WHEN pairing_excluded = 1 THEN 'organizer' ELSE status END AS status, count(*) AS n
+       FROM participants GROUP BY CASE WHEN pairing_excluded = 1 THEN 'organizer' ELSE status END ORDER BY status`,
+    ).all<any>(),
     count(c.env, "SELECT count(*) AS n FROM participants WHERE status = 'active' AND pairing_excluded = 0"),
     currentWeek
       ? c.env.DB.prepare('SELECT state, count(*) AS n FROM sessions WHERE week_id = ?1 GROUP BY state').bind(currentWeek.id).all<any>()
@@ -471,7 +474,10 @@ adminApi.get('/api/admin/analytics', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const [participants, sessions, reports, reviews, problems, rounds] = await Promise.all([
-    c.env.DB.prepare('SELECT status, count(*) AS value FROM participants GROUP BY status').all<any>(),
+    c.env.DB.prepare(
+      `SELECT CASE WHEN pairing_excluded = 1 THEN 'organizer' ELSE status END AS status, count(*) AS value
+       FROM participants GROUP BY CASE WHEN pairing_excluded = 1 THEN 'organizer' ELSE status END`,
+    ).all<any>(),
     c.env.DB.prepare('SELECT state AS label, count(*) AS value FROM sessions GROUP BY state').all<any>(),
     c.env.DB.prepare(`SELECT kind AS label, count(*) AS total, sum(CASE WHEN submitted_at IS NOT NULL THEN 1 ELSE 0 END) AS submitted FROM form_instances GROUP BY kind`).all<any>(),
     c.env.DB.prepare(`SELECT review_state AS label, count(*) AS value FROM sessions WHERE review_state != 'none' GROUP BY review_state`).all<any>(),
