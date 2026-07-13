@@ -134,6 +134,9 @@ describe('admin operational data', () => {
     const detail = await (await request(`/api/admin/participants/${STUDENT_ID}`)).json<any>();
     expect(detail.participant.name).toBe('Student Person');
     expect(detail.sessions[0]).toMatchObject({ id: 9201, problem_title: 'Two Sum' });
+    expect(detail.sessions[0].forms).toEqual([
+      expect.objectContaining({ id: 9401, kind: 'interviewee_report', session_id: 9201, submitted_at: expect.any(String), url: expect.stringMatching(/^\/f\/f:9401\./) }),
+    ]);
 
     const rounds = await (await request(`/api/admin/rounds?week=${weekId}`)).json<any>();
     expect(rounds.sessions[0]).toMatchObject({

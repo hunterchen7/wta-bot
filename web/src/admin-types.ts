@@ -22,7 +22,8 @@ export type ParticipantRow = {
   interviewer_credits: number; interviewee_credits: number; strikes: number; reports_owed: number; opted_in: number;
 };
 export type ParticipantsData = { participants: ParticipantRow[]; cohort: Cohort | null; currentWeek: Week | null };
-export type ParticipantDetail = { participant: Record<string, any>; sessions: Array<Record<string, any>>; incidents: Array<Record<string, any>>; audit: AuditRow[] };
+export type ParticipantFormLink = { id: number; kind: 'interviewer_report' | 'interviewee_report'; session_id: number; deadline_at: string; submitted_at: string | null; url: string | null };
+export type ParticipantDetail = { participant: Record<string, any>; sessions: Array<Record<string, any> & { forms: ParticipantFormLink[] }>; incidents: Array<Record<string, any>>; audit: AuditRow[] };
 
 export type RoundSession = { id: number; interviewer_name: string; interviewee_name: string; state: string; scheduled_at: string | null; origin: string; reports_in: number; review_state: string; problem_number: number | null; problem_title: string | null; problem_difficulty: string | null; packet_sent_at: string | null };
 export type RoundsData = { cohort: Cohort | null; weeks: Week[]; selectedWeek: Week | null; sessions: RoundSession[]; optins: Array<Record<string, any>>; participants: Array<{ id: number; name: string | null; discord_username: string | null }>; repairs: Array<Record<string, any>> };

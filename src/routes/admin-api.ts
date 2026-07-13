@@ -5,6 +5,7 @@ import { maybeMarkEligible } from '../engine/reports';
 import { activeCohort, cohortWeeks, createCohort } from '../engine/weeks';
 import type { Env } from '../env';
 import { fieldsFor } from '../forms/schema';
+import { signToken } from '../forms/token';
 import { listParticipants, participantsToCsv } from '../participants';
 import { composeQuestionMarkdown, normalizeAvailableWeeks, parseQuestionMarkdown } from '../question-markdown';
 import { currentProgramPhase, programTimeline } from '../program-calendar';
@@ -238,7 +239,7 @@ adminApi.get('/api/admin/participants/:id', async (c) => {
   if (!Number.isInteger(id)) return c.json({ error: 'invalid_id' }, 400);
   const participant = await c.env.DB.prepare('SELECT * FROM participants WHERE id = ?1').bind(id).first<any>();
   if (!participant) return c.json({ error: 'not_found' }, 404);
-  const [sessions, incidents, auditRows] = await Promise.all([
+  const [sessions, forms, incidents, auditRows] = await Promise.all([
     c.env.DB.prepare(
       `SELECT s.*, w.idx AS round, pi.name AS interviewer_name, pe.name AS interviewee_name, pr.title AS problem_title,
               (SELECT count(*) FROM form_instances f WHERE f.session_id = s.id AND f.submitted_at IS NOT NULL) AS reports_in
@@ -247,6 +248,10 @@ adminApi.get('/api/admin/participants/:id', async (c) => {
        LEFT JOIN problems pr ON pr.id = s.problem_id
        WHERE s.interviewer_id = ?1 OR s.interviewee_id = ?1 ORDER BY w.idx, s.id`,
     ).bind(id).all<any>(),
+    c.env.DB.prepare(
+      `SELECT id, kind, session_id, deadline_at, submitted_at
+       FROM form_instances WHERE assignee_id = ?1 ORDER BY session_id, id`,
+    ).bind(id).all<{ id: number; kind: string; session_id: number; deadline_at: string; submitted_at: string | null }>(),
     c.env.DB.prepare(
       `SELECT i.*, reporter.name AS reporter_name FROM incidents i
        LEFT JOIN participants reporter ON reporter.id = i.reporter_id
@@ -257,7 +262,29 @@ adminApi.get('/api/admin/participants/:id', async (c) => {
        WHERE a.target_type = 'participant' AND a.target_id = ?1 ORDER BY a.id DESC LIMIT 20`,
     ).bind(String(id)).all<any>(),
   ]);
-  return c.json({ participant, sessions: sessions.results, incidents: incidents.results, audit: auditRows.results });
+  const secret = c.env.FORM_SIGNING_SECRET;
+  const now = Date.now();
+  const signedForms = await Promise.all(forms.results.map(async (form) => {
+    const expiresAt = new Date(new Date(form.deadline_at).getTime() + 7 * 86400_000);
+    return {
+      ...form,
+      url: secret && expiresAt.getTime() > now
+        ? `/f/${await signToken(secret, `f:${form.id}`, expiresAt)}`
+        : null,
+    };
+  }));
+  const formsBySession = new Map<number, typeof signedForms>();
+  for (const form of signedForms) {
+    const current = formsBySession.get(form.session_id) ?? [];
+    current.push(form);
+    formsBySession.set(form.session_id, current);
+  }
+  return c.json({
+    participant,
+    sessions: sessions.results.map((session) => ({ ...session, forms: formsBySession.get(session.id) ?? [] })),
+    incidents: incidents.results,
+    audit: auditRows.results,
+  });
 });
 
 adminApi.post('/api/admin/participants/status', async (c) => {
