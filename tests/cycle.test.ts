@@ -17,6 +17,10 @@ const selectField = (custom_id: string, value: string) => ({
   type: 18,
   component: { type: 3, custom_id, values: [value] },
 });
+const textField = (custom_id: string, value: string) => ({
+  type: 18,
+  component: { type: 4, custom_id, value },
+});
 
 let signer: Signer;
 beforeAll(async () => {
@@ -62,6 +66,9 @@ describe('full weekly cycle', () => {
   });
 
   it('runs enroll → cohort → opt-in → match → schedule → no-show → repair', async () => {
+    await env.DB.prepare(
+      "INSERT INTO settings (key, value) VALUES ('packet_mode', 'on') ON CONFLICT(key) DO UPDATE SET value = 'on'",
+    ).run();
     // --- enroll four students -------------------------------------------------
     for (const [id, name] of [
       ['101', 'Alice'],
@@ -210,8 +217,8 @@ describe('full weekly cycle', () => {
     ) as Record<string, any>;
     expect(schedulerFields.date.options[0].value).toBe('2026-09-14');
     expect(schedulerFields.date.options.at(-1).value).toBe('2026-09-27');
-    expect(schedulerFields.hour.options).toHaveLength(24);
-    expect(schedulerFields.hour.options.map((option: any) => option.value)).toEqual(expect.arrayContaining(['00', '19', '23']));
+    expect(schedulerFields.time.type).toBe(4);
+    expect(schedulerFields.time.placeholder).toBe('19:30');
 
     const tooEarly = await sendInteraction(
       signer,
@@ -219,13 +226,27 @@ describe('full weekly cycle', () => {
         type: 5, id: 'too-early', token: 't', guild_id: GUILD,
         data: {
           custom_id: `sess:${s0.id}:schedmodal`,
-          components: [selectField('date', '2026-09-13'), selectField('hour', '19'), selectField('minute', '30')],
+          components: [selectField('date', '2026-09-13'), textField('time', '19:30')],
         },
         ...asUser(interviewerDiscord.discord_id),
       },
       OVERRIDES,
     );
     expect(((await tooEarly.json()) as any).data.content).toContain('before this session');
+
+    const invalidIncrement = await sendInteraction(
+      signer,
+      {
+        type: 5, id: 'invalid-increment', token: 't', guild_id: GUILD,
+        data: {
+          custom_id: `sess:${s0.id}:schedmodal`,
+          components: [selectField('date', '2026-09-16'), textField('time', '19:15')],
+        },
+        ...asUser(interviewerDiscord.discord_id),
+      },
+      OVERRIDES,
+    );
+    expect(((await invalidIncrement.json()) as any).data.content).toContain('half-hour increment');
 
     const sched = await sendInteraction(
       signer,
@@ -236,7 +257,7 @@ describe('full weekly cycle', () => {
         guild_id: GUILD,
         data: {
           custom_id: `sess:${s0.id}:schedmodal`,
-          components: [selectField('date', '2026-09-16'), selectField('hour', '19'), selectField('minute', '30')],
+          components: [selectField('date', '2026-09-16'), textField('time', '19:30')],
         },
         ...asUser(interviewerDiscord.discord_id),
       },
@@ -249,6 +270,24 @@ describe('full weekly cycle', () => {
       .first<any>();
     expect(updated.state).toBe('scheduled');
     expect(updated.scheduled_at).toBe('2026-09-16T23:30:00.000Z');
+    expect(schedJson.data.components[0].components[0]).toMatchObject({
+      custom_id: `sess:${s0.id}:sched`, label: 'Reschedule time',
+    });
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM outbox WHERE kind = 'dm' AND payload LIKE '%interviewer packet is ready%'",
+    ).first()).toEqual({ n: 1 });
+
+    const rescheduler = await sendInteraction(
+      signer,
+      button(`sess:${s0.id}:sched`, interviewerDiscord.discord_id),
+      OVERRIDES,
+    );
+    const reschedulerJson = (await rescheduler.json()) as any;
+    expect(reschedulerJson.data.title).toBe('Reschedule your session');
+    const reschedulerFields = Object.fromEntries(
+      reschedulerJson.data.components.map((field: any) => [field.component.custom_id, field.component]),
+    ) as Record<string, any>;
+    expect(reschedulerFields.time.value).toBe('19:30');
 
     // --- form drop once the session time arrives ---------------------------------
     const dropped = await formDropScan(env, 'https://example.test', new Date('2026-09-16T23:31:00Z'));

@@ -20,6 +20,7 @@ type SessionRow = {
   thread_id: string | null;
   state: string;
   origin: 'match' | 'repair' | 'manual';
+  scheduled_at: string | null;
 };
 
 export async function getSession(env: Env, sessionId: number): Promise<SessionRow | null> {

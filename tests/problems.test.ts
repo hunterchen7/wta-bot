@@ -86,7 +86,7 @@ describe('problem bank', () => {
     expect(payload.message.content).toContain('/p/');
   });
 
-  it('keeps a reserved problem private until the 24-hour delivery window', async () => {
+  it('delivers a reserved problem on the next backstop scan regardless of lead time', async () => {
     const now = new Date();
     const scheduledAt = new Date(now.getTime() + 48 * 3600_000).toISOString();
     const problem = await pickProblem(env, weekIds[1]!, 1, 2);
@@ -98,15 +98,7 @@ describe('problem bank', () => {
     const reservedSessionId = Number(ins.meta.last_row_id);
     expect(await reserveProblem(env, reservedSessionId, problem!.id)).toBe(true);
 
-    expect(await packetScan(env, 'https://example.test', now)).toBe(0);
-    expect(await env.DB.prepare(
-      'SELECT problem_id, packet_sent_at FROM sessions WHERE id = ?1',
-    ).bind(reservedSessionId).first()).toEqual({ problem_id: problem!.id, packet_sent_at: null });
-    expect(await env.DB.prepare(
-      "SELECT count(*) AS n FROM exposures WHERE session_id = ?1 AND role = 'interviewer'",
-    ).bind(reservedSessionId).first()).toEqual({ n: 0 });
-
-    expect(await packetScan(env, 'https://example.test', new Date(now.getTime() + 25 * 3600_000))).toBe(1);
+    expect(await packetScan(env, 'https://example.test', now)).toBe(1);
     const delivered = await env.DB.prepare(
       'SELECT packet_sent_at FROM sessions WHERE id = ?1',
     ).bind(reservedSessionId).first<{ packet_sent_at: string | null }>();
@@ -114,6 +106,7 @@ describe('problem bank', () => {
     expect(await env.DB.prepare(
       "SELECT count(*) AS n FROM exposures WHERE session_id = ?1 AND role = 'interviewer'",
     ).bind(reservedSessionId).first()).toEqual({ n: 1 });
+    expect(await packetScan(env, 'https://example.test', new Date(now.getTime() + 25 * 3600_000))).toBe(0);
   });
 
   it('serves packet data to the signed React link and refuses garbage', async () => {

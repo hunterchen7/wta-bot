@@ -170,7 +170,7 @@ export async function spawnSession(
       starter: {
         content:
           `🛠️ **${label}** — <@${interviewer.discord_id}> interviews <@${interviewee.discord_id}>.\n` +
-          `Agree on a time and hit **Scheduled ✅** — everything due ${discordTime(deadline)}.`,
+          `Agree on a time and hit **Choose a time**. You can reschedule later — everything due ${discordTime(deadline)}.`,
         components: [sessionButtons(sessionId)],
       },
     });

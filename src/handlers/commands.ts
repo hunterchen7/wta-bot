@@ -38,7 +38,7 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
         'For anything else, use your session thread or DM an organizer directly.',
         '`/dashboard` — one-click sign-in link for the web dashboard',
         '',
-        '**Buttons you\'ll meet:** round opt-in (I\'m in / double / standby / out) · session threads (Scheduled ✅ / Can\'t make it / Report no-show)',
+        '**Buttons you\'ll meet:** round opt-in (I\'m in / double / standby / out) · session threads (Choose a time / Can\'t make it / Report no-show)',
         `**Web dashboard:** log in with your roster email at ${c.env.PUBLIC_ORIGIN ?? 'the bot site'}/login — progress, sessions, and your report forms in one place.`,
       ];
       if (await isOrganizer(c.env, interaction)) {

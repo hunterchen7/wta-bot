@@ -2,8 +2,8 @@
 // and incident case files. Routed from interactions.ts by custom_id prefix.
 
 import type { Context } from 'hono';
-import { getSettings } from '../config';
-import { ephemeral, modal, stringSelect } from '../discord/components';
+import { getSetting, getSettings } from '../config';
+import { buttonRow, ephemeral, modal, stringSelect, textInput } from '../discord/components';
 import { disputeIncident, getSession, reportIncident, resolveCase } from '../engine/incidents';
 import { enqueue } from '../engine/outbox';
 import type { Env } from '../env';
@@ -196,10 +196,20 @@ async function handleSessionButton(
     if (!week) return c.json(ephemeral('This round no longer exists.'));
     const dateOptions = schedulingDateOptions(week, session, new Date());
     if (!dateOptions.length) return c.json(ephemeral('There are no legal scheduling dates left in this round. Contact an organizer.'));
-    return c.json(modal(`sess:${sessionId}:schedmodal`, 'Confirm your session time', [
+    const rescheduling = session.state === 'scheduled';
+    return c.json(modal(`sess:${sessionId}:schedmodal`, rescheduling ? 'Reschedule your session' : 'Schedule your session', [
       stringSelect({ id: 'date', label: 'Date (Toronto)', description: schedulingWindowDescription(week, session), options: dateOptions }),
-      stringSelect({ id: 'hour', label: 'Hour (24-hour time)', options: Array.from({ length: 24 }, (_, hour) => ({ label: String(hour).padStart(2, '0'), value: String(hour).padStart(2, '0') })) }),
-      stringSelect({ id: 'minute', label: 'Minute', options: ['00', '15', '30', '45'].map((value) => ({ label: value, value })) }),
+      textInput({
+        id: 'time',
+        label: 'Time (24-hour, Toronto)',
+        description: 'Use a half-hour time, such as 09:00 or 19:30.',
+        placeholder: '19:30',
+        value: rescheduling && session.scheduled_at
+          ? new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(session.scheduled_at))
+          : undefined,
+        minLength: 5,
+        maxLength: 5,
+      }),
     ]));
   }
 
@@ -225,12 +235,11 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
   const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(session.week_id).first<any>();
   if (!week) return c.json(ephemeral('This round no longer exists.'));
   const date = modalValue(values, 'date');
-  const hour = Number(modalValue(values, 'hour'));
-  const minute = modalValue(values, 'minute');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isInteger(hour) || hour < 0 || hour > 23 || !['00', '15', '30', '45'].includes(minute)) {
-    return c.json(ephemeral('That date or time is invalid. Reopen the scheduler and choose from the available options.'));
+  const time = modalValue(values, 'time').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^(?:[01]\d|2[0-3]):(?:00|30)$/.test(time)) {
+    return c.json(ephemeral('Enter the time in 24-hour format using a half-hour increment, such as `09:00` or `19:30`.'));
   }
-  const when = parseTorontoLocal(`${date} ${String(hour).padStart(2, '0')}:${minute}`);
+  const when = parseTorontoLocal(`${date} ${time}`);
   if (!when) return c.json(ephemeral('That date does not exist in Toronto time. Choose another date.'));
   const now = new Date();
   const windowStart = session.origin === 'manual' ? now : new Date(week.match_at);
@@ -244,14 +253,25 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
   if (when > deadline) {
     return c.json(ephemeral(`That's past the round deadline (${formatToronto(deadline)} Toronto). Pick an earlier slot.`));
   }
+  const wasScheduled = session.state === 'scheduled';
   await c.env.DB.prepare("UPDATE sessions SET scheduled_at = ?1, state = 'scheduled' WHERE id = ?2")
     .bind(when.toISOString(), sessionId)
     .run();
+  let problemSent = false;
+  if ((await getSetting(c.env, 'packet_mode')) === 'on') {
+    const { deliverSessionProblem } = await import('../engine/problems');
+    const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
+    problemSent = await deliverSessionProblem(c.env, sessionId, origin);
+  }
   // Non-ephemeral: the confirmation belongs to both partners in the thread.
   return c.json({
     type: ResponseType.CHANNEL_MESSAGE,
     data: {
-      content: `📅 Locked in: ${discordTime(when)} (${formatToronto(when)} Toronto). Report forms arrive here + by DM at session time.`,
+      content:
+        `📅 ${wasScheduled ? 'Rescheduled' : 'Locked in'}: ${discordTime(when)} (${formatToronto(when)} Toronto). ` +
+        `${problemSent ? 'The interviewer packet has been sent by DM. ' : ''}` +
+        `Report forms arrive here + by DM at session time.\n\nNeed another time? Either participant can use **Reschedule time** below.`,
+      components: [buttonRow([{ id: `sess:${sessionId}:sched`, label: 'Reschedule time', style: 1 }])],
     },
   });
 }
@@ -267,13 +287,16 @@ function schedulingWindowDescription(week: any, session: { origin?: string }): s
   return `${formatToronto(start)} through ${formatToronto(end)}`.slice(0, 100);
 }
 
-function schedulingDateOptions(week: any, session: { origin?: string }, now: Date) {
+function schedulingDateOptions(week: any, session: { origin?: string; scheduled_at?: string | null }, now: Date) {
   const startsAt = session.origin === 'manual'
     ? now
     : new Date(Math.max(now.getTime(), new Date(week.match_at).getTime()));
   const endsAt = new Date(week.grace_until ?? week.reports_due_at);
   const first = torontoDateKey(startsAt);
   const last = torontoDateKey(endsAt);
+  const scheduledDate = typeof session.scheduled_at === 'string'
+    ? torontoDateKey(new Date(session.scheduled_at))
+    : null;
   const options: Array<{ label: string; value: string; description?: string; default?: boolean }> = [];
   for (let cursor = new Date(`${first}T12:00:00Z`); options.length < 25; cursor = new Date(cursor.getTime() + 86400_000)) {
     const value = cursor.toISOString().slice(0, 10);
@@ -281,7 +304,7 @@ function schedulingDateOptions(week: any, session: { origin?: string }, now: Dat
     options.push({
       value,
       label: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Toronto', weekday: 'short', month: 'short', day: 'numeric' }).format(cursor),
-      default: options.length === 0,
+      default: scheduledDate ? value === scheduledDate : options.length === 0,
     });
   }
   return options;

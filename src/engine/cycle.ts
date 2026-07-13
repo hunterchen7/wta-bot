@@ -108,7 +108,7 @@ export async function optinReminder(env: Env, week: Week): Promise<void> {
 
 export function sessionButtons(sessionId: number) {
   return buttonRow([
-    { id: `sess:${sessionId}:sched`, label: 'Scheduled ✅', style: 3 },
+    { id: `sess:${sessionId}:sched`, label: 'Choose a time', style: 3 },
     { id: `sess:${sessionId}:cancel`, label: "Can't make it", style: 2 },
     { id: `sess:${sessionId}:noshow`, label: 'Report no-show', style: 4 },
   ]);
@@ -172,8 +172,9 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
         starter: {
           content:
             `**Round ${week.idx} session** — <@${interviewer.discord_id}> interviews <@${interviewee.discord_id}>.\n` +
-            `1️⃣ Agree on a time here, then hit **Scheduled ✅** (format: \`2026-09-15 19:30\`, Toronto time).\n` +
-            `2️⃣ At the scheduled time you'll both get your report-form links here and by DM.\n` +
+            `1️⃣ Agree on a time here, then hit **Choose a time**. You can reschedule later if plans change.\n` +
+            `2️⃣ The interviewer gets their private problem packet as soon as the time is confirmed.\n` +
+            `3️⃣ At the scheduled time you'll both get your report-form links here and by DM.\n` +
             `Deadline: sessions + reports due ${discordTime(week.grace_until ?? week.reports_due_at)}.`,
           components: [sessionButtons(sessionId)],
         },
@@ -326,7 +327,7 @@ export async function scheduleNudge(env: Env, week: Week): Promise<void> {
       await enqueue(env, 'channel_msg', {
         channelId: s.thread_id,
         message: {
-          content: `👋 <@${s.interviewer_did}> <@${s.interviewee_did}> — no confirmed time yet. Lock one in and hit **Scheduled ✅**, or use *Can't make it* / *Report no-show* if it's not happening. Everything's due ${discordTime(week.grace_until ?? week.reports_due_at)}.`,
+          content: `👋 <@${s.interviewer_did}> <@${s.interviewee_did}> — no confirmed time yet. Lock one in with **Choose a time**, or use *Can't make it* / *Report no-show* if it's not happening. Everything's due ${discordTime(week.grace_until ?? week.reports_due_at)}.`,
         },
       });
     }

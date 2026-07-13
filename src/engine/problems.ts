@@ -83,19 +83,17 @@ export async function reserveProblem(
   return Number(result.meta.changes ?? 0) > 0;
 }
 
-/** T-24h packet sweep: reveal pre-assigned problems to interviewers. Legacy
- *  unassigned sessions are reserved here as a safe deployment fallback. */
+/** Backstop sweep for scheduled sessions whose packet was not delivered by the
+ *  scheduling interaction. Legacy unassigned sessions are reserved here too. */
 export async function packetScan(env: Env, origin: string, now = new Date()): Promise<number> {
-  const cutoff = new Date(now.getTime() + 24 * 3600_000).toISOString();
   const { results } = await env.DB.prepare(
     `SELECT s.id, s.week_id, s.interviewer_id, s.interviewee_id, s.scheduled_at,
             s.problem_id, p.title AS problem_title, w.idx
      FROM sessions s JOIN weeks w ON w.id = s.week_id
      LEFT JOIN problems p ON p.id = s.problem_id
-     WHERE s.state = 'scheduled' AND s.packet_sent_at IS NULL AND s.scheduled_at <= ?1
+     WHERE s.state = 'scheduled' AND s.packet_sent_at IS NULL AND s.scheduled_at IS NOT NULL
        AND EXISTS (SELECT 1 FROM week_problem_sets wps WHERE wps.week_id = s.week_id)`,
   )
-    .bind(cutoff)
     .all<any>();
 
   let delivered = 0;
@@ -109,6 +107,24 @@ export async function packetScan(env: Env, origin: string, now = new Date()): Pr
     delivered++;
   }
   return delivered;
+}
+
+/** Reveal one session's reserved packet as soon as its time is confirmed. */
+export async function deliverSessionProblem(env: Env, sessionId: number, origin: string): Promise<boolean> {
+  const session = await env.DB.prepare(
+    `SELECT s.id, s.week_id, s.interviewer_id, s.interviewee_id, s.scheduled_at,
+            s.problem_id, s.packet_sent_at, p.title AS problem_title
+     FROM sessions s LEFT JOIN problems p ON p.id = s.problem_id
+     WHERE s.id = ?1 AND s.state = 'scheduled'`,
+  ).bind(sessionId).first<any>();
+  if (!session || session.packet_sent_at) return false;
+  const problem = session.problem_id
+    ? { id: Number(session.problem_id), title: String(session.problem_title) }
+    : await pickProblem(env, session.week_id, session.interviewer_id, session.interviewee_id);
+  if (!problem) return false;
+  if (!session.problem_id && !(await reserveProblem(env, session.id, problem.id))) return false;
+  await deliverProblemPacket(env, session, problem, origin, false);
+  return true;
 }
 
 export async function assignProblem(
