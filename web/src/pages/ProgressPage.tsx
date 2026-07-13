@@ -36,7 +36,7 @@ export function ProgressPage() {
           <div className="font-bold text-amber-950">{owedReports.length} report{owedReports.length === 1 ? '' : 's'} waiting for you</div>
           <div className="mt-3 flex flex-wrap gap-2">
             {owedReports.map((report) => (
-              <a key={report.id} href={report.url} className="rounded-xl bg-amber-900 px-4 py-2 text-sm font-bold text-white hover:bg-amber-800">
+              <a key={report.id} href={report.url} target="_blank" rel="noopener noreferrer" className="rounded-xl bg-amber-900 px-4 py-2 text-sm font-bold text-white hover:bg-amber-800">
                 {label(report.kind)} · due {formatDate(report.deadlineAt)}
               </a>
             ))}
