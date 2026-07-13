@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useBlocker, useParams, useSearchParams } from "react-router-dom";
 import {
   publicRequest,
+  removeResume,
   SettingsSaveError,
+  uploadResume,
   type Choice,
+  type ResumeSummary,
   type SettingsPayload,
 } from "../api";
 import {
@@ -13,6 +16,7 @@ import {
 } from "../components/PublicShell";
 import { ProfileSelect } from "../components/ProfileSelect";
 import { PriorParticipationCheckbox } from "../components/PriorParticipationCheckbox";
+import { ResumeUploadField } from "../components/ResumeUploadField";
 import {
   profileBlurbHelp,
   profileFormContent,
@@ -21,6 +25,7 @@ import {
 type EnrollmentData = {
   discord: { id: string; username: string | null };
   profile: SettingsPayload | null;
+  resume: ResumeSummary | null;
   options: {
     years: string[];
     programs: string[];
@@ -43,6 +48,8 @@ const emptyProfile: SettingsPayload = {
   blurb: "",
   interests: "",
   priorFeedback: "",
+  linkedinUrl: "",
+  otherUrl: "",
   emailOk: false,
 };
 
@@ -55,13 +62,21 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
   );
   const [form, setForm] = useState(emptyProfile);
   const [baseline, setBaseline] = useState(JSON.stringify(emptyProfile));
+  const [resume, setResume] = useState<ResumeSummary | null>(null);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeRemovePending, setResumeRemovePending] = useState(false);
+  const [resumeError, setResumeError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const dirty = useMemo(
-    () => !preview && JSON.stringify(form) !== baseline,
-    [form, baseline, preview],
+    () =>
+      !preview &&
+      (JSON.stringify(form) !== baseline ||
+        Boolean(resumeFile) ||
+        resumeRemovePending),
+    [form, baseline, preview, resumeFile, resumeRemovePending],
   );
   const blocker = useBlocker(dirty && !saved);
   useEffect(() => {
@@ -72,6 +87,7 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
           setData(result);
           setForm(profile);
           setBaseline(JSON.stringify(profile));
+          setResume(result.resume);
         })
         .catch((cause) =>
           setError(
@@ -107,6 +123,16 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
         ? form[key].filter((item) => item !== value)
         : [...form[key], value],
     );
+  const stageResume = (file: File | null) => {
+    setSaved(false);
+    setResumeFile(file);
+    setResumeRemovePending(false);
+  };
+  const stageResumeRemoval = () => {
+    setSaved(false);
+    setResumeFile(null);
+    setResumeRemovePending(Boolean(resume));
+  };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (preview) return;
@@ -118,6 +144,20 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
         method: "POST",
         body: JSON.stringify(form),
       });
+      let nextResume = resume;
+      if (resumeFile) {
+        nextResume = await uploadResume(
+          `/enrollment/${token}/resume`,
+          resumeFile,
+        );
+      } else if (resumeRemovePending) {
+        await removeResume(`/enrollment/${token}/resume`);
+        nextResume = null;
+      }
+      setResume(nextResume);
+      setResumeFile(null);
+      setResumeRemovePending(false);
+      setResumeError("");
       setBaseline(JSON.stringify(form));
       setSaved(true);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -311,6 +351,68 @@ export function EnrollmentPage({ preview = false }: { preview?: boolean }) {
                 className={fieldClass(fieldErrors.experience)}
               />
             </Field>
+          </div>
+        </Section>
+        <Section
+          title={profileFormContent.sections.materials.title}
+          description={profileFormContent.sections.materials.description}
+        >
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              label={profileFormContent.fields.linkedinUrl.label}
+              error={fieldErrors.linkedinUrl}
+            >
+              <input
+                name="linkedinUrl"
+                type="url"
+                inputMode="url"
+                maxLength={1000}
+                aria-invalid={Boolean(fieldErrors.linkedinUrl)}
+                value={form.linkedinUrl}
+                onChange={(event) => set("linkedinUrl", event.target.value)}
+                className={fieldClass(fieldErrors.linkedinUrl)}
+                placeholder={profileFormContent.fields.linkedinUrl.placeholder}
+              />
+            </Field>
+            <Field
+              label={profileFormContent.fields.otherUrl.label}
+              error={fieldErrors.otherUrl}
+            >
+              <input
+                name="otherUrl"
+                type="url"
+                inputMode="url"
+                maxLength={1000}
+                aria-invalid={Boolean(fieldErrors.otherUrl)}
+                value={form.otherUrl}
+                onChange={(event) => set("otherUrl", event.target.value)}
+                className={fieldClass(fieldErrors.otherUrl)}
+                placeholder={profileFormContent.fields.otherUrl.placeholder}
+              />
+            </Field>
+          </div>
+          <div className="mt-6">
+            <div className="mb-2 text-sm font-extrabold text-slate-800">
+              Resume (optional)
+            </div>
+            <ResumeUploadField
+              current={resume}
+              stagedFile={resumeFile}
+              removePending={resumeRemovePending}
+              downloadHref={token ? `/api/enrollment/${token}/resume` : undefined}
+              disabled={preview || busy}
+              error={resumeError}
+              onFileChange={stageResume}
+              onRemove={stageResumeRemoval}
+              onRestore={() => {
+                setSaved(false);
+                setResumeRemovePending(false);
+              }}
+              onError={setResumeError}
+            />
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Only you and WTA organizers can download this file.
+            </p>
           </div>
         </Section>
         <Section
@@ -584,6 +686,7 @@ const wordCount = (value: string) =>
 const previewEnrollment: EnrollmentData = {
   discord: { id: "100000000000000001", username: "alex.example" },
   profile: null,
+  resume: null,
   minimumBlurbWords: 50,
   options: {
     years: ["First", "Second", "Third", "Fourth", "Fifth or greater"],

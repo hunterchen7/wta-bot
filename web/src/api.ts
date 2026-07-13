@@ -1,5 +1,12 @@
 export type Choice = { label: string; value: string };
 
+export type ResumeSummary = {
+  filename: string;
+  contentType: string;
+  bytes: number;
+  uploadedAt: string;
+};
+
 export type ParticipantSettings = {
   id: number;
   discordId: string;
@@ -17,6 +24,9 @@ export type ParticipantSettings = {
   blurb: string;
   interests: string;
   priorFeedback: string;
+  linkedinUrl: string;
+  otherUrl: string;
+  resume: ResumeSummary | null;
   emailOk: boolean;
   status: string;
 };
@@ -69,7 +79,7 @@ export type PracticeProblemsData = {
   }>;
 };
 
-export type SettingsPayload = Omit<ParticipantSettings, 'id' | 'status' | 'discordId' | 'discordUsername' | 'discordNickname'>;
+export type SettingsPayload = Omit<ParticipantSettings, 'id' | 'status' | 'discordId' | 'discordUsername' | 'discordNickname' | 'resume'>;
 
 export class SettingsSaveError extends Error {
   constructor(message: string, readonly fieldErrors: Record<string, string> = {}) {
@@ -139,6 +149,35 @@ export async function saveSettings(payload: SettingsPayload): Promise<void> {
     throw new Error('Your session expired. Redirecting to login…');
   }
   if (!response.ok) throw new SettingsSaveError(result.message ?? 'Could not save your settings.', result.fieldErrors);
+}
+
+export async function uploadResume(path: string, file: File): Promise<ResumeSummary> {
+  const response = await fetch(`/api${path}`, {
+    method: 'PUT',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-WTA-Filename': encodeURIComponent(file.name),
+    },
+    body: file,
+  });
+  const result = await response.json().catch(() => ({})) as { message?: string; resume?: ResumeSummary };
+  if (response.status === 401 && path.startsWith('/settings')) {
+    window.location.assign('/login');
+    throw new Error('Your session expired. Redirecting to login…');
+  }
+  if (!response.ok || !result.resume) throw new SettingsSaveError(result.message ?? 'Could not upload your resume.');
+  return result.resume;
+}
+
+export async function removeResume(path: string): Promise<void> {
+  const response = await fetch(`/api${path}`, { method: 'DELETE', headers: { Accept: 'application/json' } });
+  const result = await response.json().catch(() => ({})) as { message?: string };
+  if (response.status === 401 && path.startsWith('/settings')) {
+    window.location.assign('/login');
+    throw new Error('Your session expired. Redirecting to login…');
+  }
+  if (!response.ok) throw new SettingsSaveError(result.message ?? 'Could not remove your resume.');
 }
 
 export async function publicRequest<T>(path: string, init?: RequestInit): Promise<T> {

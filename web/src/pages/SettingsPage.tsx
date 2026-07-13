@@ -1,9 +1,17 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useBlocker } from "react-router-dom";
 import { useDashboard } from "../dashboard-context";
-import { saveSettings, SettingsSaveError, type SettingsPayload } from "../api";
+import {
+  removeResume,
+  saveSettings,
+  SettingsSaveError,
+  uploadResume,
+  type ResumeSummary,
+  type SettingsPayload,
+} from "../api";
 import { ProfileSelect } from "../components/ProfileSelect";
 import { PriorParticipationCheckbox } from "../components/PriorParticipationCheckbox";
+import { ResumeUploadField } from "../components/ResumeUploadField";
 import {
   profileBlurbHelp,
   profileFormContent,
@@ -17,6 +25,12 @@ export function SettingsPage() {
   const [baseline, setBaseline] = useState(() =>
     JSON.stringify(fromParticipant(data.participant)),
   );
+  const [resume, setResume] = useState<ResumeSummary | null>(
+    data.participant.resume,
+  );
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
+  const [resumeRemovePending, setResumeRemovePending] = useState(false);
+  const [resumeError, setResumeError] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{
     kind: "ok" | "error";
@@ -24,8 +38,11 @@ export function SettingsPage() {
   } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const dirty = useMemo(
-    () => JSON.stringify(form) !== baseline,
-    [form, baseline],
+    () =>
+      JSON.stringify(form) !== baseline ||
+      Boolean(resumeFile) ||
+      resumeRemovePending,
+    [form, baseline, resumeFile, resumeRemovePending],
   );
   const blocker = useBlocker(dirty);
 
@@ -55,6 +72,14 @@ export function SettingsPage() {
         : [...current[key], value],
     }));
   };
+  const stageResume = (file: File | null) => {
+    setResumeFile(file);
+    setResumeRemovePending(false);
+  };
+  const stageResumeRemoval = () => {
+    setResumeFile(null);
+    setResumeRemovePending(Boolean(resume));
+  };
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
@@ -63,6 +88,17 @@ export function SettingsPage() {
     setFieldErrors({});
     try {
       await saveSettings(form);
+      let nextResume = resume;
+      if (resumeFile) {
+        nextResume = await uploadResume("/settings/resume", resumeFile);
+      } else if (resumeRemovePending) {
+        await removeResume("/settings/resume");
+        nextResume = null;
+      }
+      setResume(nextResume);
+      setResumeFile(null);
+      setResumeRemovePending(false);
+      setResumeError("");
       setBaseline(JSON.stringify(form));
       setMessage({
         kind: "ok",
@@ -312,6 +348,66 @@ export function SettingsPage() {
           </div>
         </Card>
 
+        <Card
+          title={profileFormContent.sections.materials.title}
+          description={profileFormContent.sections.materials.description}
+        >
+          <div className="grid gap-5 sm:grid-cols-2">
+            <Field
+              label={profileFormContent.fields.linkedinUrl.label}
+              error={fieldErrors.linkedinUrl}
+            >
+              <input
+                name="linkedinUrl"
+                type="url"
+                inputMode="url"
+                maxLength={1000}
+                aria-invalid={Boolean(fieldErrors.linkedinUrl)}
+                value={form.linkedinUrl}
+                onChange={(event) => set("linkedinUrl", event.target.value)}
+                className={fieldClass(fieldErrors.linkedinUrl)}
+                placeholder={profileFormContent.fields.linkedinUrl.placeholder}
+              />
+            </Field>
+            <Field
+              label={profileFormContent.fields.otherUrl.label}
+              error={fieldErrors.otherUrl}
+            >
+              <input
+                name="otherUrl"
+                type="url"
+                inputMode="url"
+                maxLength={1000}
+                aria-invalid={Boolean(fieldErrors.otherUrl)}
+                value={form.otherUrl}
+                onChange={(event) => set("otherUrl", event.target.value)}
+                className={fieldClass(fieldErrors.otherUrl)}
+                placeholder={profileFormContent.fields.otherUrl.placeholder}
+              />
+            </Field>
+          </div>
+          <div className="mt-6">
+            <div className="mb-2 text-sm font-bold text-slate-700">
+              Resume (optional)
+            </div>
+            <ResumeUploadField
+              current={resume}
+              stagedFile={resumeFile}
+              removePending={resumeRemovePending}
+              downloadHref="/api/settings/resume"
+              disabled={saving}
+              error={resumeError}
+              onFileChange={stageResume}
+              onRemove={stageResumeRemoval}
+              onRestore={() => setResumeRemovePending(false)}
+              onError={setResumeError}
+            />
+            <p className="mt-2 text-xs leading-5 text-slate-500">
+              Only you and WTA organizers can download this file.
+            </p>
+          </div>
+        </Card>
+
         <div className="sticky bottom-4 flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white/95 p-4 shadow-xl shadow-slate-900/10 backdrop-blur">
           <span
             className={`text-sm font-semibold ${dirty ? "text-amber-700" : "text-slate-500"}`}
@@ -486,5 +582,7 @@ const fromParticipant = (
   blurb: participant.blurb,
   interests: participant.interests,
   priorFeedback: participant.priorFeedback,
+  linkedinUrl: participant.linkedinUrl,
+  otherUrl: participant.otherUrl,
   emailOk: participant.emailOk,
 });

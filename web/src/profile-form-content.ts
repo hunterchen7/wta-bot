@@ -18,6 +18,11 @@ export const profileFormContent = {
       description:
         "Tell us what you want to learn and the kind of work you hope to do.",
     },
+    materials: {
+      title: "Application materials",
+      description:
+        "Optional links and a resume help organizers understand your experience and tailor feedback.",
+    },
     notifications: {
       title: "Notifications",
       description: "Discord is the main place for program updates. Email reminders are optional.",
@@ -46,6 +51,14 @@ export const profileFormContent = {
     },
     interests: { label: "Anything else you are interested in learning?" },
     priorFeedback: { label: "Any feedback from last year's sessions? (If attended)" },
+    linkedinUrl: {
+      label: "LinkedIn profile (optional)",
+      placeholder: "https://www.linkedin.com/in/your-name",
+    },
+    otherUrl: {
+      label: "Portfolio, GitHub, or personal website (optional)",
+      placeholder: "https://github.com/your-name",
+    },
   },
   selectPlaceholder: "Choose…",
   emailOptIn: {
