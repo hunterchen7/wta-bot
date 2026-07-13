@@ -31,10 +31,10 @@ const request = async (path: string, options: RequestInit = {}, organizer = true
 beforeAll(async () => {
   await env.DB.prepare(
     `INSERT INTO participants
-      (id, discord_id, discord_username, discord_nickname, name, preferred_email, western_email, year, program, topics, email_ok, status)
+      (id, discord_id, discord_username, discord_nickname, name, preferred_email, western_email, year, program, opportunities, experience_band, topics, email_ok, status)
      VALUES
-      (?1, 'admin-9101', 'admin.account', 'Admin Nick', 'Admin Person', 'admin@example.com', 'admin@uwo.ca', 'Fourth', 'Computer Science', '["dsa"]', 1, 'active'),
-      (?2, 'student-9102', 'student.account', 'Student Nick', 'Student Person', 'student@example.com', 'student@uwo.ca', 'Third', 'Software Engineering', '["dsa"]', 1, 'active')`,
+      (?1, 'admin-9101', 'admin.account', 'Admin Nick', 'Admin Person', 'admin@example.com', 'admin@uwo.ca', 'Fourth', 'Computer Science', '["new_grad"]', '3-4', '["dsa"]', 1, 'active'),
+      (?2, 'student-9102', 'student.account', 'Student Nick', 'Student Person', 'student@example.com', 'student@uwo.ca', 'Third', 'Software Engineering', '["internships"]', '1-2', '["dsa"]', 1, 'active')`,
   ).bind(ADMIN_ID, STUDENT_ID).run();
   const cohort = await createCohort(env, 'Admin API Cohort', [2026, 7, 26]);
   weekId = cohort.weeks[0]!.id;
@@ -125,6 +125,9 @@ describe('admin operational data', () => {
         discord_nickname: 'Student Nick',
         discord_id: 'student-9102',
         email_ok: 1,
+        experience_band: '1-2',
+        opportunities: '["internships"]',
+        topics: '["dsa"]',
       }),
     ]));
 

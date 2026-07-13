@@ -17,7 +17,8 @@ export type OverviewData = {
 
 export type ParticipantRow = {
   id: number; discord_id: string; discord_username: string | null; discord_nickname: string | null; name: string | null; preferred_email: string | null; western_email: string | null;
-  year: string | null; program: string | null; status: string; email_ok: number; created_at: string;
+  year: string | null; program: string | null; opportunities: string | null; prior_wta: number; experience_band: string | null; topics: string | null;
+  blurb: string | null; interests: string | null; prior_feedback: string | null; status: string; email_ok: number; pairing_excluded: number; removed_reason: string | null; created_at: string; updated_at: string;
   interviewer_credits: number; interviewee_credits: number; strikes: number; reports_owed: number; opted_in: number;
 };
 export type ParticipantsData = { participants: ParticipantRow[]; cohort: Cohort | null; currentWeek: Week | null };

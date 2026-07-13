@@ -11,7 +11,9 @@ const names = ['Alex Chen', 'Jordan Lee', 'Maya Singh', 'Sam Wilson', 'Taylor Ki
 const participants = names.map((name, index) => ({
   id: index + 1, discord_id: `10000${index}`, discord_username: name.toLowerCase().replace(' ', ''), discord_nickname: index % 4 === 0 ? name.split(' ')[0] : name, name, preferred_email: `${name.toLowerCase().replace(' ', '.')}@example.com`, western_email: `student${index}@uwo.ca`,
   year: ['Second', 'Third', 'Fourth'][index % 3], program: index % 3 === 1 ? 'Software Engineering' : 'Computer Science',
-  status: index === 8 ? 'held' : index === 10 ? 'paused' : 'active', email_ok: index % 3 ? 1 : 0, created_at: '2026-07-12 12:00:00',
+  opportunities: index % 2 ? '["internships"]' : '["internships","new_grad"]', prior_wta: index % 3 === 0 ? 1 : 0, experience_band: ['0', '1-2', '3-4', '5+'][index % 4], topics: index % 2 ? '["dsa","networking"]' : '["system_design","applications"]',
+  blurb: `Interested in ${index % 2 ? 'product engineering' : 'infrastructure'} roles and building stronger interview communication skills.`, interests: index % 2 ? 'System design and practical interview strategy.' : null, prior_feedback: index % 3 === 0 ? 'More detailed feedback after each round.' : null,
+  status: index === 8 ? 'held' : index === 10 ? 'paused' : 'active', email_ok: index % 3 ? 1 : 0, pairing_excluded: index === 0 ? 1 : 0, removed_reason: null, created_at: '2026-07-12 12:00:00', updated_at: now,
   interviewer_credits: Math.min(3, index % 4), interviewee_credits: Math.min(3, (index + 1) % 4), strikes: index === 8 ? 2 : index === 5 ? 1 : 0,
   reports_owed: index === 2 || index === 7 ? 1 : 0, opted_in: index < 9 ? 1 : 0,
 }));

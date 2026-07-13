@@ -188,7 +188,8 @@ adminApi.get('/api/admin/participants', async (c) => {
   const currentWeek = currentProgramWeek(weeks);
   const { results } = await c.env.DB.prepare(
     `SELECT p.id, p.discord_id, p.discord_username, p.discord_nickname, p.name, p.preferred_email, p.western_email, p.year, p.program,
-            p.status, p.email_ok, p.created_at,
+            p.opportunities, p.prior_wta, p.experience_band, p.topics, p.blurb, p.interests, p.prior_feedback,
+            p.status, p.email_ok, p.pairing_excluded, p.removed_reason, p.created_at, p.updated_at,
             (SELECT count(*) FROM sessions s WHERE s.interviewer_id = p.id AND s.interviewer_credited = 1) AS interviewer_credits,
             (SELECT count(*) FROM sessions s WHERE s.interviewee_id = p.id AND s.interviewee_credited = 1) AS interviewee_credits,
             (SELECT count(*) FROM incidents i WHERE i.accused_id = p.id AND i.state = 'confirmed' AND i.kind IN ('ghost','unresponsive')) AS strikes,

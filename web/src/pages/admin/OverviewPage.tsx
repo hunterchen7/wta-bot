@@ -18,7 +18,7 @@ export function OverviewPage() {
   const completed = Number(data.sessionStates.find((row) => row.state === 'completed')?.n ?? 0);
   const attention = queueLinks.reduce((sum, [key]) => sum + data.queues[key], 0);
   const activeQueues = queueLinks.filter(([key]) => data.queues[key] > 0);
-  return <div className="space-y-5">
+  return <div className="space-y-5 xl:flex xl:h-[calc(100dvh-9rem)] xl:min-h-[42rem] xl:flex-col xl:space-y-0 xl:gap-5">
     <PageIntro title="Operational overview" description="Current cohort status and anything that needs organizer attention." actions={<Link className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50" to="/app/admin/operations">System activity</Link>} />
 
     {!data.cohort ? <Panel><div className="p-5"><h2 className="font-black text-slate-950">No active cohort</h2><p className="mt-1 text-sm text-slate-500">Create a cohort calendar in Program settings before opening enrollment.</p><Link to="/app/admin/settings" className="mt-3 inline-flex rounded-lg bg-western-700 px-3.5 py-2 text-sm font-bold text-white">Configure cohort</Link></div></Panel> : <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -43,8 +43,8 @@ export function OverviewPage() {
       </Panel>
     </div>
 
-    <Panel title="Recent organizer activity" actions={<Link to="/app/admin/operations" className="text-xs font-bold text-western-700 hover:text-western-800">View audit log →</Link>}>
-      <ScrollArea className="h-[15rem]"><div className="overflow-x-auto"><table className="w-full min-w-[38rem] text-left text-sm"><thead><tr><th className={`${thClass} sticky top-0 z-10`}>When</th><th className={`${thClass} sticky top-0 z-10`}>Organizer</th><th className={`${thClass} sticky top-0 z-10`}>Action</th><th className={`${thClass} sticky top-0 z-10`}>Target</th></tr></thead><tbody>{data.recentAudit.map((row) => <tr key={row.id}><td className={tdClass}>{formatDate(row.created_at)}</td><td className={tdClass}>{row.actor_name ?? 'System'}</td><td className={`${tdClass} font-semibold text-slate-900`}>{row.action.replaceAll('.', ' · ').replaceAll('_', ' ')}</td><td className={tdClass}>{row.target_type ? `${row.target_type} #${row.target_id ?? ''}` : '—'}</td></tr>)}</tbody></table></div></ScrollArea>
+    <Panel className="xl:flex xl:min-h-[18rem] xl:flex-1 xl:flex-col" title="Recent organizer activity" actions={<Link to="/app/admin/operations" className="text-xs font-bold text-western-700 hover:text-western-800">View audit log →</Link>}>
+      <ScrollArea className="h-[22rem] xl:h-auto xl:min-h-0 xl:flex-1"><div className="overflow-x-auto"><table className="w-full min-w-[38rem] text-left text-sm"><thead><tr><th className={`${thClass} sticky top-0 z-10`}>When</th><th className={`${thClass} sticky top-0 z-10`}>Organizer</th><th className={`${thClass} sticky top-0 z-10`}>Action</th><th className={`${thClass} sticky top-0 z-10`}>Target</th></tr></thead><tbody>{data.recentAudit.map((row) => <tr key={row.id}><td className={tdClass}>{formatDate(row.created_at)}</td><td className={tdClass}>{row.actor_name ?? 'System'}</td><td className={`${tdClass} font-semibold text-slate-900`}>{row.action.replaceAll('.', ' · ').replaceAll('_', ' ')}</td><td className={tdClass}>{row.target_type ? `${row.target_type} #${row.target_id ?? ''}` : '—'}</td></tr>)}</tbody></table></div></ScrollArea>
     </Panel>
   </div>;
 }
