@@ -54,6 +54,10 @@ api.get('/api/dashboard', async (c) => {
     .first<any>();
   const sessionsPromise = c.env.DB.prepare(
     `SELECT s.id, s.state, s.scheduled_at, s.interviewer_id, s.interviewee_id,
+            EXISTS(SELECT 1 FROM form_instances f
+              WHERE f.session_id = s.id AND f.assignee_id = ?1 AND f.submitted_at IS NOT NULL) AS report_submitted,
+            EXISTS(SELECT 1 FROM form_instances f
+              WHERE f.session_id = s.id AND f.assignee_id != ?1 AND f.submitted_at IS NOT NULL) AS partner_report_submitted,
             w.idx, pi.name AS interviewer_name, pe.name AS interviewee_name
      FROM sessions s JOIN weeks w ON w.id = s.week_id
      JOIN participants pi ON pi.id = s.interviewer_id
@@ -87,6 +91,7 @@ api.get('/api/dashboard', async (c) => {
       url: `/f/${await signToken(secret, `f:${report.id}`, new Date(new Date(report.deadline_at).getTime() + 7 * 86400_000))}`,
     })),
   );
+  const dashboardNow = Date.now();
   const jsonList = (value: string | null): string[] => {
     try {
       return value ? JSON.parse(value) : [];
@@ -132,6 +137,13 @@ api.get('/api/dashboard', async (c) => {
         partnerName: isInterviewer ? row.interviewee_name : row.interviewer_name,
         scheduledAt: row.scheduled_at,
         state: row.state,
+        reportState: row.report_submitted === 1 && row.partner_report_submitted === 1
+          ? 'complete'
+          : !row.scheduled_at || dashboardNow < new Date(row.scheduled_at).getTime() + 30 * 60_000
+            ? 'not_released'
+            : row.report_submitted === 1
+              ? 'waiting_partner'
+              : row.partner_report_submitted === 1 ? 'waiting_you' : 'waiting_both',
       };
     }),
     owedReports,

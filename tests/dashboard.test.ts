@@ -98,6 +98,47 @@ describe('participant dashboard API', () => {
     });
   });
 
+  it('reports personal submission while the session still waits for the partner', async () => {
+    const past = new Date(Date.now() - 60 * 60_000).toISOString();
+    const future = new Date(Date.now() + 60 * 60_000).toISOString();
+    await env.DB.prepare("INSERT INTO cohorts (id, name, start_date, weeks_count, status) VALUES (40110, 'Dashboard status', '2026-07-26', 3, 'done')").run();
+    await env.DB.prepare(
+      `INSERT INTO weeks (id, cohort_id, idx, optin_opens_at, optin_closes_at, match_at, reports_due_at)
+       VALUES (40111, 40110, 1, '2026-07-19T20:00:00.000Z', '2026-07-26T23:00:00.000Z', '2026-07-26T23:15:00.000Z', '2026-08-09T03:59:00.000Z')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO sessions (id, week_id, interviewer_id, interviewee_id, state, scheduled_at)
+       VALUES
+         (40112, 40111, ?1, ?2, 'scheduled', ?3),
+         (40115, 40111, ?1, ?2, 'scheduled', ?3),
+         (40118, 40111, ?1, ?2, 'scheduled', ?3),
+         (40121, 40111, ?1, ?2, 'scheduled', ?3),
+         (40124, 40111, ?1, ?2, 'scheduled', ?4)`,
+    ).bind(STUDENT_ID, ADMIN_ID, past, future).run();
+    await env.DB.prepare(
+      `INSERT INTO form_instances (id, kind, session_id, assignee_id, token_hash, deadline_at, submitted_at, payload)
+       VALUES
+         (40113, 'interviewer_report', 40112, ?1, 'dashboard-status-own', '2026-08-09T03:59:00.000Z', ?3, '{}'),
+         (40114, 'interviewee_report', 40112, ?2, 'dashboard-status-partner', '2026-08-09T03:59:00.000Z', NULL, NULL),
+         (40116, 'interviewer_report', 40115, ?1, 'dashboard-status-own-needed', '2026-08-09T03:59:00.000Z', NULL, NULL),
+         (40117, 'interviewee_report', 40115, ?2, 'dashboard-status-partner-done', '2026-08-09T03:59:00.000Z', ?3, '{}'),
+         (40119, 'interviewer_report', 40118, ?1, 'dashboard-status-own-waiting', '2026-08-09T03:59:00.000Z', NULL, NULL),
+         (40120, 'interviewee_report', 40118, ?2, 'dashboard-status-partner-waiting', '2026-08-09T03:59:00.000Z', NULL, NULL),
+         (40122, 'interviewer_report', 40121, ?1, 'dashboard-status-own-done', '2026-08-09T03:59:00.000Z', ?3, '{}'),
+         (40123, 'interviewee_report', 40121, ?2, 'dashboard-status-both-done', '2026-08-09T03:59:00.000Z', ?3, '{}')`,
+    ).bind(STUDENT_ID, ADMIN_ID, past).run();
+
+    const response = await app.request('/api/dashboard', { headers: { Cookie: await cookieFor(STUDENT_ID, false) } }, env);
+    const dashboard = await response.json<any>();
+    expect(Object.fromEntries(dashboard.sessions.filter((row: any) => row.id >= 40112).map((row: any) => [row.id, row.reportState]))).toEqual({
+      40112: 'waiting_partner',
+      40115: 'waiting_you',
+      40118: 'waiting_both',
+      40121: 'complete',
+      40124: 'not_released',
+    });
+  });
+
   it('returns exact field errors and saves all participant settings together', async () => {
     const cookie = await cookieFor(STUDENT_ID, false);
     const invalid = await jsonPost('/api/settings', { name: '', preferredEmail: 'bad', westernEmail: '', year: '', program: '', experience: '', opportunities: [], topics: [], priorWta: false, emailOk: false, blurb: '', interests: '', priorFeedback: '' }, cookie);

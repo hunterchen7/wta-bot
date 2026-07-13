@@ -25,10 +25,10 @@ export const demoDashboard: DashboardData = {
   },
   progress: { interviewer: 2, interviewee: 1, strikes: 0 },
   sessions: [
-    { id: 1, round: 1, role: 'interviewer', partnerName: 'Jordan Lee', scheduledAt: '2026-07-30T23:30:00.000Z', state: 'completed' },
-    { id: 2, round: 1, role: 'interviewee', partnerName: 'Maya Singh', scheduledAt: '2026-08-02T18:00:00.000Z', state: 'completed' },
-    { id: 3, round: 2, role: 'interviewer', partnerName: 'Sam Wilson', scheduledAt: '2026-08-13T22:30:00.000Z', state: 'scheduled' },
-    { id: 4, round: 2, role: 'interviewee', partnerName: 'Taylor Kim', scheduledAt: null, state: 'pending_schedule' },
+    { id: 1, round: 1, role: 'interviewer', partnerName: 'Jordan Lee', scheduledAt: '2026-07-30T23:30:00.000Z', state: 'completed', reportState: 'complete' as const },
+    { id: 2, round: 1, role: 'interviewee', partnerName: 'Maya Singh', scheduledAt: '2026-08-02T18:00:00.000Z', state: 'scheduled', reportState: 'waiting_you' as const },
+    { id: 3, round: 2, role: 'interviewer', partnerName: 'Sam Wilson', scheduledAt: '2026-08-13T22:30:00.000Z', state: 'scheduled', reportState: 'waiting_partner' as const },
+    { id: 4, round: 2, role: 'interviewee', partnerName: 'Taylor Kim', scheduledAt: null, state: 'pending_schedule', reportState: 'not_released' as const },
   ],
   owedReports: [
     { id: 8, kind: 'interviewee_report', deadlineAt: '2026-08-08T03:59:00.000Z', url: '#' },

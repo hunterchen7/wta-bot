@@ -16,12 +16,12 @@ export function AppLayout() {
   const location = useLocation();
   useDocumentTitle(pageTitle(location.pathname));
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (options?: { silent?: boolean }) => {
     try {
       setData(await getDashboard());
       setError(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load the dashboard.');
+      if (!options?.silent) setError(cause instanceof Error ? cause.message : 'Could not load the dashboard.');
     }
   }, []);
 

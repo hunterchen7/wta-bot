@@ -33,6 +33,7 @@ export type DashboardData = {
     partnerName: string | null;
     scheduledAt: string | null;
     state: string;
+    reportState: 'not_released' | 'waiting_both' | 'waiting_you' | 'waiting_partner' | 'complete';
   }>;
   owedReports: Array<{ id: number; kind: string; deadlineAt: string; url: string }>;
   minimumBlurbWords: number;
