@@ -12,7 +12,7 @@ validation, and report side effects.
 - `/enroll/:token` — Discord-linked enrollment/profile form minted by `/join`.
 - `/f/:token` — signed interview report form.
 - `/p/:token` — signed interviewer packet or released solution.
-- `/bank` — current published question bank.
+- `/bank` — current round question bank when an organizer explicitly publishes it; private by default.
 - `/preview/*` — interactive, non-writing versions of public flows.
 - `/api/*` — Worker JSON endpoints consumed by the React application.
 

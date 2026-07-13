@@ -78,9 +78,11 @@ interaction — no deploy.
    (bot role must sit above these, with Manage Roles + Manage Nicknames on)
 3. Configure Discord's native verification level and AutoMod in Server Settings.
 4. Load the bank: `/admin problems add` per problem (solution notes pasted in the
-   dashboard → Problems), then `/admin problems setweek 1..3`. Sets are **public**:
-   `/bank` + the pairing announcement; interviewers record their pick on the
-   report. (Private T-24h packets exist but are off — `settings.packet_mode`.)
+   dashboard → Problems), then `/admin problems setweek 1..3`. Sets are **private
+   by default**: keep private interviewer packets enabled and each interviewer
+   receives only their assigned problem after confirming a session time. The
+   participant bank and pairing-announcement list appear only when an organizer
+   enables **Publish the participant question bank** in Program settings.
 5. `/admin setup cohort start_date:YYYY-MM-DD name:"Summer 2026"` — round 1's first
    day, any weekday (2026: `2026-07-26`). **That's the last manual step.** The
    cron runs everything else.
@@ -88,9 +90,9 @@ interaction — no deploy.
 **The automated round (14 days, all Toronto time, D = round start):** D-3
 16:00 opt-in opens (announce post + DMs) → D-2 18:00 reminder to
 non-responders → D-1 18:00 close, 18:15 match (threads, pairing DMs/emails,
-residuals → repair queue) → D+3 and D+10 18:00 unscheduled-session nudges →
-packets to interviewers 24h before each session → report forms at session
-time → T-24h form nudges, overdue sweeps → D+14 09:00 organizer digest. The
+residuals → re-pair queue) → D+3 and D+10 18:00 unscheduled-session nudges →
+packet to the interviewer as soon as a time is confirmed → role-specific form
+links in the 15–30 minute reminder window → overdue sweeps → D+14 09:00 organizer digest. The
 final round gets a +4-day repair/report grace window.
 Mid-week no-shows: victims are re-paired automatically (complementary victims,
 then standby volunteers); anything unrepaired simply becomes next week's

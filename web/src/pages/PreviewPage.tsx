@@ -28,9 +28,9 @@ export function PreviewPage() {
         "Private problem statement, hint ladder, and solution notes.",
     },
     {
-      to: "/bank",
-      title: "Question bank",
-      description: "The currently published round set from live program data.",
+      to: "/app/admin/problems",
+      title: "Question library",
+      description: "Manage round sets and open participant-facing previews without publishing the bank.",
     },
     {
       to: "/login",
