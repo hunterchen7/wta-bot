@@ -55,9 +55,16 @@ written to `audit_log` with the token owner's participant ID.
 
 Streamable HTTP endpoint: `https://wta.hunterchen.ca/mcp`
 
-Configure the MCP client to send the same bearer token. This is a stateless,
-JSON-response MCP server built with the official stable TypeScript SDK. Its tool
-list is generated from the token's scopes.
+From **Admin → MCP**, generate a personal token and configure the client with:
+
+- Transport: Streamable HTTP
+- URL: `https://wta.hunterchen.ca/mcp`
+- Header: `Authorization: Bearer <your token>`
+
+Reconnect or refresh the client after saving so it discovers the current tool
+list. The dashboard includes a copyable generic configuration and example
+requests. This is a stateless, JSON-response MCP server built with the official
+stable TypeScript SDK. Its tool list is generated from the token's scopes.
 
 Current tools:
 
@@ -66,8 +73,19 @@ Current tools:
 - `get_participant`
 - `list_rounds`
 - `list_problems`
-- `set_participant_status` (`participants:write`)
+- `pause_participant` (`participants:write`)
+- `hold_participant` (`participants:write`)
+- `restore_participant` (`participants:write`)
+- `remove_participant` (`participants:write`, explicit confirmation required)
 - `create_problem` (`problems:write`)
+
+Read first, then ask the organizer to confirm the exact intended change before
+using a write tool. `remove_participant` performs the complete lifecycle: it
+cancels open sessions, removes unsubmitted forms for those sessions and future opt-ins, expires the
+participant's re-pair requests, queues affected partners for re-pairing, sends
+notifications, and retains historical records. `create_problem` writes to the
+live question bank immediately but does not alter an already generated round
+set.
 
 The MCP layer calls typed application services. It does not have a generic SQL
 tool, arbitrary HTTP proxy, filesystem access, or secret-reading tool.

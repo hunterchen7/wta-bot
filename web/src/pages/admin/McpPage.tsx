@@ -4,7 +4,7 @@ import { adminRequest } from '../../api';
 import { Button, Dialog, DialogClose, ErrorState, formatDate, LoadingState, PageIntro, Panel } from '../../components/AdminUI';
 import { useAdminData } from '../../hooks/useAdminData';
 
-type CopyTarget = 'url' | 'token';
+type CopyTarget = 'url' | 'token' | 'config';
 
 export function McpPage() {
   const { data, error, loading, reload, setData } = useAdminData<AdminMcpData>('/mcp-token');
@@ -49,6 +49,15 @@ export function McpPage() {
 
   const tokenCopy = copyState?.target === 'token' ? (copyState.failed ? 'Copy failed' : 'Copied') : 'Copy';
   const urlCopy = copyState?.target === 'url' ? (copyState.failed ? 'Copy failed' : 'Copied') : 'Copy';
+  const configCopy = copyState?.target === 'config' ? (copyState.failed ? 'Copy failed' : 'Copied') : 'Copy config';
+  const connectionConfig = JSON.stringify({
+    url: data.mcpUrl,
+    headers: { Authorization: `Bearer ${data.token ?? '<your token>'}` },
+  }, null, 2);
+  const displayedConnectionConfig = JSON.stringify({
+    url: data.mcpUrl,
+    headers: { Authorization: 'Bearer <your token>' },
+  }, null, 2);
 
   return <div className="space-y-7">
     <PageIntro
@@ -83,6 +92,26 @@ export function McpPage() {
       </div>
     </Panel>
 
+    <Panel
+      title="How to connect"
+      description="Client labels vary, but every remote MCP setup needs the same three values."
+      actions={<Button variant="secondary" disabled={!data.token} onClick={() => void copy('config', connectionConfig)}>{configCopy}</Button>}
+    >
+      <div className="grid gap-6 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(24rem,1.1fr)]">
+        <ol className="space-y-4">
+          <SetupStep number="1" title="Generate your token">Use the button above. Each organizer gets a separate credential.</SetupStep>
+          <SetupStep number="2" title="Add a remote MCP server">Choose <strong>Streamable HTTP</strong> in your AI client and paste the MCP URL.</SetupStep>
+          <SetupStep number="3" title="Add authentication">Set the <code>Authorization</code> header to <code>Bearer</code>, a space, and your token.</SetupStep>
+          <SetupStep number="4" title="Reconnect the client">Refresh its MCP servers or start a new conversation so it loads the current WTA tools.</SetupStep>
+        </ol>
+        <div className="min-w-0">
+          <div className="mb-2 text-xs font-black uppercase tracking-[0.12em] text-slate-500 dark:text-muted-foreground">Generic connection config</div>
+          <pre className="min-h-44 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950 p-4 font-mono text-xs leading-6 text-slate-100"><code>{displayedConnectionConfig}</code></pre>
+          <p className="mt-2 text-xs leading-5 text-slate-500 dark:text-muted-foreground">Some clients ask for these fields separately instead of accepting JSON. Never put this config in source control.</p>
+        </div>
+      </div>
+    </Panel>
+
     <div className="grid gap-4 lg:grid-cols-2">
       <Panel title="Authentication" description="What to enter in clients that expose individual connection fields.">
         <dl className="divide-y divide-slate-100 px-5 dark:divide-border">
@@ -98,6 +127,24 @@ export function McpPage() {
         </div>
       </Panel>
     </div>
+
+    <Panel title="Using the tools well" description="The server returns live program data and writes changes immediately.">
+      <div className="grid gap-5 p-5 sm:p-6 lg:grid-cols-2">
+        <div>
+          <h3 className="text-sm font-extrabold text-slate-950 dark:text-foreground">Good requests to start with</h3>
+          <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-600 dark:text-muted-foreground">
+            <li>“Check overall program health and explain any failed deliveries.”</li>
+            <li>“Show round 2 pairings that are not scheduled yet.”</li>
+            <li>“Find Jane by Discord username, then summarize her sessions and reports owed.”</li>
+            <li>“List the questions available for round 1 and flag thin difficulty coverage.”</li>
+          </ul>
+        </div>
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+          <h3 className="text-sm font-extrabold text-amber-950 dark:text-amber-100">Before allowing a write</h3>
+          <p className="mt-2 text-sm leading-6 text-amber-900/85 dark:text-amber-100/80">Ask the client to show the intended change first. Participant removal requires explicit confirmation and automatically cancels open sessions, clears future opt-ins, queues partners for re-pairing, and sends notifications. Creating a question writes it to the live bank immediately.</p>
+        </div>
+      </div>
+    </Panel>
 
     {confirmReset ? <Dialog
       title={data.token ? 'Reset your MCP token?' : 'Generate your MCP token?'}
@@ -141,6 +188,13 @@ function ConnectionRow({ label, value, mono = false }: { label: string; value: s
     <dt className="text-slate-500 dark:text-muted-foreground">{label}</dt>
     <dd className={`break-words font-semibold text-slate-900 dark:text-foreground ${mono ? 'font-mono text-xs' : ''}`}>{value}</dd>
   </div>;
+}
+
+function SetupStep({ number, title, children }: { number: string; title: string; children: ReactNode }) {
+  return <li className="flex gap-3">
+    <span className="grid size-7 shrink-0 place-items-center rounded-full bg-western-100 text-xs font-black text-western-800 dark:bg-western-950/60 dark:text-western-200">{number}</span>
+    <div><div className="text-sm font-extrabold text-slate-900 dark:text-foreground">{title}</div><p className="mt-0.5 text-sm leading-5 text-slate-600 dark:text-muted-foreground">{children}</p></div>
+  </li>;
 }
 
 async function copyText(value: string) {
