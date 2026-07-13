@@ -2,7 +2,6 @@
 // Usage: npm run post:enrollment-button -- CHANNEL_ID
 
 import { enrollmentButtonMessage } from '../src/discord/enrollment.ts';
-import { DiscordRest } from '../src/discord/rest.ts';
 
 const channelId = process.argv[2]?.trim();
 const token = process.env.DISCORD_TOKEN;
@@ -16,7 +15,19 @@ if (!token) {
   process.exit(1);
 }
 
-const message = await new DiscordRest(token).send(channelId, enrollmentButtonMessage());
+const response = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+  method: 'POST',
+  headers: {
+    Authorization: `Bot ${token}`,
+    'Content-Type': 'application/json',
+  },
+  body: JSON.stringify(enrollmentButtonMessage()),
+});
+if (!response.ok) {
+  console.error(`Discord rejected the message: ${response.status} ${await response.text()}`);
+  process.exit(1);
+}
+const message = await response.json() as { id: string };
 console.log(`Posted the WTA enrollment button (message ${message.id}) to channel ${channelId}.`);
 
 export {};
