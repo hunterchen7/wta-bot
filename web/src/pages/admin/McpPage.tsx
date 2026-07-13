@@ -102,7 +102,7 @@ export function McpPage() {
     {confirmReset ? <Dialog
       title={data.token ? 'Reset your MCP token?' : 'Generate your MCP token?'}
       description={data.token ? 'The current token will stop working immediately. You will need to update every connected MCP client.' : 'This creates a personal organizer credential for MCP clients.'}
-      onClose={() => { if (!resetting) setConfirmReset(false); }}
+      onClose={() => setConfirmReset(false)}
       actions={<>
         <DialogClose><Button variant="secondary" disabled={resetting}>Cancel</Button></DialogClose>
         <Button variant={data.token ? 'danger' : 'primary'} disabled={resetting} onClick={() => void reset()}>{resetting ? (data.token ? 'Resetting…' : 'Generating…') : (data.token ? 'Reset token' : 'Generate token')}</Button>
