@@ -46,6 +46,8 @@ const COLUMN_DEFINITIONS: Record<ColumnId, ColumnDefinition> = {
   status: { label: 'Status', value: (participant) => participant.status },
 };
 const sortCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+const rosterDateFormatter = new Intl.DateTimeFormat('en-CA', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'America/Toronto' });
+const rosterTimeFormatter = new Intl.DateTimeFormat('en-CA', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Toronto' });
 
 export function ParticipantsPage() {
   const { data, error, loading, reload } = useAdminData<ParticipantsData>('/participants');
@@ -175,6 +177,14 @@ function FilterField({ label, children }: { label: string; children: ReactNode }
   return <div><div className="mb-1.5 text-[0.68rem] font-black uppercase tracking-[0.12em] text-muted-foreground">{label}</div>{children}</div>;
 }
 
+function RosterDateTime({ value }: { value: string | null | undefined }) {
+  const date = timestampDate(value);
+  if (!date) return <span className="text-muted-foreground">—</span>;
+  const dateLabel = rosterDateFormatter.format(date);
+  const timeLabel = rosterTimeFormatter.format(date);
+  return <time dateTime={date.toISOString()} title={`${dateLabel} at ${timeLabel} Toronto`} className="block whitespace-nowrap tabular-nums"><span className="block text-xs text-foreground">{dateLabel}</span><span className="mt-0.5 block font-mono text-[0.7rem] text-muted-foreground">{timeLabel}</span></time>;
+}
+
 function SortableColumnHeader({ column, sort, dragging, dropTarget, onSort, onDragStart, onDragOver, onDrop, onDragEnd, onNudge }: {
   column: ColumnId;
   sort: SortState;
@@ -206,8 +216,8 @@ function ParticipantCell({ column, participant, currentWeek, onOpen }: { column:
   let content: React.ReactNode;
   switch (column) {
     case 'participant': content = <button className="cursor-pointer text-left" onClick={() => void onOpen(participant)}><span className="block font-bold text-foreground group-hover:text-western-700 dark:group-hover:text-western-300">{participant.name ?? '(unnamed)'}</span><span className="mt-1 block text-xs font-semibold text-muted-foreground">Nickname: {participant.discord_nickname ?? 'not synced'}</span><span className="block text-xs font-semibold text-indigo-600 dark:text-indigo-300">{participant.discord_username ? `@${participant.discord_username}` : 'Discord not synced'}</span><span className="block font-mono text-[0.65rem] text-muted-foreground">{participant.discord_id}</span></button>; break;
-    case 'joined': content = <span className="whitespace-nowrap text-xs">{formatDate(participant.created_at, false)}</span>; break;
-    case 'updated': content = <span className="whitespace-nowrap text-xs">{formatDate(participant.updated_at, false)}</span>; break;
+    case 'joined': content = <RosterDateTime value={participant.created_at} />; break;
+    case 'updated': content = <RosterDateTime value={participant.updated_at} />; break;
     case 'contact': content = <><a className="block text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={participant.preferred_email ? `mailto:${participant.preferred_email}` : undefined}>{participant.preferred_email ?? '—'}</a><a className="mt-1 block text-xs text-muted-foreground hover:underline" href={participant.western_email ? `mailto:${participant.western_email}` : undefined}>{participant.western_email ?? '—'}</a></>; break;
     case 'linkedin': content = <ProfileLink value={participant.linkedin_url} label="Open profile" />; break;
     case 'other_link': content = <ProfileLink value={participant.other_url} label="Open link" />; break;
@@ -280,7 +290,8 @@ function readSortState(): SortState {
 }
 
 function asColumnId(value: unknown): ColumnId | null { return typeof value === 'string' && (COLUMN_IDS as readonly string[]).includes(value) ? value as ColumnId : null; }
-function dateValue(value: string | null | undefined) { if (!value) return null; const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? `${value.replace(' ', 'T')}Z` : value; const time = Date.parse(normalized); return Number.isNaN(time) ? null : time; }
+function timestampDate(value: string | null | undefined) { if (!value) return null; const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? `${value.replace(' ', 'T')}Z` : value; const date = new Date(normalized); return Number.isNaN(date.getTime()) ? null : date; }
+function dateValue(value: string | null | undefined) { return timestampDate(value)?.getTime() ?? null; }
 
 function ParticipantDrawer({ detail, loading, onClose }: { detail: ParticipantDetail | null; loading: boolean; onClose: () => void }) {
   return <Dialog wide title={detail?.participant.name ?? 'Participant'} description={detail ? `Server nickname: ${detail.participant.discord_nickname ?? 'not synced'} · Discord: ${detail.participant.discord_username ? `@${detail.participant.discord_username}` : 'not synced'} · ID ${detail.participant.discord_id}` : 'Loading participant history…'} onClose={onClose}>
