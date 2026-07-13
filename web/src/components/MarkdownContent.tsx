@@ -11,7 +11,7 @@ const components = {
   ol: (props: ComponentPropsWithoutRef<'ol'>) => <ol className="my-4 list-decimal space-y-2 pl-6 text-muted-foreground" {...props} />,
   li: (props: ComponentPropsWithoutRef<'li'>) => <li className="pl-1 leading-7" {...props} />,
   blockquote: (props: ComponentPropsWithoutRef<'blockquote'>) => <blockquote className="my-5 border-l-4 border-western-400 bg-western-50 px-5 py-3 text-muted-foreground dark:bg-western-950/30" {...props} />,
-  pre: (props: ComponentPropsWithoutRef<'pre'>) => <pre className="my-5 overflow-x-auto rounded-xl border border-border bg-slate-950 p-4 text-sm leading-6 text-slate-100" {...props} />,
+  pre: (props: ComponentPropsWithoutRef<'pre'>) => <pre className="my-5 max-w-full overflow-x-auto rounded-xl border border-border bg-slate-950 p-4 text-sm leading-6 text-slate-100" {...props} />,
   code: ({ className, ...props }: ComponentPropsWithoutRef<'code'>) => className
     ? <code className={className} {...props} />
     : <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em] text-foreground" {...props} />,

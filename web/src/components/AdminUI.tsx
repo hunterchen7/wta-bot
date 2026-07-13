@@ -79,15 +79,15 @@ export function Dialog({ title, description, children, onClose, actions, wide = 
   }, []);
 
   return <ShadcnDialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose(); }}>
-      <DialogContent onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }} onAnimationEnd={(event) => { if (!open && event.target === event.currentTarget) finishClose(); }} className={`max-h-[calc(100dvh-2rem)] gap-0 overflow-y-auto rounded-2xl p-0 shadow-[0_24px_80px_rgba(15,23,42,.3)] [&_[data-slot=dialog-close]]:z-20 ${wide ? 'sm:max-w-4xl' : 'sm:max-w-lg'}`}>
-        <div className="sticky top-0 z-10 border-b border-slate-100 bg-white/95 px-5 py-4 pr-14 backdrop-blur-xl">
+      <DialogContent onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }} onAnimationEnd={(event) => { if (!open && event.target === event.currentTarget) finishClose(); }} className={`flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-[0_24px_80px_rgba(15,23,42,.3)] [&_[data-slot=dialog-close]]:z-20 ${wide ? 'sm:max-w-4xl' : 'sm:max-w-lg'}`}>
+        <div className="shrink-0 border-b border-border bg-card/95 px-5 py-4 pr-14 backdrop-blur-xl">
           <DialogHeader className="gap-1 text-left">
             <DialogTitle className="font-black text-slate-950">{title}</DialogTitle>
             {description ? <DialogDescription className="text-sm leading-5 text-slate-500">{description}</DialogDescription> : null}
           </DialogHeader>
         </div>
-        <div className="p-5">{children}</div>
-        {actions ? <div className="sticky bottom-0 flex justify-end gap-2 border-t border-slate-100 bg-white/95 px-5 py-4 backdrop-blur-xl">{actions}</div> : null}
+        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-5">{children}</div>
+        {actions ? <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-card/95 px-5 py-4 backdrop-blur-xl">{actions}</div> : null}
       </DialogContent>
   </ShadcnDialog>;
 }

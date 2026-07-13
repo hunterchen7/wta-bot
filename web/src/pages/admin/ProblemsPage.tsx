@@ -79,7 +79,7 @@ export function ProblemsPage() {
       { value: 'library', label: 'Question library', count: data.problems.length },
     ]} /></div>
     {tab === 'sets'
-      ? <RoundSets data={data} reload={reload} onNotice={setNotice} />
+      ? <RoundSets data={data} reload={reload} onNotice={setNotice} onPreview={setPreview} />
       : <Panel>
         <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row">
           <input className={`${inputClass} sm:max-w-sm`} type="search" placeholder="Search title or number…" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -111,9 +111,8 @@ function QuestionPreview({ problem, onClose }: { problem: ProblemRow; onClose: (
     onClose={onClose}
     actions={<DialogClose><Button variant="secondary">Close preview</Button></DialogClose>}
   >
-    <div className="mb-5 flex flex-wrap items-center gap-2"><Badge value={problem.difficulty} /><WeekTags weeks={problem.available_weeks} />{problem.active ? null : <Badge value="inactive" />}</div>
-    {problem.url ? <div className="mb-6 text-sm"><a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a></div> : null}
-    <div className="space-y-5">
+    <div className="mb-5 flex flex-wrap items-center gap-2"><Badge value={problem.difficulty} /><WeekTags weeks={problem.available_weeks} />{problem.active ? null : <Badge value="inactive" />}{problem.url ? <a href={problem.url} target="_blank" rel="noreferrer" className="ml-auto font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a> : null}</div>
+    <div className="min-w-0 space-y-5">
       <ProblemContentSection title="Statement" value={problem.statement_md?.trim() || 'No statement has been added yet.'} />
       <ProblemContentSection title="Hint ladder" value={problem.hints_md?.trim() || 'No hints have been added yet.'} />
       <ProblemContentSection title="Solution" value={problem.solution_md?.trim() || 'No solution notes have been added yet.'} />
@@ -121,7 +120,7 @@ function QuestionPreview({ problem, onClose }: { problem: ProblemRow; onClose: (
   </Dialog>;
 }
 
-function RoundSets({ data, reload, onNotice }: { data: ProblemsData; reload: () => Promise<void>; onNotice: (notice: string) => void }) {
+function RoundSets({ data, reload, onNotice, onPreview }: { data: ProblemsData; reload: () => Promise<void>; onNotice: (notice: string) => void; onPreview: (problem: ProblemRow) => void }) {
   const [weekId, setWeekId] = useState(data.weeks[0]?.id ?? 0);
   const [draft, setDraft] = useState<number[]>([]);
   const [size, setSize] = useState(5);
@@ -158,10 +157,13 @@ function RoundSets({ data, reload, onNotice }: { data: ProblemsData; reload: () 
     <div className="border-b border-slate-100 p-4"><Tabs value={String(weekId)} onChange={(value) => setWeekId(Number(value))} items={data.weeks.map((week) => ({ value: String(week.id), label: `Round ${week.idx}`, count: data.sets.filter((row) => row.week_id === week.id).length }))} /></div>
     {available.length ? <ScrollArea className="h-[min(58vh,38rem)]"><div className="grid gap-2 p-4 sm:grid-cols-2 xl:grid-cols-3">{available.map((problem) => {
       const checked = draft.includes(problem.id);
-      return <label key={problem.id} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${checked ? 'border-western-300 bg-western-50 dark:bg-western-950/30' : 'border-slate-200 bg-white hover:bg-slate-50'}`}>
-        <Checkbox className="mt-0.5" checked={checked} onCheckedChange={() => toggle(problem.id)} />
-        <span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-900">{problem.number ? `#${problem.number} · ` : ''}{problem.title}</span><span className="mt-1 flex items-center gap-2"><Badge value={problem.difficulty} /><span className="text-xs text-slate-500">rank {problem.difficulty_rank ?? 'default'} · {problem.uses} uses</span></span></span>
-      </label>;
+      return <div key={problem.id} className={`flex items-start gap-3 rounded-xl border p-3 transition ${checked ? 'border-western-300 bg-western-50 dark:bg-western-950/30' : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-border dark:bg-card dark:hover:bg-muted/50'}`}>
+        <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+          <Checkbox className="mt-0.5" checked={checked} onCheckedChange={() => toggle(problem.id)} />
+          <span className="min-w-0"><span className="block truncate text-sm font-bold text-slate-900 dark:text-foreground">{problem.number ? `#${problem.number} · ` : ''}{problem.title}</span><span className="mt-1 flex items-center gap-2"><Badge value={problem.difficulty} /><span className="text-xs text-slate-500 dark:text-muted-foreground">rank {problem.difficulty_rank ?? 'default'} · {problem.uses} uses</span></span></span>
+        </label>
+        <button type="button" className="shrink-0 cursor-pointer rounded-lg px-2 py-1 text-xs font-bold text-western-700 transition hover:bg-western-100 hover:text-western-900 dark:text-western-300 dark:hover:bg-western-950/50" onClick={() => onPreview(problem)}>Preview</button>
+      </div>;
     })}</div></ScrollArea> : <EmptyState title={`No questions tagged for round ${selectedWeek?.idx}`} description="Edit a question and add this round under Available rounds." />}
   </Panel>;
 }
