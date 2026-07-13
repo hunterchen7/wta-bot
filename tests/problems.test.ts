@@ -202,7 +202,7 @@ describe('problem bank', () => {
     expect(exp.n).toBe(1);
   });
 
-  it('does not fall back to a problem already seen by the interviewer', async () => {
+  it('falls back to a least-repeated problem when every option has been seen', async () => {
     const { results: set } = await env.DB.prepare(
       'SELECT problem_id FROM week_problem_sets WHERE week_id = ?1',
     )
@@ -221,7 +221,7 @@ describe('problem bank', () => {
         .bind(row.problem_id)
         .run();
     }
-    expect(await pickProblem(env, weekIds[2]!, 1, 2)).toBeNull();
+    expect(await pickProblem(env, weekIds[2]!, 1, 2)).not.toBeNull();
   });
 
   it('never assigns someone the problem from their other-role session', async () => {
@@ -252,6 +252,6 @@ describe('problem bank', () => {
         "INSERT INTO exposures (participant_id, problem_id, role) VALUES (1, ?1, 'interviewer')",
       ).bind(row.problem_id).run();
     }
-    expect(await pickProblem(env, weekIds[0]!, 1, 2)).toBeNull();
+    expect(await pickProblem(env, weekIds[0]!, 1, 2)).not.toBeNull();
   });
 });

@@ -46,7 +46,7 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
   const used = new Set<number>();
   for (const a of open) {
     if (used.has(a.id)) continue;
-    const b = open.find(
+    const candidates = open.filter(
       (x) =>
         !used.has(x.id) &&
         x.id !== a.id &&
@@ -54,11 +54,19 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
         x.need !== a.need &&
         x.participant_id !== a.participant_id,
     );
-    if (!b) continue;
+    if (!candidates.length) continue;
+    let b = candidates[0]!; // repeat fallback when every candidate is prior
+    for (const candidate of candidates) {
+      const interviewerId = a.need === 'interviewer' ? candidate.participant_id : a.participant_id;
+      const intervieweeId = a.need === 'interviewer' ? a.participant_id : candidate.participant_id;
+      if (!(await pairedBefore(env, a.week_id, interviewerId, intervieweeId))) {
+        b = candidate;
+        break;
+      }
+    }
     // a needs X, b needs the opposite — orient the session accordingly.
     const interviewerId = a.need === 'interviewer' ? b.participant_id : a.participant_id;
     const intervieweeId = a.need === 'interviewer' ? a.participant_id : b.participant_id;
-    if (await pairedBefore(env, a.week_id, interviewerId, intervieweeId)) continue;
     used.add(a.id);
     used.add(b.id);
     await createRepairSession(env, a.week_id, interviewerId, intervieweeId, [a.id, b.id]);
@@ -78,6 +86,7 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
       .all<{ participant_id: number }>()
       .then((r) => {
         return (async () => {
+          const fallback = r.results[0]?.participant_id ?? null;
           for (const cand of r.results) {
             const interviewerId = a.need === 'interviewer' ? cand.participant_id : a.participant_id;
             const intervieweeId = a.need === 'interviewer' ? a.participant_id : cand.participant_id;
@@ -85,7 +94,7 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
               return cand.participant_id;
             }
           }
-          return null;
+          return fallback;
         })();
       });
     if (!volunteer) continue;

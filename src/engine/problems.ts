@@ -45,7 +45,7 @@ export async function pickProblem(
   intervieweeId: number,
   excludeProblemId?: number,
 ): Promise<{ id: number; title: string } | null> {
-  return env.DB.prepare(
+  const distinct = await env.DB.prepare(
     `
     SELECT p.id, p.title FROM week_problem_sets wps
     JOIN problems p ON p.id = wps.problem_id AND p.active = 1
@@ -63,6 +63,24 @@ export async function pickProblem(
     ORDER BY RANDOM() LIMIT 1`,
   )
     .bind(weekId, intervieweeId, interviewerId, excludeProblemId ?? null)
+    .first<{ id: number; title: string }>();
+  if (distinct) return distinct;
+
+  // An exhausted exposure pool should not strand the session. Fall back to
+  // the question with the fewest prior touches across both participants.
+  return env.DB.prepare(
+    `SELECT p.id, p.title FROM week_problem_sets wps
+     JOIN problems p ON p.id = wps.problem_id AND p.active = 1
+     WHERE wps.week_id = ?1 AND (?4 IS NULL OR p.id != ?4)
+     ORDER BY
+       (SELECT count(*) FROM exposures e
+        WHERE e.problem_id = p.id AND e.participant_id IN (?2, ?3)) +
+       (SELECT count(*) FROM sessions seen
+        WHERE seen.problem_id = p.id
+          AND (seen.interviewer_id IN (?2, ?3) OR seen.interviewee_id IN (?2, ?3))) ASC,
+       RANDOM()
+     LIMIT 1`,
+  ).bind(weekId, intervieweeId, interviewerId, excludeProblemId ?? null)
     .first<{ id: number; title: string }>();
 }
 

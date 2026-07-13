@@ -5,11 +5,11 @@
 // that out-degree = interviewer demand and in-degree = interviewee demand,
 // subject to hard constraints:
 //   1. no self-pairing
-//   2. no repeat counterpart within the cohort, in either direction
-//      (`forbiddenPairs`, unordered — includes prior weeks and repairs)
-//   3. no mutual pair within the week (if A interviews B, B must not
+//   2. no mutual pair within the week (if A interviews B, B must not
 //      interview A that same week — that would recreate same-partner-swap)
-//   4. no duplicate directed edge (a double never sees the same person twice)
+//   3. no duplicate directed edge (a double never sees the same person twice)
+// Prior cohort counterparts are a soft constraint: always prefer someone new,
+// but allow the least-bad repeat rather than leave demand unmatched.
 //
 // Randomized greedy with retries; returns the best attempt (fewest unmatched
 // slots). Residual demand feeds the repair queue / admin digest.
@@ -34,13 +34,19 @@ export function matchWeek(
   let best: MatchResult | null = null;
   for (let i = 0; i < attempts; i++) {
     const result = attempt(demands, forbidden, rng);
-    if (!best || totalUnmatched(result) < totalUnmatched(best)) best = result;
-    if (totalUnmatched(best) === 0) break;
+    if (!best || betterThan(result, best, forbidden)) best = result;
+    if (totalUnmatched(best) === 0 && repeatCount(best, forbidden) === 0) break;
   }
   return best ?? { edges: [], unmatched: [] };
 }
 
 const totalUnmatched = (r: MatchResult) => r.unmatched.reduce((n, u) => n + u.count, 0);
+const repeatCount = (r: MatchResult, forbidden: Set<string>) =>
+  r.edges.reduce((count, edge) => count + Number(forbidden.has(pairKey(edge.interviewerId, edge.intervieweeId))), 0);
+const betterThan = (candidate: MatchResult, current: MatchResult, forbidden: Set<string>) => {
+  const unmatchedDelta = totalUnmatched(candidate) - totalUnmatched(current);
+  return unmatchedDelta < 0 || (unmatchedDelta === 0 && repeatCount(candidate, forbidden) < repeatCount(current, forbidden));
+};
 
 function attempt(demands: Demand[], forbidden: Set<string>, rng: () => number): MatchResult {
   // One slot per unit of interviewer demand, in random order.
@@ -62,14 +68,16 @@ function attempt(demands: Demand[], forbidden: Set<string>, rng: () => number): 
     // interviewee demand to keep the tail of the assignment feasible.
     let pick: number | null = null;
     let pickRemaining = -1;
+    let pickRepeatPenalty = 2;
     for (const [candidate, remaining] of remainingIn) {
       if (remaining <= 0 || candidate === interviewer) continue;
-      if (forbidden.has(pairKey(interviewer, candidate))) continue;
       if (usedThisWeek.has(pairKey(interviewer, candidate))) continue;
       if (usedDirected.has(`${interviewer}>${candidate}`)) continue;
-      if (remaining > pickRemaining) {
+      const repeatPenalty = forbidden.has(pairKey(interviewer, candidate)) ? 1 : 0;
+      if (repeatPenalty < pickRepeatPenalty || (repeatPenalty === pickRepeatPenalty && remaining > pickRemaining)) {
         pick = candidate;
         pickRemaining = remaining;
+        pickRepeatPenalty = repeatPenalty;
       }
     }
     if (pick === null) {

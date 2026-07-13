@@ -99,8 +99,24 @@ describe('matchWeek', () => {
       [2, 3],
     ];
     const result = matchWeek(demands, forbidden, { rng: mulberry32(6) });
-    assertInvariants(result.edges, demands, forbidden);
-    expect(result.unmatched.length).toBeGreaterThan(0);
+    assertInvariants(result.edges, demands, []);
+    expect(result.unmatched).toEqual([]);
+    const forbiddenSet = new Set(forbidden.map(([a, b]) => a < b ? `${a}:${b}` : `${b}:${a}`));
+    expect(result.edges.some((edge) => forbiddenSet.has(edge.interviewerId < edge.intervieweeId
+      ? `${edge.interviewerId}:${edge.intervieweeId}`
+      : `${edge.intervieweeId}:${edge.interviewerId}`))).toBe(true);
+  });
+
+  it('treats prior matches as unordered and only repeats when needed', () => {
+    const avoidable = matchWeek(uniform(6), [[1, 2]], { rng: mulberry32(61) });
+    expect(avoidable.unmatched).toEqual([]);
+    expect(avoidable.edges.some((edge) => new Set([edge.interviewerId, edge.intervieweeId]).has(1)
+      && new Set([edge.interviewerId, edge.intervieweeId]).has(2))).toBe(false);
+
+    const allPrior: Array<[number, number]> = [[1, 2], [1, 3], [2, 3]];
+    const fallback = matchWeek(uniform(3), allPrior, { rng: mulberry32(62) });
+    expect(fallback.unmatched).toEqual([]);
+    expect(fallback.edges).toHaveLength(3);
   });
 
   it('is deterministic under a seeded rng', () => {
