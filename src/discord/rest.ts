@@ -99,6 +99,14 @@ export class DiscordRest {
     );
   }
 
+  async getGuild(guildId: string) {
+    return this.request<{ id: string; owner_id: string }>('GET', `/guilds/${guildId}`);
+  }
+
+  async getGuildRoles(guildId: string) {
+    return this.request<Array<{ id: string; permissions: string }>>('GET', `/guilds/${guildId}/roles`);
+  }
+
   /** Paginated member list — requires the Server Members intent to be enabled
    *  on the application (instant toggle under 10k members). */
   async listAllMembers(guildId: string): Promise<Array<{ user: { id: string; username: string; global_name?: string | null; bot?: boolean }; nick?: string | null; roles: string[] }>> {

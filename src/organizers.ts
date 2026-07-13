@@ -1,6 +1,7 @@
 import type { Env } from './env';
 import { getSetting } from './config';
 import { DiscordRest } from './discord/rest';
+import { ADMINISTRATOR, MANAGE_GUILD } from './discord/types';
 
 export function isWhitelistedAdmin(env: Env, email: string | null | undefined): boolean {
   if (!email) return false;
@@ -21,11 +22,31 @@ export async function isCurrentOrganizer(env: Env, participantId: number): Promi
 
   const roleId = await getSetting(env, 'organizer_role_id');
   const guildId = env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
-  if (!roleId || !guildId || !env.DISCORD_TOKEN) return false;
+  if (!guildId || !env.DISCORD_TOKEN) return false;
   try {
-    const member = await new DiscordRest(env.DISCORD_TOKEN).getGuildMember(guildId, participant.discord_id);
-    return member.roles.includes(roleId);
-  } catch {
+    const discord = new DiscordRest(env.DISCORD_TOKEN);
+    const member = await discord.getGuildMember(guildId, participant.discord_id);
+    if (roleId && member.roles.includes(roleId)) return true;
+
+    const [guild, roles] = await Promise.all([
+      discord.getGuild(guildId),
+      discord.getGuildRoles(guildId),
+    ]);
+    if (guild.owner_id === participant.discord_id) return true;
+
+    const memberRoleIds = new Set([guildId, ...member.roles]);
+    let permissions = 0n;
+    for (const role of roles) {
+      if (!memberRoleIds.has(role.id)) continue;
+      try { permissions |= BigInt(role.permissions); } catch { /* Ignore malformed Discord data. */ }
+    }
+    return (permissions & ADMINISTRATOR) === ADMINISTRATOR
+      || (permissions & MANAGE_GUILD) === MANAGE_GUILD;
+  } catch (error) {
+    console.warn('organizer revalidation failed', {
+      participantId,
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }
