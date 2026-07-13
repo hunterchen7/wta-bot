@@ -1,7 +1,7 @@
 // Slash-command handlers. Routed from interactions.ts.
 
 import type { Context } from 'hono';
-import { setSetting, getSettings } from '../config';
+import { getSetting, getSettings, setSetting } from '../config';
 import { ephemeral } from '../discord/components';
 import { getSession, reportIncident, resolveCase } from '../engine/incidents';
 import { weeklyDigest } from '../engine/digest';
@@ -565,7 +565,9 @@ async function problemsCommand(c: Ctx, interaction: Interaction, s: Opt) {
         ephemeral(
           `Round ${idx} set (${chosen.length}${chosen.length < size ? ` of ${size} requested — the tagged pool is thin` : ''}):\n` +
             chosen.map((p) => `• ${p.title}`).join('\n') +
-            `\nPublished at ${c.env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca'}/bank and in the round announcement — interviewers pick one and record it in their report.`,
+            ((await getSetting(c.env, 'question_bank_public')) === 'on'
+              ? `\nPublished at ${c.env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca'}/bank and in the round announcement.`
+              : '\nKept private. Each interviewer receives only their assigned problem through a signed packet when the session time is confirmed.'),
         ),
       );
     }

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getSettings } from '../config';
+import { getSetting, getSettings } from '../config';
 import { enqueue } from '../engine/outbox';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
 import type { Env } from '../env';
@@ -27,8 +27,12 @@ import {
 export const publicApi = new Hono<{ Bindings: Env }>();
 
 publicApi.get('/api/public/bank', async (c) => {
+  c.header('Cache-Control', 'no-store');
+  if ((await getSetting(c.env, 'question_bank_public')) !== 'on') {
+    return c.json({ public: false, cohort: null, round: null, problems: [] });
+  }
   const cohort = await activeCohort(c.env);
-  if (!cohort) return c.json({ cohort: null, round: null, problems: [] });
+  if (!cohort) return c.json({ public: true, cohort: null, round: null, problems: [] });
   const weeks = await cohortWeeks(c.env, cohort.id);
   const now = Date.now();
   const current = weeks.find((week) => now >= new Date(week.optin_opens_at).getTime() && now <= new Date(week.grace_until ?? week.reports_due_at).getTime())
@@ -38,7 +42,7 @@ publicApi.get('/api/public/bank', async (c) => {
     `SELECT p.number, p.title, p.url, p.difficulty FROM week_problem_sets wps
      JOIN problems p ON p.id = wps.problem_id WHERE wps.week_id = ?1 ORDER BY p.id`,
   ).bind(current.id).all<any>();
-  return c.json({ cohort: { name: cohort.name }, round: current.idx, problems: results });
+  return c.json({ public: true, cohort: { name: cohort.name }, round: current.idx, problems: results });
 });
 
 publicApi.get('/api/enrollment/:token', async (c) => {

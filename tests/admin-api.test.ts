@@ -352,10 +352,11 @@ describe('admin mutations and audit history', () => {
   it('updates program settings and creates a cohort calendar', async () => {
     const settings = await request('/api/admin/settings', {
       method: 'POST',
-      body: JSON.stringify({ settings: { packet_mode: 'on', organizer_role_id: 'role-123', unsupported: 'ignored' } }),
+      body: JSON.stringify({ settings: { packet_mode: 'on', question_bank_public: 'off', organizer_role_id: 'role-123', unsupported: 'ignored' } }),
     });
-    expect(await settings.json<any>()).toMatchObject({ ok: true, updated: 2 });
+    expect(await settings.json<any>()).toMatchObject({ ok: true, updated: 3 });
     expect(await env.DB.prepare("SELECT value FROM settings WHERE key = 'packet_mode'").first()).toEqual({ value: 'on' });
+    expect(await env.DB.prepare("SELECT value FROM settings WHERE key = 'question_bank_public'").first()).toEqual({ value: 'off' });
 
     const cohort = await request('/api/admin/cohorts', {
       method: 'POST',

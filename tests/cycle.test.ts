@@ -212,6 +212,12 @@ describe('full weekly cycle', () => {
     const kinds = Object.fromEntries(outboxKinds.results.map((r: any) => [r.kind, r.n]));
     expect(kinds.thread_create).toBe(4);
     expect(kinds.dm).toBeGreaterThanOrEqual(4);
+    const pairingAnnouncement = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%pairings are out%' ORDER BY id DESC LIMIT 1",
+    ).first<{ payload: string }>();
+    expect(pairingAnnouncement).not.toBeNull();
+    expect(pairingAnnouncement!.payload).not.toContain('Round one problem');
+    expect(pairingAnnouncement!.payload).not.toContain('/bank');
 
     // --- one pair schedules via the modal ----------------------------------------
     const s0 = sessions[0]!;

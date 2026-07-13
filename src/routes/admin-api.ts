@@ -28,7 +28,7 @@ export const adminApi = new Hono<{ Bindings: Env }>();
 const participantStatuses = new Set(['active', 'paused', 'held', 'removed', 'completed']);
 const editableSettingKeys = new Set<SettingKey>([
   'announce_channel_id', 'organizer_channel_id', 'threads_channel_id',
-  'participant_role_id', 'organizer_role_id', 'packet_mode',
+  'participant_role_id', 'organizer_role_id', 'packet_mode', 'question_bank_public',
 ]);
 const PREVIEW_RECORDING_PART_BYTES = 16 * 1024 * 1024;
 const MAX_PREVIEW_RECORDING_BYTES = 2 * 1024 * 1024 * 1024;

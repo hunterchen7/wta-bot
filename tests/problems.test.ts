@@ -127,10 +127,18 @@ describe('problem bank', () => {
     expect((await app.request('/api/problems/garbage', {}, env)).status).toBe(404);
   });
 
-  it('serves the public question-bank API with the current round set', async () => {
-    const res = await app.request('/api/public/bank', {}, env);
-    expect(res.status).toBe(200);
-    const bank = await res.json<any>();
+  it('keeps the public question-bank API private by default and publishes it only when enabled', async () => {
+    const privateRes = await app.request('/api/public/bank', {}, env);
+    expect(privateRes.status).toBe(200);
+    expect(await privateRes.json<any>()).toEqual({ public: false, cohort: null, round: null, problems: [] });
+
+    await env.DB.prepare(
+      "INSERT INTO settings (key, value) VALUES ('question_bank_public', 'on') ON CONFLICT(key) DO UPDATE SET value = 'on'",
+    ).run();
+    const publicRes = await app.request('/api/public/bank', {}, env);
+    expect(publicRes.status).toBe(200);
+    const bank = await publicRes.json<any>();
+    expect(bank.public).toBe(true);
     expect(bank.problems.map((problem: any) => problem.title)).toContain('Two Sum');
   });
 

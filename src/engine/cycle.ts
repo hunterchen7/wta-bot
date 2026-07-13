@@ -115,7 +115,7 @@ export function sessionButtons(sessionId: number) {
 }
 
 export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promise<{ sessions: number; unmatched: number }> {
-  const cfg = await getSettings(env, ['announce_channel_id', 'threads_channel_id', 'organizer_channel_id']);
+  const cfg = await getSettings(env, ['announce_channel_id', 'threads_channel_id', 'organizer_channel_id', 'question_bank_public']);
 
   const { results: optins } = await env.DB.prepare(
     `SELECT o.participant_id, o.wants_double, o.standby, o.regular_opt_in, o.extra_interviewer,
@@ -233,18 +233,20 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
   }
 
   if (cfg.announce_channel_id) {
-    // Open question bank: publish the round's set with the pairings.
-    const { results: bank } = await env.DB.prepare(
-      `SELECT p.number, p.title, p.url FROM week_problem_sets wps
-       JOIN problems p ON p.id = wps.problem_id WHERE wps.week_id = ?1 ORDER BY p.id`,
-    )
-      .bind(week.id)
-      .all<{ number: number | null; title: string; url: string | null }>();
-    const bankLines = bank.length
-      ? `\n📚 **Round ${week.idx} question bank** (interviewers pick one):\n` +
-        bank.map((p) => `• ${p.url ? `[${p.number ? `#${p.number} ` : ''}${p.title}](${p.url})` : `${p.number ? `#${p.number} ` : ''}${p.title}`}`).join('\n') +
-        `\nAlso at ${env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca'}/bank`
-      : '';
+    let bankLines = '';
+    if (cfg.question_bank_public === 'on') {
+      const { results: bank } = await env.DB.prepare(
+        `SELECT p.number, p.title, p.url FROM week_problem_sets wps
+         JOIN problems p ON p.id = wps.problem_id WHERE wps.week_id = ?1 ORDER BY p.id`,
+      )
+        .bind(week.id)
+        .all<{ number: number | null; title: string; url: string | null }>();
+      bankLines = bank.length
+        ? `\n📚 **Round ${week.idx} question bank** (interviewers pick one):\n` +
+          bank.map((p) => `• ${p.url ? `[${p.number ? `#${p.number} ` : ''}${p.title}](${p.url})` : `${p.number ? `#${p.number} ` : ''}${p.title}`}`).join('\n') +
+          `\nAlso at ${env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca'}/bank`
+        : '';
+    }
     await enqueue(env, 'channel_msg', {
       channelId: cfg.announce_channel_id,
       message: {

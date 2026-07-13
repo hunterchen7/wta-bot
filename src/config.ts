@@ -11,7 +11,8 @@ export type SettingKey =
   | 'organizer_role_id' // dashboard organizer check + admin surfaces
   | 'commands_json' // syncCommands bookkeeping
   | 'category_id' // current year's category (bootstrap renames it on archive)
-  | 'packet_mode'; // 'on' enables private interviewer packets delivered when a session is scheduled
+  | 'packet_mode' // 'on' enables private interviewer packets delivered when a session is scheduled
+  | 'question_bank_public'; // 'on' exposes the active round set; absent/off keeps it private
 
 export async function getSetting(env: Env, key: SettingKey): Promise<string | null> {
   const row = await env.DB.prepare('SELECT value FROM settings WHERE key = ?1')
