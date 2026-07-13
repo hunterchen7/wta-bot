@@ -8,13 +8,19 @@ const weeks = [
   { id: 3, cohort_id: 1, idx: 3, optin_opens_at: '2026-08-23T20:00:00.000Z', optin_closes_at: '2026-08-27T22:00:00.000Z', match_at: '2026-08-27T22:15:00.000Z', reports_due_at: '2026-09-06T03:59:00.000Z', grace_until: '2026-09-10T03:59:00.000Z' },
 ];
 const names = ['Alex Chen', 'Jordan Lee', 'Maya Singh', 'Sam Wilson', 'Taylor Kim', 'Priya Patel', 'Noah Martin', 'Amara Okafor', 'Leo Zhang', 'Sofia Rodriguez', 'Ethan Brown', 'Zoe Park'];
+const demoResumeFormats = [
+  { extension: 'docx', contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', bytes: 18_640 },
+  { extension: 'rtf', contentType: 'application/rtf', bytes: 2_480 },
+  { extension: 'odt', contentType: 'application/vnd.oasis.opendocument.text', bytes: 12_800 },
+];
+const demoResumeFormat = (index: number) => demoResumeFormats[Math.floor(index / 2) % demoResumeFormats.length]!;
 const participants = names.map((name, index) => ({
   id: index + 1, discord_id: `10000${index}`, discord_username: name.toLowerCase().replace(' ', ''), discord_nickname: index % 4 === 0 ? name.split(' ')[0] : name, name, preferred_email: `${name.toLowerCase().replace(' ', '.')}@example.com`, western_email: `student${index}@uwo.ca`,
   year: ['Second', 'Third', 'Fourth'][index % 3], program: index % 3 === 1 ? 'Software Engineering' : 'Computer Science',
   opportunities: index % 2 ? '["internships"]' : '["internships","new_grad"]', prior_wta: index % 3 === 0 ? 1 : 0, experience_band: ['0', '1-2', '3-4', '5+'][index % 4], topics: index % 2 ? '["dsa","networking"]' : '["system_design","applications"]',
   blurb: `Interested in ${index % 2 ? 'product engineering' : 'infrastructure'} roles and building stronger interview communication skills.`, interests: index % 2 ? 'System design and practical interview strategy.' : null, prior_feedback: index % 3 === 0 ? 'More detailed feedback after each round.' : null,
   linkedin_url: index % 2 ? `https://www.linkedin.com/in/student-${index}` : null, other_url: index % 3 === 0 ? `https://github.com/student-${index}` : null,
-  resume_filename: index % 2 ? `${name.replace(' ', '-')}-resume.pdf` : null, resume_content_type: index % 2 ? 'application/pdf' : null, resume_bytes: index % 2 ? 182_400 : null, resume_uploaded_at: index % 2 ? now : null,
+  resume_filename: index % 2 ? `${name.replace(' ', '-')}-resume.${demoResumeFormat(index).extension}` : null, resume_content_type: index % 2 ? demoResumeFormat(index).contentType : null, resume_bytes: index % 2 ? demoResumeFormat(index).bytes : null, resume_uploaded_at: index % 2 ? now : null,
   status: index === 8 ? 'held' : index === 10 ? 'paused' : 'active', email_ok: index % 3 ? 1 : 0, pairing_excluded: index === 0 ? 1 : 0, removed_reason: null, created_at: new Date(Date.UTC(2026, 6, 12 + index, 16)).toISOString(), updated_at: new Date(Date.UTC(2026, 7, 1 + index, 18)).toISOString(),
   interviewer_credits: Math.min(3, index % 4), interviewee_credits: Math.min(3, (index + 1) % 4), strikes: index === 8 ? 2 : index === 5 ? 1 : 0,
   reports_owed: index === 2 || index === 7 ? 1 : 0, opted_in: index < 9 ? 1 : 0,
@@ -91,4 +97,48 @@ export async function adminDemoRequest(path: string, init?: RequestInit): Promis
     { index: 8, startsOn: '2026-09-06', endsOn: '2026-09-12', title: 'Referrals + alumni coordination', technicalRound: null },
   ], programWeek: { index: 4, startsOn: '2026-08-09', endsOn: '2026-08-15', title: 'Technical Round 2', technicalRound: 2 }, activeParticipants: 10, minimumMatchingPool: 3 } satisfies AdminSettingsData;
   throw new Error(`No demo response for ${path}`);
+}
+
+export async function adminDemoFile(path: string, signal?: AbortSignal): Promise<Blob> {
+  await new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(resolve, 260);
+    signal?.addEventListener('abort', () => {
+      window.clearTimeout(timer);
+      reject(new DOMException('The request was aborted.', 'AbortError'));
+    }, { once: true });
+  });
+  const match = path.match(/^\/participants\/(\d+)\/resume$/);
+  if (!match) throw new Error(`No demo file for ${path}`);
+  const participant = participants.find((row) => row.id === Number(match[1]));
+  if (!participant?.resume_filename) throw new Error('No resume is attached to this profile.');
+  const displayName = participant.name ?? 'WTA participant';
+  if (participant.resume_filename.endsWith('.docx')) return demoDocx(participant);
+  if (participant.resume_filename.endsWith('.odt')) return demoOdt(participant);
+  const rtf = `{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Arial;}}\\fs34\\b ${displayName}\\b0\\par\\fs22 ${participant.preferred_email ?? ''}\\par\\par\\b EXPERIENCE\\b0\\par Software engineering student with experience building reliable web applications and developer tools.\\par\\par\\b PROJECTS\\b0\\par WTA Dashboard - React, TypeScript, Cloudflare Workers\\par Built accessible organizer workflows and durable notification infrastructure.\\par\\par\\b EDUCATION\\b0\\par Western University - ${participant.program ?? 'Computer Science'}\\par}`;
+  return new Blob([rtf], { type: 'application/rtf' });
+}
+
+async function demoDocx(participant: typeof participants[number]) {
+  const { default: JSZip } = await import('jszip');
+  const archive = new JSZip();
+  archive.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+  archive.folder('_rels')!.file('.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  archive.folder('word')!.file('document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${docxParagraph(participant.name ?? 'WTA participant', true)}${docxParagraph(participant.preferred_email ?? '')}${docxParagraph('EXPERIENCE', true)}${docxParagraph('Software engineering student with experience building reliable web applications and developer tools.')}${docxParagraph('PROJECTS', true)}${docxParagraph('WTA Dashboard — React, TypeScript, Cloudflare Workers')}${docxParagraph('Built accessible organizer workflows and durable notification infrastructure.')}${docxParagraph('EDUCATION', true)}${docxParagraph(`Western University — ${participant.program ?? 'Computer Science'}`)}<w:sectPr><w:pgSz w:w="12240" w:h="15840"/><w:pgMar w:top="1080" w:right="1080" w:bottom="1080" w:left="1080"/></w:sectPr></w:body></w:document>`);
+  return archive.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+async function demoOdt(participant: typeof participants[number]) {
+  const { default: JSZip } = await import('jszip');
+  const archive = new JSZip();
+  archive.file('mimetype', 'application/vnd.oasis.opendocument.text', { compression: 'STORE' });
+  archive.file('content.xml', `<?xml version="1.0" encoding="UTF-8"?><office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0" xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"><office:body><office:text><text:h>${escapeXml(participant.name ?? 'WTA participant')}</text:h><text:p>${escapeXml(participant.preferred_email ?? '')}</text:p><text:h>EXPERIENCE</text:h><text:p>Software engineering student with experience building reliable web applications and developer tools.</text:p><text:h>PROJECTS</text:h><text:p>WTA Dashboard — React, TypeScript, Cloudflare Workers</text:p><text:p>Built accessible organizer workflows and durable notification infrastructure.</text:p><text:h>EDUCATION</text:h><text:p>Western University — ${escapeXml(participant.program ?? 'Computer Science')}</text:p></office:text></office:body></office:document-content>`);
+  return archive.generateAsync({ type: 'blob', mimeType: 'application/vnd.oasis.opendocument.text' });
+}
+
+function docxParagraph(value: string, bold = false) {
+  return `<w:p><w:r>${bold ? '<w:rPr><w:b/></w:rPr>' : ''}<w:t xml:space="preserve">${escapeXml(value)}</w:t></w:r></w:p>`;
+}
+
+function escapeXml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[character]!);
 }

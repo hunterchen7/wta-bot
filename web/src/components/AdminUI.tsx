@@ -58,7 +58,7 @@ export function Tabs({ items, value, onChange }: { items: Array<{ value: string;
   return <ShadcnTabs value={value} onValueChange={onChange} className="max-w-full overflow-x-auto"><TabsList className="border border-slate-200">{items.map((item) => <TabsTrigger aria-label={item.label} key={item.value} value={item.value} className="text-xs font-extrabold">{item.label}{item.count == null ? null : <span className="ml-1.5 tabular-nums text-slate-400">{item.count}</span>}</TabsTrigger>)}</TabsList></ShadcnTabs>;
 }
 
-export function Dialog({ title, description, children, onClose, actions, wide = false }: { title: string; description?: string; children: ReactNode; onClose: () => void; actions?: ReactNode; wide?: boolean }) {
+export function Dialog({ title, description, children, onClose, actions, wide = false, size, bodyClassName = '' }: { title: string; description?: string; children: ReactNode; onClose: () => void; actions?: ReactNode; wide?: boolean; size?: 'default' | 'wide' | 'viewport'; bodyClassName?: string }) {
   const [open, setOpen] = useState(true);
   const onCloseRef = useRef(onClose);
   const fallbackTimer = useRef<number | null>(null);
@@ -78,15 +78,20 @@ export function Dialog({ title, description, children, onClose, actions, wide = 
     if (fallbackTimer.current !== null) window.clearTimeout(fallbackTimer.current);
   }, []);
 
+  const resolvedSize = size ?? (wide ? 'wide' : 'default');
+  const sizeClass = resolvedSize === 'viewport'
+    ? 'h-[calc(100dvh-1rem)] max-h-[64rem] max-w-[calc(100%-1rem)] sm:h-[min(92dvh,64rem)] sm:max-w-[min(96vw,88rem)]'
+    : resolvedSize === 'wide' ? 'sm:max-w-4xl' : 'sm:max-w-lg';
+
   return <ShadcnDialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) requestClose(); }}>
-      <DialogContent onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }} onAnimationEnd={(event) => { if (!open && event.target === event.currentTarget) finishClose(); }} className={`flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-[0_24px_80px_rgba(15,23,42,.3)] [&_[data-slot=dialog-close]]:z-20 ${wide ? 'sm:max-w-4xl' : 'sm:max-w-lg'}`}>
+      <DialogContent onCloseAutoFocus={(event) => { event.preventDefault(); returnFocusRef.current?.focus(); }} onAnimationEnd={(event) => { if (!open && event.target === event.currentTarget) finishClose(); }} className={`flex max-h-[calc(100dvh-2rem)] min-w-0 flex-col gap-0 overflow-hidden rounded-2xl p-0 shadow-[0_24px_80px_rgba(15,23,42,.3)] [&_[data-slot=dialog-close]]:z-20 ${sizeClass}`}>
         <div className="shrink-0 border-b border-border bg-card/95 px-5 py-4 pr-14 backdrop-blur-xl">
           <DialogHeader className="gap-1 text-left">
             <DialogTitle className="font-black text-slate-950">{title}</DialogTitle>
             {description ? <DialogDescription className="text-sm leading-5 text-slate-500">{description}</DialogDescription> : null}
           </DialogHeader>
         </div>
-        <div className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-5">{children}</div>
+        <div className={`min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-5 ${bodyClassName}`}>{children}</div>
         {actions ? <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-card/95 px-5 py-4 backdrop-blur-xl">{actions}</div> : null}
       </DialogContent>
   </ShadcnDialog>;

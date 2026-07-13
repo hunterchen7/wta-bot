@@ -213,6 +213,23 @@ export async function adminRequest<T>(path: string, init?: RequestInit): Promise
   return result as T;
 }
 
+export async function adminFileRequest(path: string, signal?: AbortSignal): Promise<Blob> {
+  if (import.meta.env.DEV && demoEnabled()) {
+    const { adminDemoFile } = await import('./demo-admin');
+    return adminDemoFile(path, signal);
+  }
+  const response = await fetch(`/api/admin${path}`, { signal });
+  if (response.status === 401) {
+    window.location.assign('/login');
+    throw new Error('Your session expired. Redirecting to login…');
+  }
+  if (!response.ok) {
+    const result = await response.json().catch(() => ({})) as { message?: string; error?: string };
+    throw new Error(result.message ?? result.error?.replaceAll('_', ' ') ?? 'The file could not be loaded.');
+  }
+  return response.blob();
+}
+
 function demoEnabled() {
   if (!import.meta.env.DEV) return false;
   if (new URLSearchParams(window.location.search).has('demo')) {
