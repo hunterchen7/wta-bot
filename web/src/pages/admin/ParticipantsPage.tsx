@@ -11,7 +11,7 @@ const PARTICIPANT_STATUSES = ['active', 'paused', 'held', 'removed', 'completed'
 const STATUS_OPTIONS = PARTICIPANT_STATUSES.map((value) => ({ value, label: value }));
 const COLUMN_ORDER_STORAGE_KEY = 'wta:participant-columns:v1';
 const SORT_STORAGE_KEY = 'wta:participant-sort:v1';
-const COLUMN_IDS = ['participant', 'joined', 'updated', 'contact', 'education', 'opportunities', 'experience', 'topics', 'prior_wta', 'blurb', 'interests', 'prior_feedback', 'round', 'progress', 'reports', 'strikes', 'email', 'pairing', 'status'] as const;
+const COLUMN_IDS = ['participant', 'joined', 'updated', 'contact', 'linkedin', 'other_link', 'resume', 'education', 'opportunities', 'experience', 'topics', 'prior_wta', 'blurb', 'interests', 'prior_feedback', 'round', 'progress', 'reports', 'strikes', 'email', 'pairing', 'status'] as const;
 type ColumnId = typeof COLUMN_IDS[number];
 type SortDirection = 'asc' | 'desc';
 type SortState = { column: ColumnId; direction: SortDirection };
@@ -25,6 +25,9 @@ const COLUMN_DEFINITIONS: Record<ColumnId, ColumnDefinition> = {
   joined: { label: 'Joined', defaultDirection: 'desc', value: (participant) => dateValue(participant.created_at) },
   updated: { label: 'Updated', defaultDirection: 'desc', value: (participant) => dateValue(participant.updated_at) },
   contact: { label: 'Contact', value: (participant) => participant.preferred_email ?? participant.western_email },
+  linkedin: { label: 'LinkedIn', value: (participant) => participant.linkedin_url },
+  other_link: { label: 'Other link', value: (participant) => participant.other_url },
+  resume: { label: 'Resume', value: (participant) => participant.resume_filename },
   education: { label: 'Education', value: (participant) => `${participant.year ?? ''}\u0000${participant.program ?? ''}` },
   opportunities: { label: 'Opportunities', value: (participant) => parseChoices(participant.opportunities).join(' ') },
   experience: { label: 'Experience', value: (participant) => participant.experience_band },
@@ -191,6 +194,9 @@ function ParticipantCell({ column, participant, currentWeek, onOpen }: { column:
     case 'joined': content = <span className="whitespace-nowrap text-xs">{formatDate(participant.created_at, false)}</span>; break;
     case 'updated': content = <span className="whitespace-nowrap text-xs">{formatDate(participant.updated_at, false)}</span>; break;
     case 'contact': content = <><a className="block text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={participant.preferred_email ? `mailto:${participant.preferred_email}` : undefined}>{participant.preferred_email ?? '—'}</a><a className="mt-1 block text-xs text-muted-foreground hover:underline" href={participant.western_email ? `mailto:${participant.western_email}` : undefined}>{participant.western_email ?? '—'}</a></>; break;
+    case 'linkedin': content = <ProfileLink value={participant.linkedin_url} label="Open profile" />; break;
+    case 'other_link': content = <ProfileLink value={participant.other_url} label="Open link" />; break;
+    case 'resume': content = participant.resume_filename ? <a className="block max-w-56 text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={`/api/admin/participants/${participant.id}/resume`} target="_blank" rel="noreferrer" title={participant.resume_filename}><span className="block truncate">{participant.resume_filename}</span><span className="mt-1 block font-normal text-muted-foreground">{formatBytes(participant.resume_bytes)}{participant.resume_uploaded_at ? ` · ${formatDate(participant.resume_uploaded_at, false)}` : ''} ↗</span></a> : <span className="text-muted-foreground">—</span>; break;
     case 'education': content = <><span className="block font-semibold text-foreground">{participant.year ?? '—'}</span><span className="mt-1 block text-xs text-muted-foreground">{participant.program ?? '—'}</span></>; break;
     case 'opportunities': content = <ChoiceList value={participant.opportunities} />; break;
     case 'experience': content = participant.experience_band ?? '—'; break;
@@ -232,8 +238,21 @@ function readColumnOrder(): ColumnId[] {
     const saved = JSON.parse(localStorage.getItem(COLUMN_ORDER_STORAGE_KEY) ?? '[]');
     if (!Array.isArray(saved)) return DEFAULT_COLUMN_ORDER.slice();
     const known = saved.map(String).filter((value): value is ColumnId => asColumnId(value) != null);
-    return [...new Set(known), ...DEFAULT_COLUMN_ORDER.filter((column) => !known.includes(column))];
+    return mergeColumnOrder([...new Set(known)]);
   } catch { return DEFAULT_COLUMN_ORDER.slice(); }
+}
+
+function mergeColumnOrder(saved: ColumnId[]) {
+  const merged = saved.slice();
+  for (const column of DEFAULT_COLUMN_ORDER) {
+    if (merged.includes(column)) continue;
+    const defaultIndex = DEFAULT_COLUMN_ORDER.indexOf(column);
+    const previous = DEFAULT_COLUMN_ORDER.slice(0, defaultIndex).reverse().find((candidate) => merged.includes(candidate));
+    const next = DEFAULT_COLUMN_ORDER.slice(defaultIndex + 1).find((candidate) => merged.includes(candidate));
+    const insertAt = previous ? merged.indexOf(previous) + 1 : next ? merged.indexOf(next) : merged.length;
+    merged.splice(insertAt, 0, column);
+  }
+  return merged;
 }
 
 function readSortState(): SortState {
@@ -255,7 +274,7 @@ function ParticipantDrawer({ detail, loading, onClose }: { detail: ParticipantDe
       <div className="grid gap-4 lg:grid-cols-2">
         <DetailSection title="Contact"><DetailRow label="Preferred email" value={detail.participant.preferred_email} link="email" /><DetailRow label="UWO email" value={detail.participant.western_email} link="email" /><DetailRow label="Email reminders" value={detail.participant.email_ok ? 'Enabled' : 'Discord only'} /><DetailRow label="Profile updated" value={formatDate(detail.participant.updated_at)} /></DetailSection>
         <DetailSection title="Enrollment profile"><DetailRow label="Targeting" value={formatChoices(detail.participant.opportunities)} /><DetailRow label="Practice topics" value={formatChoices(detail.participant.topics)} /><DetailRow label="Prior WTA" value={detail.participant.prior_wta ? 'Yes' : 'No'} />{detail.participant.removed_reason ? <DetailRow label="Removal reason" value={detail.participant.removed_reason} /> : null}</DetailSection>
-        <DetailSection title="Application materials" className="lg:col-span-2"><DetailRow label="LinkedIn" value={detail.participant.linkedin_url} link="url" /><DetailRow label="Other link" value={detail.participant.other_url} link="url" /><DetailRow label="Resume" value={detail.participant.resume?.filename} href={detail.participant.resume ? `/api/admin/participants/${detail.participant.id}/resume` : undefined} /><DetailRow label="Uploaded" value={detail.participant.resume?.uploadedAt ? formatDate(detail.participant.resume.uploadedAt) : null} /></DetailSection>
+        <DetailSection title="Application materials" className="lg:col-span-2"><DetailRow label="LinkedIn profile" value={detail.participant.linkedin_url} link="url" /><DetailRow label="Other profile link" value={detail.participant.other_url} link="url" /><DetailRow label="Resume" value={detail.participant.resume?.filename} href={detail.participant.resume ? `/api/admin/participants/${detail.participant.id}/resume` : undefined} /><DetailRow label="Resume size" value={detail.participant.resume ? formatBytes(detail.participant.resume.bytes) : null} /><DetailRow label="Resume uploaded" value={detail.participant.resume?.uploadedAt ? formatDate(detail.participant.resume.uploadedAt) : null} /></DetailSection>
       </div>
       {detail.participant.blurb || detail.participant.interests || detail.participant.prior_feedback ? <div><SectionTitle>Enrollment context</SectionTitle><div className="grid gap-3 lg:grid-cols-2">{detail.participant.blurb ? <ProfileNote className="lg:col-span-2" label="Ideal role and motivation" value={detail.participant.blurb} /> : null}{detail.participant.interests ? <ProfileNote label="Other learning interests" value={detail.participant.interests} /> : null}{detail.participant.prior_feedback ? <ProfileNote label="Prior-program feedback" value={detail.participant.prior_feedback} /> : null}</div></div> : null}
       <div><SectionTitle>Sessions & survey links</SectionTitle><div className="overflow-hidden rounded-xl border border-slate-200 dark:border-border">{detail.sessions.length ? detail.sessions.map((session) => <div key={session.id} className="border-b border-slate-100 px-4 py-3 last:border-0 dark:border-border"><div className="flex flex-wrap items-center gap-x-4 gap-y-1"><span className="font-bold text-slate-900 dark:text-foreground">R{session.round} · #{session.id}</span><span className="text-sm text-slate-600 dark:text-muted-foreground">{session.interviewer_name} → {session.interviewee_name}</span><Badge value={session.state} /><span className="ml-auto text-xs text-slate-500 dark:text-muted-foreground">{session.reports_in}/2 reports</span></div><ParticipantSurveyLinks session={session} /></div>) : <div className="p-4 text-sm text-slate-500">No sessions yet.</div>}</div></div>
@@ -310,6 +329,9 @@ function formatChoices(value: unknown) { const choices = parseChoices(value); re
 function formatChoice(value: string) { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
 function uniqueValues(values: Array<string | null | undefined>) { return [...new Set(values.filter((value): value is string => Boolean(value)))].sort((a, b) => a.localeCompare(b)); }
 function filterOptions(allLabel: string, values: string[]) { return [{ value: 'all', label: allLabel }, ...values.map((value) => ({ value, label: formatChoice(value) }))]; }
+function ProfileLink({ value, label }: { value: string | null; label: string }) { if (!value) return <span className="text-muted-foreground">—</span>; return <a className="block max-w-52 text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={value} target="_blank" rel="noreferrer"><span className="block">{label} ↗</span><span className="mt-1 block truncate font-normal text-muted-foreground">{urlLabel(value)}</span></a>; }
+function urlLabel(value: string) { try { return new URL(value).hostname.replace(/^www\./, ''); } catch { return value; } }
+function formatBytes(value: number | null | undefined) { if (value == null) return 'Size unavailable'; if (value < 1024) return `${value} B`; if (value < 1024 ** 2) return `${Math.round(value / 1024)} KB`; return `${(value / 1024 ** 2).toFixed(1)} MB`; }
 function ChoiceList({ value }: { value: unknown }) { const choices = parseChoices(value); return choices.length ? <div className="flex max-w-64 flex-wrap gap-1">{choices.map((choice) => <span key={choice} className="rounded-full bg-muted px-2 py-0.5 text-[0.68rem] font-semibold text-muted-foreground">{formatChoice(choice)}</span>)}</div> : <span className="text-muted-foreground">—</span>; }
 function TextPreview({ value }: { value: string | null }) { return value ? <span title={value} className="block max-w-64 truncate text-xs text-muted-foreground">{value}</span> : <span className="text-muted-foreground">—</span>; }
 function SignalCount({ value, singular }: { value: number; singular: string }) { return value ? <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700 dark:bg-amber-950/40 dark:text-amber-300">{value} {singular}{value === 1 ? '' : 's'}</span> : <span className="text-muted-foreground">0</span>; }
