@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "register": "node --env-file=.dev.vars scripts/register-commands.ts",
+    "post:enrollment-button": "node --env-file=.dev.vars scripts/post-enrollment-button.ts",
     "migrate:local": "wrangler d1 migrations apply wta-bot --local",
     "migrate:remote": "wrangler d1 migrations apply wta-bot --remote"
   },

@@ -10,9 +10,10 @@ import { creditsOf, strikesOf } from '../engine/progress';
 import { activeCohort, cohortWeeks, createCohort } from '../engine/weeks';
 import type { Env } from '../env';
 import { signToken } from '../forms/token';
-import { getParticipant, listParticipants, participantsToCsv, upsertParticipant } from '../participants';
+import { getParticipant, listParticipants, participantsToCsv } from '../participants';
 import { discordTime } from '../time';
 import { type Interaction, interactionUser, ResponseType } from '../discord/types';
+import { enrollmentLinkResponse } from './enrollment';
 import { isOrganizer } from './shared';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -56,46 +57,8 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
       return c.json(ephemeral(lines.join('\n')));
     }
 
-    case 'join': {
-      const existing = await getParticipant(c.env, user.id);
-      // `/join` only issues the enrollment link, so persist organizer
-      // eligibility here even when this is their first-ever interaction.
-      if (!existing && await isOrganizer(c.env, interaction)) {
-        await upsertParticipant(c.env, user.id, {
-          discord_username: user.username,
-          discord_nickname: interaction.member?.nick ?? user.global_name ?? user.username,
-          pairing_excluded: 1,
-        });
-      }
-      if (existing?.status === 'removed') {
-        if ((existing as any).removed_reason === 'withdrew') {
-          const { buttonRow } = await import('../discord/components');
-          return c.json(
-            ephemeral(
-              '👋 **Welcome back?** You left the program earlier — rejoining restores everything as it was: your profile, your completed interviews, your history. If you\'re behind pace, the next opt-in will offer you a catch-up double.',
-              [buttonRow([{ id: 'rejoin:confirm', label: 'Rejoin the program', style: 3 }])],
-            ),
-          );
-        }
-        return c.json(
-          ephemeral('You were removed from this cohort. Talk to an organizer if you think that\'s a mistake.'),
-        );
-      }
-      const secret = c.env.FORM_SIGNING_SECRET;
-      if (!secret) return c.json(ephemeral('Enrollment is not configured yet.'));
-      const username = [...new TextEncoder().encode(user.global_name ?? user.username)]
-        .map((byte) => byte.toString(16).padStart(2, '0')).join('');
-      const token = await signToken(
-        secret,
-        `enroll:${user.id}:${interaction.guild_id ?? '0'}:${username}`,
-        new Date(Date.now() + 60 * 60_000),
-      );
-      const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
-      return c.json(ephemeral(
-        `${existing?.topics ? 'Edit your WTA profile' : 'Complete your WTA enrollment'} in the web app (link valid for 1 hour):\n${origin}/enroll/${token}\n\n` +
-        `This link is tied to **@${user.global_name ?? user.username}** and only visible to you.`,
-      ));
-    }
+    case 'join':
+      return enrollmentLinkResponse(c, interaction);
 
     case 'status':
       return statusCommand(c, interaction);

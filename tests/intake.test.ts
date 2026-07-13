@@ -1,5 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { enrollmentButtonMessage } from '../src/discord/enrollment';
 import { app } from '../src/index';
 import { asUser, makeSigner, sendInteraction, type Signer } from './helpers';
 
@@ -10,6 +11,12 @@ let enrollmentToken = '';
 
 const joinCommand = (id = USER, username = 'test.student') => ({
   type: 2, id: '1', token: 'interaction', guild_id: GUILD, data: { name: 'join' },
+  ...asUser(id, { user: { id, username, global_name: username } }),
+});
+
+const joinButton = (id = USER, username = 'test.student') => ({
+  type: 3, id: '1', token: 'interaction', guild_id: GUILD,
+  data: { custom_id: 'enrollment:open', component_type: 2 },
   ...asUser(id, { user: { id, username, global_name: username } }),
 });
 
@@ -30,16 +37,34 @@ beforeAll(async () => {
 });
 
 describe('web enrollment cutover', () => {
-  it('/join returns a Discord-bound React enrollment link instead of native modals', async () => {
-    const response = await sendInteraction(signer, joinCommand(), { ALLOWED_GUILD_IDS: GUILD, PUBLIC_ORIGIN: 'https://wta.example' });
+  it('builds a persistent enrollment message with the Join WTA button', () => {
+    const message = enrollmentButtonMessage();
+    expect(message.content).toContain('Join WTA 2026');
+    expect((message.components as any[])[0].components[0]).toMatchObject({
+      custom_id: 'enrollment:open',
+      label: 'Join WTA',
+      style: 1,
+    });
+  });
+
+  it('the Join WTA button returns a private Discord-bound enrollment link', async () => {
+    const response = await sendInteraction(signer, joinButton(), { ALLOWED_GUILD_IDS: GUILD, PUBLIC_ORIGIN: 'https://wta.example' });
     const body = await response.json<any>();
     expect(body.type).toBe(4);
+    expect(body.data.flags).toBe(64);
     expect(body.data.content).toContain('web app');
     expect(body.data.content).toContain('@test.student');
     expect(body.data.custom_id).toBeUndefined();
     const match = body.data.content.match(/https:\/\/wta\.example\/enroll\/(\S+)/);
     expect(match).not.toBeNull();
     enrollmentToken = match[1];
+  });
+
+  it('keeps /join as a fallback for the same enrollment flow', async () => {
+    const response = await sendInteraction(signer, joinCommand(), { ALLOWED_GUILD_IDS: GUILD, PUBLIC_ORIGIN: 'https://wta.example' });
+    const body = await response.json<any>();
+    expect(body.data.flags).toBe(64);
+    expect(body.data.content).toMatch(/https:\/\/wta\.example\/enroll\/\S+/);
   });
 
   it('loads linked Discord identity and reports exact validation errors', async () => {

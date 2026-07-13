@@ -15,6 +15,8 @@ import {
   interactionUser,
   ResponseType,
 } from '../discord/types';
+import { ENROLLMENT_BUTTON_ID } from '../discord/enrollment';
+import { enrollmentLinkResponse } from './enrollment';
 import { isOrganizer } from './shared';
 
 type Ctx = Context<{ Bindings: Env }>;
@@ -23,6 +25,9 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
   const user = interactionUser(interaction);
   if (!user) return c.json(ephemeral('Could not identify you — try again.'));
   const id = interaction.data?.custom_id ?? '';
+
+  // ---- persistent program enrollment ---------------------------------------
+  if (id === ENROLLMENT_BUTTON_ID) return enrollmentLinkResponse(c, interaction);
 
   // ---- weekly opt-in ------------------------------------------------------
   const optin = /^optin:(\d+):(in|double|standby|out)$/.exec(id);

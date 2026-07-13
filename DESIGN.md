@@ -50,11 +50,11 @@ Three incident kinds are tracked distinctly: **ghost** (confirmed time, didn't s
 
 ## 5. Forms
 
-**Intake — web app launched from Discord** (`/join`):
-- `/join` returns a short-lived signed link tied to the invoking Discord user and guild.
+**Intake — web app launched from Discord** (Join WTA button or `/join`):
+- The persistent Join WTA button and `/join` fallback return the same short-lived signed link tied to the invoking Discord user and guild. Button responses are ephemeral, so each participant sees only their own link.
 - The React enrollment form collects identity, program, opportunities, experience, topics, optional context, and email-reminder opt-in in one save-all flow.
 - Re-running `/join` opens the same prefilled form for self-serve edits. The latest Discord username is persisted beside the immutable Discord user ID so dashboard and Discord identities remain reconcilable.
-- **Nickname sync:** on name entry (and edits), the bot sets the member's server nickname to their entered name (truncated to 32). Fire-and-forget — never blocks intake. Needs **Manage Nicknames** + role hierarchy; Discord never allows changing the guild *owner's* nickname.
+- **Nickname sync:** on name entry (and edits), the bot sets the member's server nickname to the first name from their profile (truncated to 32). Fire-and-forget — never blocks intake. Needs **Manage Nicknames** + role hierarchy; Discord never allows changing the guild *owner's* nickname.
 
 **External form rail** — for anything richer than a modal (post-interview reports with code paste; later: alumni pages, availability grids):
 - One **template per form kind**, versioned: `interviewee_report`, `interviewer_report` **[OPEN — interviewer form fields pending access/paste]**, future kinds. "Week N" is a column, not a new form.
