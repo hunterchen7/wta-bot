@@ -1,6 +1,7 @@
 import type { ComponentPropsWithoutRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { CodeSyntax, languageFromFence } from './CodeSyntax';
 
 const components = {
   h1: (props: ComponentPropsWithoutRef<'h1'>) => <h1 className="mb-4 mt-8 text-2xl font-black tracking-tight text-foreground first:mt-0" {...props} />,
@@ -11,10 +12,12 @@ const components = {
   ol: (props: ComponentPropsWithoutRef<'ol'>) => <ol className="my-4 list-decimal space-y-2 pl-6 text-muted-foreground" {...props} />,
   li: (props: ComponentPropsWithoutRef<'li'>) => <li className="pl-1 leading-7" {...props} />,
   blockquote: (props: ComponentPropsWithoutRef<'blockquote'>) => <blockquote className="my-5 border-l-4 border-western-400 bg-western-50 px-5 py-3 text-muted-foreground dark:bg-western-950/30" {...props} />,
-  pre: (props: ComponentPropsWithoutRef<'pre'>) => <pre className="my-5 max-w-full overflow-x-auto rounded-xl border border-border bg-slate-950 p-4 text-sm leading-6 text-slate-100" {...props} />,
-  code: ({ className, ...props }: ComponentPropsWithoutRef<'code'>) => className
-    ? <code className={className} {...props} />
-    : <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em] text-foreground" {...props} />,
+  pre: ({ children }: ComponentPropsWithoutRef<'pre'>) => <>{children}</>,
+  code: ({ className, children, ...props }: ComponentPropsWithoutRef<'code'>) => {
+    const language = /language-([\w+-]+)/.exec(className ?? '')?.[1];
+    if (language) return <div className="my-5 max-w-full overflow-hidden rounded-xl border border-border"><CodeSyntax code={String(children).replace(/\n$/, '')} language={languageFromFence(language)} /></div>;
+    return <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[0.9em] text-foreground" {...props}>{children}</code>;
+  },
   a: (props: ComponentPropsWithoutRef<'a'>) => <a className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 hover:text-western-900 dark:text-western-300 dark:hover:text-western-200" target="_blank" rel="noreferrer" {...props} />,
   hr: (props: ComponentPropsWithoutRef<'hr'>) => <hr className="my-8 border-border" {...props} />,
   table: (props: ComponentPropsWithoutRef<'table'>) => <div className="my-5 overflow-x-auto rounded-xl border border-border"><table className="w-full border-collapse text-left text-sm" {...props} /></div>,

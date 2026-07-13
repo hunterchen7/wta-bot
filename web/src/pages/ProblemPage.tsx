@@ -17,7 +17,7 @@ export function ProblemPage({ preview = false }: { preview?: boolean }) {
   return <PublicShell narrow>
     <PublicIntro eyebrow={preview ? 'Read-only preview' : `Round ${data.round}`} title={data.mode === 'packet' ? 'Interviewer packet' : 'Solution notes'} description={`${problem.number ? `#${problem.number} · ` : ''}${problem.title} · ${problem.difficulty}${data.intervieweeName ? ` · interviewing ${data.intervieweeName}` : ''}`} />
     {preview ? <Notice tone="western">Preview mode. Live packets are private, signed, and expire automatically.</Notice> : null}
-    {data.mode === 'packet' ? <Notice tone="amber">Private interviewer material. Never share this page or its contents with the interviewee—it includes the full solution.</Notice> : null}
+    {data.mode === 'packet' ? <Notice tone="amber">Private interviewer material. Do not share.</Notice> : null}
     {problem.url ? <div className="mb-6 text-sm text-muted-foreground"><a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a></div> : null}
     <div className="space-y-5">{problem.statement ? <ProblemContentSection title="Statement" value={problem.statement} /> : null}{problem.hints ? <ProblemContentSection title="Hint ladder" value={problem.hints} /> : null}<ProblemContentSection title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} /></div>
   </PublicShell>;

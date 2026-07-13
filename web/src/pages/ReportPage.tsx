@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Textarea } from '../components/ui/textarea';
+import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 
 export type ReportField = { id: string; label: string; type: 'radio' | 'select' | 'scale' | 'text' | 'textarea' | 'url'; options?: Array<{ value: string; label: string }>; required?: boolean; shared?: boolean; help?: string; mono?: boolean; low?: string; high?: string };
 export type ReportData = { preview?: boolean; id: number; kind: string; round: number; role: string; assigneeName: string | null; assigneeDiscordId: string; assigneeDiscordUsername: string | null; assigneeDiscordNickname: string | null; partnerName: string | null; scheduledAt: string | null; deadlineAt: string; submittedAt: string | null; overdue: boolean; fields: ReportField[]; values: Record<string, string> };
@@ -24,6 +25,7 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [submissionComplete, setSubmissionComplete] = useState<'submitted' | 'updated' | null>(null);
   const dirty = useMemo(() => !previewKind && JSON.stringify(values) !== baseline, [values, baseline, previewKind]);
   const blocker = useBlocker(dirty && !saved);
 
@@ -31,7 +33,7 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     const request = previewKind
       ? adminRequest<ReportData>(`/previews/${previewKind}`)
       : publicRequest<ReportData>(`/forms/${token}`);
-    request.then((result) => { setData(result); setValues(result.values); setBaseline(JSON.stringify(result.values)); }).catch((cause) => setError(cause instanceof Error ? cause.message : 'Could not open this report.'));
+    request.then((result) => { setData(result); setValues(result.values); setBaseline(JSON.stringify(result.values)); setSaved(false); setSubmissionComplete(null); }).catch((cause) => setError(cause instanceof Error ? cause.message : 'Could not open this report.'));
   }, [previewKind, token]);
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => { if (dirty && !saved) event.preventDefault(); };
@@ -44,8 +46,11 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     if (previewKind) return;
     setBusy(true); setError(''); setFieldErrors({});
     try {
+      const wasRevision = Boolean(data?.submittedAt);
       await publicRequest(`/forms/${token}`, { method: 'POST', body: JSON.stringify(values) });
-      setBaseline(JSON.stringify(values)); setSaved(true); window.scrollTo({ top: 0, behavior: 'smooth' });
+      setBaseline(JSON.stringify(values)); setSaved(true);
+      setData((current) => current ? { ...current, submittedAt: new Date().toISOString() } : current);
+      setSubmissionComplete(wasRevision ? 'updated' : 'submitted');
     } catch (cause) {
       if (cause instanceof SettingsSaveError) {
         setFieldErrors(cause.fieldErrors); setError(cause.message);
@@ -68,8 +73,27 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     <form onSubmit={submit} className="space-y-4">{data.fields.map((field, index) => <ReportFieldInput key={field.id} field={field} value={values[field.id] ?? ''} error={fieldErrors[field.id]} index={index + 1} token={token} preview={Boolean(previewKind)} onChange={(value) => set(field.id, value)} />)}
       <div className={`${previewKind ? '' : 'sticky bottom-4 z-20 shadow-xl backdrop-blur'} rounded-2xl border border-slate-200 bg-white/95 p-3`}><Button size="lg" disabled={Boolean(previewKind) || busy || (!dirty && Boolean(data.submittedAt))} className="h-12 w-full cursor-pointer rounded-xl font-black disabled:cursor-not-allowed">{previewKind ? 'Submission disabled in preview' : busy ? 'Saving report…' : data.submittedAt ? 'Save revised report' : 'Submit report'}</Button></div>
     </form>
+    <SubmissionDialog state={submissionComplete} onClose={() => setSubmissionComplete(null)} />
     {blocker.state === 'blocked' ? <LeaveDialog onStay={() => blocker.reset()} onLeave={() => blocker.proceed()} /> : null}
   </ReportShell>;
+}
+
+function SubmissionDialog({ state, onClose }: { state: 'submitted' | 'updated' | null; onClose: () => void }) {
+  const submitted = state === 'submitted';
+  return <Dialog open={state !== null} onOpenChange={(open) => { if (!open) onClose(); }}>
+    <DialogContent className="max-w-md rounded-2xl p-7" aria-describedby="report-submission-description">
+      <DialogHeader className="text-left">
+        <div aria-hidden="true" className="mb-1 grid size-11 place-items-center rounded-full bg-emerald-100 text-xl font-black text-emerald-700">✓</div>
+        <DialogTitle className="text-2xl font-black">{submitted ? 'Report submitted' : 'Report updated'}</DialogTitle>
+        <DialogDescription id="report-submission-description" className="leading-6">Your answers have been saved successfully. Any follow-up processing is now underway.</DialogDescription>
+      </DialogHeader>
+      <p className="text-sm font-medium text-muted-foreground">You can safely close this tab now, or return to your dashboard.</p>
+      <DialogFooter className="mt-2">
+        <DialogClose asChild><Button variant="secondary">Stay on this page</Button></DialogClose>
+        <Button asChild><a href="/app">Return to dashboard</a></Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }
 
 function ReportIntro({ data, preview }: { data: ReportData; preview: boolean }) {
