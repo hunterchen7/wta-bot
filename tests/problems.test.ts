@@ -112,6 +112,34 @@ describe('problem bank', () => {
     expect(await packetScan(env, 'https://example.test', new Date(now.getTime() + 25 * 3600_000))).toBe(0);
   });
 
+  it('waits for the configured lead window and sends immediately inside it', async () => {
+    await env.DB.prepare(
+      "INSERT INTO settings (key, value) VALUES ('packet_lead_hours', '24') ON CONFLICT(key) DO UPDATE SET value = '24'",
+    ).run();
+    const now = new Date();
+    const problem = await pickProblem(env, weekIds[1]!, 1, 2);
+    expect(problem).not.toBeNull();
+
+    const later = await env.DB.prepare(
+      `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, scheduled_at)
+       VALUES (?1, 1, 2, 'scheduled', ?2)`,
+    ).bind(weekIds[1], new Date(now.getTime() + 48 * 3600_000).toISOString()).run();
+    const laterId = Number(later.meta.last_row_id);
+    expect(await reserveProblem(env, laterId, problem!.id)).toBe(true);
+    expect(await packetScan(env, 'https://example.test', now)).toBe(0);
+    expect(await packetScan(env, 'https://example.test', new Date(now.getTime() + 24 * 3600_000))).toBe(1);
+
+    const soon = await env.DB.prepare(
+      `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, scheduled_at)
+       VALUES (?1, 1, 2, 'scheduled', ?2)`,
+    ).bind(weekIds[1], new Date(now.getTime() + 6 * 3600_000).toISOString()).run();
+    const soonId = Number(soon.meta.last_row_id);
+    expect(await reserveProblem(env, soonId, problem!.id)).toBe(true);
+    expect(await packetScan(env, 'https://example.test', now)).toBe(1);
+
+    await env.DB.prepare("UPDATE settings SET value = 'scheduled' WHERE key = 'packet_lead_hours'").run();
+  });
+
   it('serves packet data to the signed React link and refuses garbage', async () => {
     const dm = await env.DB.prepare(
       "SELECT payload FROM outbox WHERE kind = 'dm' AND payload LIKE '%/p/%' ORDER BY id DESC LIMIT 1",

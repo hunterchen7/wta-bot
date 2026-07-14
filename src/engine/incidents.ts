@@ -21,6 +21,7 @@ type SessionRow = {
   state: string;
   origin: 'match' | 'repair' | 'manual';
   scheduled_at: string | null;
+  packet_sent_at: string | null;
 };
 
 export async function getSession(env: Env, sessionId: number): Promise<SessionRow | null> {

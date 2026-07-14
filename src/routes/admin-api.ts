@@ -29,8 +29,9 @@ export const adminApi = new Hono<{ Bindings: Env }>();
 const participantStatuses = new Set(['active', 'paused', 'held', 'removed', 'completed']);
 const editableSettingKeys = new Set<SettingKey>([
   'announce_channel_id', 'organizer_channel_id', 'threads_channel_id',
-  'participant_role_id', 'organizer_role_id', 'packet_mode', 'question_bank_public',
+  'participant_role_id', 'organizer_role_id', 'packet_mode', 'packet_lead_hours', 'question_bank_public',
 ]);
+const packetLeadOptions = new Set(['scheduled', '1', '6', '12', '24', '48']);
 const PREVIEW_RECORDING_PART_BYTES = 16 * 1024 * 1024;
 const MAX_PREVIEW_RECORDING_BYTES = 2 * 1024 * 1024 * 1024;
 
@@ -771,6 +772,10 @@ adminApi.post('/api/admin/settings', async (c) => {
   const body = await c.req.json<{ settings?: Record<string, string> }>().catch(() => null);
   if (!body?.settings || typeof body.settings !== 'object') return c.json({ error: 'invalid_request' }, 400);
   const entries = Object.entries(body.settings).filter(([key]) => editableSettingKeys.has(key as SettingKey));
+  const packetLead = entries.find(([key]) => key === 'packet_lead_hours')?.[1];
+  if (packetLead !== undefined && !packetLeadOptions.has(String(packetLead).trim())) {
+    return c.json({ error: 'invalid_packet_lead', message: 'Choose a supported packet delivery time.' }, 400);
+  }
   for (const [key, value] of entries) await setSetting(c.env, key as SettingKey, String(value).trim().slice(0, 200));
   await audit(c.env, gate.participantId, 'program.settings_updated', 'settings', undefined, Object.fromEntries(entries));
   return c.json({ ok: true, updated: entries.length });

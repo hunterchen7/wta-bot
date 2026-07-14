@@ -12,6 +12,7 @@ export type SettingKey =
   | 'commands_json' // syncCommands bookkeeping
   | 'category_id' // current year's category (bootstrap renames it on archive)
   | 'packet_mode' // 'on' enables private interviewer packets delivered when a session is scheduled
+  | 'packet_lead_hours' // 'scheduled' sends when confirmed; otherwise hours before the interview
   | 'question_bank_public'; // 'on' exposes the active round set; absent/off keeps it private
 
 export async function getSetting(env: Env, key: SettingKey): Promise<string | null> {

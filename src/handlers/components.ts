@@ -289,11 +289,20 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
   )
     .bind(when.toISOString(), sessionId)
     .run();
-  let problemSent = false;
+  let packetMessage = '';
   if ((await getSetting(c.env, 'packet_mode')) === 'on') {
-    const { deliverSessionProblem } = await import('../engine/problems');
+    const { deliverSessionProblem, packetLeadHours } = await import('../engine/problems');
     const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
-    problemSent = await deliverSessionProblem(c.env, sessionId, origin);
+    const leadHours = await packetLeadHours(c.env);
+    const problemSent = await deliverSessionProblem(c.env, sessionId, origin, now, leadHours);
+    if (problemSent) {
+      packetMessage = 'The interviewer packet has been sent by DM. ';
+    } else if (session.packet_sent_at) {
+      packetMessage = 'The interviewer already has the problem packet. ';
+    } else if (leadHours !== null) {
+      const releaseAt = new Date(Math.max(now.getTime(), when.getTime() - leadHours * 3600_000));
+      packetMessage = `The interviewer packet will be sent ${discordTime(releaseAt, 'R')}. `;
+    }
   }
   // Non-ephemeral: the confirmation belongs to both partners in the thread.
   return c.json({
@@ -301,7 +310,7 @@ async function handleScheduleSubmit(c: Ctx, interaction: Interaction, sessionId:
     data: {
       content:
         `📅 ${wasScheduled ? 'Rescheduled' : 'Locked in'}: ${discordTime(when)} (${formatToronto(when)} Toronto). ` +
-        `${problemSent ? 'The interviewer packet has been sent by DM. ' : ''}` +
+        packetMessage +
         `Report forms arrive here + by DM at session time.\n\nNeed another time? Either participant can use **Reschedule time** below.`,
       components: [buttonRow([{ id: `sess:${sessionId}:sched`, label: 'Reschedule time', style: 1 }])],
     },
