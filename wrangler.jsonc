@@ -31,7 +31,7 @@
   "vars": {
     "ALLOWED_GUILD_IDS": "1124746819184906431",
     "PUBLIC_ORIGIN": "https://wta.hunterchen.ca",
-    "OUTBOX_BUDGET": "20",
+    "OUTBOX_BUDGET": "100",
     // Emails that get organizer views on the dashboard (comma-separated)
     "DASHBOARD_ADMINS": "",
     // Sender — must belong to the Email Service onboarded domain

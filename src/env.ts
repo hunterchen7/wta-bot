@@ -16,8 +16,8 @@ export type Env = {
   // Comma-separated emails that get organizer views on the web dashboard
   // (checked at login, alongside the Discord organizer-role fallback).
   DASHBOARD_ADMINS?: string;
-  // Outbox rows drained per tick (Discord/email sends). Default 20 — safe on
-  // the free plan's external-subrequest cap; raise on Workers Paid.
+  // Outbox rows drained per tick (Discord/email sends). Defaults to 100 for
+  // the paid Worker deployment; keep this bounded to respect provider limits.
   OUTBOX_BUDGET?: string;
   // Email Service binding (optional until the domain is onboarded in the dash).
   EMAIL?: {
