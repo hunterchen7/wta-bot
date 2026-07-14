@@ -5,13 +5,14 @@ import { interactionUser } from '../discord/types';
 import type { Env } from '../env';
 import { signToken } from '../forms/token';
 import { getParticipant, upsertParticipant } from '../participants';
+import { logEnrollmentEvent, type EnrollmentEventSource } from '../services/enrollment-events';
 import { isOrganizer } from './shared';
 
 type Ctx = Context<{ Bindings: Env }>;
 
 /** Return the same private, Discord-bound enrollment flow for `/join` and
  * the persistent Join WTA button. */
-export async function enrollmentLinkResponse(c: Ctx, interaction: Interaction) {
+export async function enrollmentLinkResponse(c: Ctx, interaction: Interaction, source: EnrollmentEventSource) {
   const user = interactionUser(interaction);
   if (!user) return c.json(ephemeral('Could not identify you — try again.'));
 
@@ -41,7 +42,7 @@ export async function enrollmentLinkResponse(c: Ctx, interaction: Interaction) {
 
   const secret = c.env.FORM_SIGNING_SECRET;
   if (!secret) return c.json(ephemeral('Enrollment is not configured yet.'));
-  const username = [...new TextEncoder().encode(user.global_name ?? user.username)]
+  const username = [...new TextEncoder().encode(user.username)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('');
   const token = await signToken(
@@ -50,10 +51,20 @@ export async function enrollmentLinkResponse(c: Ctx, interaction: Interaction) {
     new Date(Date.now() + 60 * 60_000),
   );
   const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
+  if (!existing?.topics) {
+    await logEnrollmentEvent(c.env, {
+      discordId: user.id,
+      discordUsername: user.username,
+      guildId: interaction.guild_id ?? null,
+      eventType: 'link_generated',
+      source,
+      externalId: interaction.id,
+    });
+  }
   return c.json(
     ephemeral(
       `${existing?.topics ? 'Edit your WTA profile' : 'Complete your WTA enrollment'} in the web app (link valid for 1 hour):\n${origin}/enroll/${token}\n\n` +
-        `This link is tied to **@${user.global_name ?? user.username}** and only visible to you.`,
+        `This link is tied to **@${user.username}** and only visible to you.`,
     ),
   );
 }

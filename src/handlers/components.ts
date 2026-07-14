@@ -27,7 +27,7 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
   const id = interaction.data?.custom_id ?? '';
 
   // ---- persistent program enrollment ---------------------------------------
-  if (id === ENROLLMENT_BUTTON_ID) return enrollmentLinkResponse(c, interaction);
+  if (id === ENROLLMENT_BUTTON_ID) return enrollmentLinkResponse(c, interaction, 'join_button');
 
   // ---- weekly opt-in ------------------------------------------------------
   const optin = /^optin:(\d+):(in|double|standby|out)$/.exec(id);

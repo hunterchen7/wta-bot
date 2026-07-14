@@ -58,7 +58,7 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
     }
 
     case 'join':
-      return enrollmentLinkResponse(c, interaction);
+      return enrollmentLinkResponse(c, interaction, 'join_command');
 
     case 'status':
       return statusCommand(c, interaction);

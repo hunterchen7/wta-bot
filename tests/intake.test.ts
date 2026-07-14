@@ -10,7 +10,7 @@ let signer: Signer;
 let enrollmentToken = '';
 
 const joinCommand = (id = USER, username = 'test.student') => ({
-  type: 2, id: '1', token: 'interaction', guild_id: GUILD, data: { name: 'join' },
+  type: 2, id: '2', token: 'interaction', guild_id: GUILD, data: { name: 'join' },
   ...asUser(id, { user: { id, username, global_name: username } }),
 });
 
@@ -59,6 +59,9 @@ describe('web enrollment cutover', () => {
     const match = body.data.content.match(/https:\/\/wta\.example\/enroll\/(\S+)/);
     expect(match).not.toBeNull();
     enrollmentToken = match[1];
+    expect(await env.DB.prepare(
+      "SELECT event_type, source, discord_username FROM enrollment_events WHERE discord_id = ?1 ORDER BY id",
+    ).bind(USER).all()).toMatchObject({ results: [{ event_type: 'link_generated', source: 'join_button', discord_username: 'test.student' }] });
   });
 
   it('keeps /join as a fallback for the same enrollment flow', async () => {
@@ -66,12 +69,18 @@ describe('web enrollment cutover', () => {
     const body = await response.json<any>();
     expect(body.data.flags).toBe(64);
     expect(body.data.content).toMatch(/https:\/\/wta\.example\/enroll\/\S+/);
+    expect(await env.DB.prepare(
+      "SELECT source FROM enrollment_events WHERE discord_id = ?1 AND event_type = 'link_generated' ORDER BY id",
+    ).bind(USER).all()).toMatchObject({ results: [{ source: 'join_button' }, { source: 'join_command' }] });
   });
 
   it('loads linked Discord identity and reports exact validation errors', async () => {
     const load = await app.request(`/api/enrollment/${enrollmentToken}`, {}, env);
     expect(load.status).toBe(200);
     expect(await load.json<any>()).toMatchObject({ discord: { id: USER, username: 'test.student' }, profile: null, minimumBlurbWords: 50 });
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM enrollment_events WHERE discord_id = ?1 AND event_type = 'form_opened'",
+    ).bind(USER).first()).toEqual({ n: 1 });
 
     const invalid = await app.request(`/api/enrollment/${enrollmentToken}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -80,6 +89,9 @@ describe('web enrollment cutover', () => {
     expect(invalid.status).toBe(400);
     expect(await invalid.json<any>()).toMatchObject({ fieldErrors: { name: expect.any(String), opportunities: expect.any(String), blurb: expect.stringContaining('currently 1') } });
     expect(await env.DB.prepare('SELECT id FROM participants WHERE discord_id = ?1').bind(USER).first()).toBeNull();
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM enrollment_events WHERE discord_id = ?1 AND event_type = 'enrollment_completed'",
+    ).bind(USER).first()).toEqual({ n: 0 });
   });
 
   it('saves the full profile, Discord mapping, role grant, nickname, and email confirmation together', async () => {
@@ -90,6 +102,9 @@ describe('web enrollment cutover', () => {
     expect(await response.json<any>()).toMatchObject({ ok: true, created: true });
     const participant = await env.DB.prepare('SELECT * FROM participants WHERE discord_id = ?1').bind(USER).first<any>();
     expect(participant).toMatchObject({ discord_username: 'test.student', discord_nickname: 'Test', name: 'Test Student', preferred_email: 'test@example.com', topics: '["dsa","system_design"]', linkedin_url: 'https://www.linkedin.com/in/test-student', other_url: 'https://github.com/test-student', email_ok: 1, status: 'active' });
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM enrollment_events WHERE discord_id = ?1 AND event_type = 'enrollment_completed'",
+    ).bind(USER).first()).toEqual({ n: 1 });
 
     const { results } = await env.DB.prepare("SELECT kind, payload FROM outbox WHERE kind IN ('role_add','nickname','email') ORDER BY id").all<any>();
     expect(results.map((row) => row.kind)).toEqual(expect.arrayContaining(['role_add', 'nickname', 'email']));

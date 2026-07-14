@@ -22,6 +22,7 @@ import {
 import { sessionFrom, type SessionUser } from './web';
 import { isCurrentOrganizer } from '../organizers';
 import { participantResume, resumeDownloadHeaders, resumeSummary, ResumeUploadError } from '../services/resumes';
+import { enrollmentFunnel } from '../services/enrollment-events';
 
 export const adminApi = new Hono<{ Bindings: Env }>();
 
@@ -585,7 +586,7 @@ adminApi.get('/api/admin/analytics', async (c) => {
 adminApi.get('/api/admin/operations', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
-  const [outbox, notifications, jobs, auditRows] = await Promise.all([
+  const [outbox, notifications, jobs, auditRows, enrollment] = await Promise.all([
     c.env.DB.prepare(
       `SELECT o.id, o.kind, o.payload, o.attempts, o.run_after, o.done_at, o.dismissed_at, o.last_error, o.created_at,
               (SELECT p.name FROM participants p
@@ -597,6 +598,7 @@ adminApi.get('/api/admin/operations', async (c) => {
     c.env.DB.prepare(`SELECT n.*, p.name FROM notify_log n LEFT JOIN participants p ON p.id = n.participant_id ORDER BY n.id DESC LIMIT 100`).all<any>(),
     c.env.DB.prepare('SELECT * FROM job_runs ORDER BY ran_at DESC LIMIT 100').all<any>(),
     c.env.DB.prepare(`SELECT a.*, p.name AS actor_name FROM audit_log a LEFT JOIN participants p ON p.id = a.actor_participant_id ORDER BY a.id DESC LIMIT 100`).all<any>(),
+    enrollmentFunnel(c.env),
   ]);
   const lastTick = jobs.results.find((row) => String(row.job_key).startsWith('tick:')) ?? null;
   const ageMinutes = lastTick ? Math.max(0, Math.round((Date.now() - new Date(lastTick.ran_at).getTime()) / 60_000)) : null;
@@ -606,7 +608,7 @@ adminApi.get('/api/admin/operations', async (c) => {
     ageMinutes,
     expectedEveryMinutes: 15,
   };
-  return c.json({ outbox: outbox.results, notifications: notifications.results, jobs: jobs.results, audit: auditRows.results, cron });
+  return c.json({ outbox: outbox.results, notifications: notifications.results, jobs: jobs.results, audit: auditRows.results, cron, enrollmentFunnel: enrollment });
 });
 
 adminApi.post('/api/admin/operations/outbox/:id/retry', async (c) => {

@@ -14,6 +14,7 @@ import {
   validateParticipantSettings,
   type ParticipantSettingsInput,
 } from '../services/participant-settings';
+import { logEnrollmentEvent } from '../services/enrollment-events';
 import {
   participantResume,
   readResumeBody,
@@ -51,6 +52,15 @@ publicApi.get('/api/enrollment/:token', async (c) => {
   const participant = await getParticipant(c.env, identity.discordId);
   if (participant?.status === 'removed' && (participant as any).removed_reason !== 'withdrew') {
     return c.json({ error: 'removed', message: 'This profile was removed. Contact an organizer if you think this is a mistake.' }, 403);
+  }
+  if (!participant?.topics) {
+    await logEnrollmentEvent(c.env, {
+      discordId: identity.discordId,
+      discordUsername: participant?.discord_username ?? identity.username,
+      guildId: identity.guildId,
+      eventType: 'form_opened',
+      source: 'web',
+    });
   }
   return c.json({
     discord: { id: identity.discordId, username: participant?.discord_username ?? identity.username ?? null },
@@ -114,7 +124,16 @@ publicApi.post('/api/enrollment/:token', async (c) => {
   if (input.emailOk && (before?.email_ok !== 1 || before.preferred_email?.toLowerCase() !== input.preferredEmail)) {
     await enqueueEmailConfirmation(c.env, input.preferredEmail, input.name);
   }
-  if (!before?.topics) await finishEnrollment(c.env, identity.guildId, identity.discordId, input.name);
+  if (!before?.topics) {
+    await logEnrollmentEvent(c.env, {
+      discordId: identity.discordId,
+      discordUsername: identity.username,
+      guildId: identity.guildId,
+      eventType: 'enrollment_completed',
+      source: 'web',
+    });
+    await finishEnrollment(c.env, identity.guildId, identity.discordId, input.name);
+  }
 
   const participant = await getParticipant(c.env, identity.discordId);
   return c.json({

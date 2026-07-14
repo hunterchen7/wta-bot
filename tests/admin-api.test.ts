@@ -61,6 +61,15 @@ beforeAll(async () => {
       resume_filename = 'Student Person Resume.pdf', resume_content_type = 'application/pdf',
       resume_bytes = ?3, resume_uploaded_at = ?4 WHERE id = ?1`,
   ).bind(STUDENT_ID, resumeKey, resumeBytes.byteLength, new Date().toISOString()).run();
+  await env.DB.prepare(
+    `INSERT INTO enrollment_events (discord_id, discord_username, event_type, source, created_at) VALUES
+       ('funnel-1', 'link.only', 'link_generated', 'join_button', '2026-07-13T14:00:00.000Z'),
+       ('funnel-2', 'form.opened', 'link_generated', 'join_command', '2026-07-13T14:01:00.000Z'),
+       ('funnel-2', 'form.opened', 'form_opened', 'web', '2026-07-13T14:02:00.000Z'),
+       ('funnel-3', 'completed.user', 'link_generated', 'join_button', '2026-07-13T14:03:00.000Z'),
+       ('funnel-3', 'completed.user', 'form_opened', 'web', '2026-07-13T14:04:00.000Z'),
+       ('funnel-3', 'completed.user', 'enrollment_completed', 'web', '2026-07-13T14:05:00.000Z')`,
+  ).run();
 });
 
 describe('admin JSON API authorization', () => {
@@ -122,6 +131,18 @@ describe('admin operational data', () => {
     expect(body.activeParticipants).toBe(2);
     expect(body.matchingReady).toBe(false);
     expect(body.queues).toMatchObject({ reviews: 1, failedOutbox: 0 });
+  });
+
+  it('returns enrollment funnel counts and person-level activity in Operations', async () => {
+    const response = await request('/api/admin/operations');
+    expect(response.status).toBe(200);
+    const funnel = (await response.json<any>()).enrollmentFunnel;
+    expect(funnel).toMatchObject({ generated: 3, linksIssued: 3, opened: 2, completed: 1 });
+    expect(funnel.people).toEqual(expect.arrayContaining([
+      expect.objectContaining({ discord_id: 'funnel-1', discord_username: 'link.only', status: 'link_generated' }),
+      expect.objectContaining({ discord_id: 'funnel-2', discord_username: 'form.opened', status: 'in_progress' }),
+      expect.objectContaining({ discord_id: 'funnel-3', discord_username: 'completed.user', status: 'completed' }),
+    ]));
   });
 
   it('returns roster, detail, rounds, analytics, and CSV', async () => {

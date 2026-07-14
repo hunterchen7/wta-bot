@@ -26,7 +26,7 @@ function buildMcpServer(env: Env, principal: AdminPrincipal): McpServer {
 
   server.registerTool('get_overview', {
     title: 'Get program health overview',
-    description: 'Return program-wide aggregate health across all cohorts: participant statuses, session states, report completion, exhausted delivery items, and the most recent cron tick. Use list_rounds for current-round details.',
+    description: 'Return program-wide aggregate health across all cohorts: the enrollment funnel (link generated, form opened, and completed), participant statuses, session states, report completion, exhausted delivery items, and the most recent cron tick. Use list_rounds for current-round details.',
     inputSchema: {},
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async () => result(await automationOverview(env)));

@@ -5,9 +5,10 @@ import { activeCohort, cohortWeeks } from '../engine/weeks';
 import { composeQuestionMarkdown, normalizeAvailableWeeks, parseQuestionMarkdown } from '../question-markdown';
 import { problemBankWorkspace } from './problem-sets';
 import { writeAdminAudit } from './admin-audit';
+import { enrollmentFunnel } from './enrollment-events';
 
 export async function automationOverview(env: Env) {
-  const [participants, sessions, forms, failedOutbox, lastTick] = await Promise.all([
+  const [participants, sessions, forms, failedOutbox, lastTick, enrollment] = await Promise.all([
     env.DB.prepare(
       `SELECT CASE WHEN pairing_excluded = 1 THEN 'organizer' ELSE status END AS status, count(*) AS count
        FROM participants GROUP BY CASE WHEN pairing_excluded = 1 THEN 'organizer' ELSE status END`,
@@ -23,6 +24,7 @@ export async function automationOverview(env: Env) {
        WHERE done_at IS NULL AND dismissed_at IS NULL AND attempts >= 5`,
     ).first<{ count: number }>(),
     env.DB.prepare("SELECT job_key, ran_at FROM job_runs WHERE job_key LIKE 'tick:%' ORDER BY ran_at DESC LIMIT 1").first<any>(),
+    enrollmentFunnel(env),
   ]);
   return {
     participants: participants.results,
@@ -30,6 +32,7 @@ export async function automationOverview(env: Env) {
     forms: forms.results,
     failedOutbox: Number(failedOutbox?.count ?? 0),
     cron: lastTick ? { lastTickAt: lastTick.ran_at, jobKey: lastTick.job_key } : null,
+    enrollmentFunnel: enrollment,
   };
 }
 
