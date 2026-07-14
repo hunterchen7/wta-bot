@@ -51,16 +51,15 @@ export async function enrollmentLinkResponse(c: Ctx, interaction: Interaction, s
     new Date(Date.now() + 60 * 60_000),
   );
   const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
-  if (!existing?.topics) {
-    await logEnrollmentEvent(c.env, {
-      discordId: user.id,
-      discordUsername: user.username,
-      guildId: interaction.guild_id ?? null,
-      eventType: 'link_generated',
-      source,
-      externalId: interaction.id,
-    });
-  }
+  await logEnrollmentEvent(c.env, {
+    discordId: user.id,
+    discordUsername: user.username,
+    guildId: interaction.guild_id ?? null,
+    eventType: 'link_generated',
+    source,
+    flow: existing?.topics ? 'profile_edit' : 'enrollment',
+    externalId: interaction.id,
+  });
   return c.json(
     ephemeral(
       `${existing?.topics ? 'Edit your WTA profile' : 'Complete your WTA enrollment'} in the web app (link valid for 1 hour):\n${origin}/enroll/${token}\n\n` +

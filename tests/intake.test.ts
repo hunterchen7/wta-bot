@@ -9,8 +9,8 @@ const GUILD = '777000111';
 let signer: Signer;
 let enrollmentToken = '';
 
-const joinCommand = (id = USER, username = 'test.student') => ({
-  type: 2, id: '2', token: 'interaction', guild_id: GUILD, data: { name: 'join' },
+const joinCommand = (id = USER, username = 'test.student', interactionId = '2') => ({
+  type: 2, id: interactionId, token: 'interaction', guild_id: GUILD, data: { name: 'join' },
   ...asUser(id, { user: { id, username, global_name: username } }),
 });
 
@@ -60,8 +60,8 @@ describe('web enrollment cutover', () => {
     expect(match).not.toBeNull();
     enrollmentToken = match[1];
     expect(await env.DB.prepare(
-      "SELECT event_type, source, discord_username FROM enrollment_events WHERE discord_id = ?1 ORDER BY id",
-    ).bind(USER).all()).toMatchObject({ results: [{ event_type: 'link_generated', source: 'join_button', discord_username: 'test.student' }] });
+      "SELECT event_type, source, flow, discord_username FROM enrollment_events WHERE discord_id = ?1 ORDER BY id",
+    ).bind(USER).all()).toMatchObject({ results: [{ event_type: 'link_generated', source: 'join_button', flow: 'enrollment', discord_username: 'test.student' }] });
   });
 
   it('keeps /join as a fallback for the same enrollment flow', async () => {
@@ -70,8 +70,8 @@ describe('web enrollment cutover', () => {
     expect(body.data.flags).toBe(64);
     expect(body.data.content).toMatch(/https:\/\/wta\.example\/enroll\/\S+/);
     expect(await env.DB.prepare(
-      "SELECT source FROM enrollment_events WHERE discord_id = ?1 AND event_type = 'link_generated' ORDER BY id",
-    ).bind(USER).all()).toMatchObject({ results: [{ source: 'join_button' }, { source: 'join_command' }] });
+      "SELECT source, flow FROM enrollment_events WHERE discord_id = ?1 AND event_type = 'link_generated' ORDER BY id",
+    ).bind(USER).all()).toMatchObject({ results: [{ source: 'join_button', flow: 'enrollment' }, { source: 'join_command', flow: 'enrollment' }] });
   });
 
   it('loads linked Discord identity and reports exact validation errors', async () => {
@@ -158,13 +158,16 @@ describe('web enrollment cutover', () => {
   });
 
   it('prefills edits and refreshes the stored Discord username on later interactions', async () => {
-    const response = await sendInteraction(signer, joinCommand(USER, 'renamed.student'), { ALLOWED_GUILD_IDS: GUILD, PUBLIC_ORIGIN: 'https://wta.example' });
+    const response = await sendInteraction(signer, joinCommand(USER, 'renamed.student', '3'), { ALLOWED_GUILD_IDS: GUILD, PUBLIC_ORIGIN: 'https://wta.example' });
     const content = (await response.json<any>()).data.content;
     const token = content.match(/\/enroll\/(\S+)/)![1];
     const load = await (await app.request(`/api/enrollment/${token}`, {}, env)).json<any>();
     expect(load.profile).toMatchObject({ name: 'Test Student', preferredEmail: 'test@example.com' });
     expect(load.discord.username).toBe('renamed.student');
     expect(await env.DB.prepare('SELECT discord_username FROM participants WHERE discord_id = ?1').bind(USER).first()).toEqual({ discord_username: 'renamed.student' });
+    expect(await env.DB.prepare(
+      "SELECT source, flow, discord_username FROM enrollment_events WHERE discord_id = ?1 AND event_type = 'link_generated' ORDER BY id DESC LIMIT 1",
+    ).bind(USER).first()).toEqual({ source: 'join_command', flow: 'profile_edit', discord_username: 'renamed.student' });
   });
 
   it('rejects expired/garbage enrollment links as JSON', async () => {
