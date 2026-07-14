@@ -55,11 +55,17 @@ const problems: ProblemsData['problems'] = [
 
 const operations: OperationsData = {
   enrollmentFunnel: {
-    generated: 18, linksIssued: 22, opened: 15, completed: 12,
+    generated: 18, linksIssued: 22, totalLinksIssued: 23, opened: 15, completed: 12,
     people: [
       { discord_id: '200003', display_name: 'Avery Brooks', discord_username: 'avery.brooks', generated_at: '2026-08-13T13:10:00.000Z', last_generated_at: '2026-08-13T13:10:00.000Z', links_issued: 1, opened_at: null, completed_at: null, last_event_at: '2026-08-13T13:10:00.000Z', status: 'link_generated' },
       { discord_id: '200002', display_name: 'Morgan Bell', discord_username: 'morgan.bell', generated_at: '2026-08-13T12:40:00.000Z', last_generated_at: '2026-08-13T12:40:00.000Z', links_issued: 1, opened_at: '2026-08-13T12:42:00.000Z', completed_at: null, last_event_at: '2026-08-13T12:42:00.000Z', status: 'in_progress' },
       { discord_id: '200001', display_name: 'Jamie Wu', discord_username: 'jamie.wu', generated_at: '2026-08-13T11:20:00.000Z', last_generated_at: '2026-08-13T11:20:00.000Z', links_issued: 2, opened_at: '2026-08-13T11:22:00.000Z', completed_at: '2026-08-13T11:31:00.000Z', last_event_at: '2026-08-13T11:31:00.000Z', status: 'completed' },
+    ],
+    recentLinks: [
+      { id: 24, discord_id: '200001', display_name: 'Jamie Wu', discord_username: 'jamie.wu', source: 'join_command', flow: 'profile_edit', created_at: '2026-08-13T13:35:00.000Z' },
+      { id: 21, discord_id: '200003', display_name: 'Avery Brooks', discord_username: 'avery.brooks', source: 'join_button', flow: 'enrollment', created_at: '2026-08-13T13:10:00.000Z' },
+      { id: 19, discord_id: '200002', display_name: 'Morgan Bell', discord_username: 'morgan.bell', source: 'join_command', flow: 'enrollment', created_at: '2026-08-13T12:40:00.000Z' },
+      { id: 16, discord_id: '200001', display_name: 'Jamie Wu', discord_username: 'jamie.wu', source: 'join_button', flow: 'enrollment', created_at: '2026-08-13T11:20:00.000Z' },
     ],
   },
   outbox: [

@@ -18,6 +18,7 @@ export type OverviewData = {
 export type EnrollmentFunnel = {
   generated: number;
   linksIssued: number;
+  totalLinksIssued: number;
   opened: number;
   completed: number;
   people: Array<{
@@ -31,6 +32,15 @@ export type EnrollmentFunnel = {
     completed_at: string | null;
     last_event_at: string;
     status: 'link_generated' | 'in_progress' | 'completed';
+  }>;
+  recentLinks: Array<{
+    id: number;
+    discord_id: string;
+    display_name: string;
+    discord_username: string | null;
+    source: 'join_button' | 'join_command';
+    flow: 'enrollment' | 'profile_edit';
+    created_at: string;
   }>;
 };
 
