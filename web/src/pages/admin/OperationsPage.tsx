@@ -1,5 +1,5 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Link2, MousePointerClick } from 'lucide-react';
 import type { OperationsData, OutboxRow } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { Badge, Button, EmptyState, ErrorState, formatDate, LoadingState, PageIntro, Panel, tableClass, tdClass, thClass, Tabs } from '../../components/AdminUI';
@@ -14,10 +14,30 @@ export function OperationsPage() {
   const dismiss = async (row: OutboxRow) => { setDismissing(row.id); try { await adminRequest(`/operations/outbox/${row.id}/dismiss`, { method: 'POST', body: '{}' }); await reload(); } finally { setDismissing(null); } };
   return <div className="flex min-h-[34rem] flex-col gap-5 lg:h-[calc(100dvh-9rem)] lg:min-h-0"><PageIntro title="Operations" description="Delivery, scheduled work, and organizer actions—the evidence you need when something feels off." />
     {failed ? <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 dark:border-rose-900/60 dark:bg-rose-950/25"><div className="text-sm font-extrabold text-rose-900 dark:text-rose-200">{failed} {failed === 1 ? 'delivery needs' : 'deliveries need'} attention</div><p className="mt-0.5 text-xs leading-5 text-rose-700 dark:text-rose-300/80">Automatic retries have stopped. Review the suggested fix, then retry or dismiss the item.</p></div> : null}
-    <div className="flex"><Tabs value={tab} onChange={setTab} items={[{ value: 'outbox', label: 'Delivery queue', count: data.outbox.filter((row) => !row.done_at && !row.dismissed_at).length }, { value: 'notifications', label: 'Notification history', count: data.notifications.length }, { value: 'jobs', label: 'Scheduled runs', count: data.jobs.length }, { value: 'audit', label: 'Audit log', count: data.audit.length }]} /></div>
-    <div className="min-h-0 flex-1">{tab === 'outbox' ? <OutboxPanel rows={data.outbox} retrying={retrying} dismissing={dismissing} onRetry={retry} onDismiss={dismiss} /> : tab === 'notifications' ? <NotificationsPanel rows={data.notifications} /> : tab === 'jobs' ? <JobsPanel rows={data.jobs} cron={data.cron} /> : <AuditPanel rows={data.audit} />}</div>
+    <div className="flex"><Tabs value={tab} onChange={setTab} items={[{ value: 'outbox', label: 'Delivery queue', count: data.outbox.filter((row) => !row.done_at && !row.dismissed_at).length }, { value: 'enrollment', label: 'Enrollment activity', count: data.enrollmentFunnel.generated }, { value: 'notifications', label: 'Notification history', count: data.notifications.length }, { value: 'jobs', label: 'Scheduled runs', count: data.jobs.length }, { value: 'audit', label: 'Audit log', count: data.audit.length }]} /></div>
+    <div className="min-h-0 flex-1">{tab === 'outbox' ? <OutboxPanel rows={data.outbox} retrying={retrying} dismissing={dismissing} onRetry={retry} onDismiss={dismiss} /> : tab === 'enrollment' ? <EnrollmentPanel funnel={data.enrollmentFunnel} /> : tab === 'notifications' ? <NotificationsPanel rows={data.notifications} /> : tab === 'jobs' ? <JobsPanel rows={data.jobs} cron={data.cron} /> : <AuditPanel rows={data.audit} />}</div>
   </div>;
 }
+
+function EnrollmentPanel({ funnel }: { funnel: OperationsData['enrollmentFunnel'] }) {
+  const stages = [
+    { label: 'Link generated', value: funnel.generated, note: `${funnel.linksIssued} total ${funnel.linksIssued === 1 ? 'link' : 'links'} issued`, icon: Link2, tone: 'bg-western-100 text-western-800 dark:bg-western-950/70 dark:text-western-300' },
+    { label: 'Form opened', value: funnel.opened, note: conversion(funnel.opened, funnel.generated, 'of link holders'), icon: MousePointerClick, tone: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300' },
+    { label: 'Enrolled', value: funnel.completed, note: conversion(funnel.completed, funnel.opened, 'of form openers'), icon: CheckCircle2, tone: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300' },
+  ];
+  return <Panel className="flex h-full min-h-0 flex-col" title="Enrollment activity" description="First-time enrollment events recorded from Discord link generation through a successfully saved profile.">
+    <div className="grid shrink-0 gap-3 border-b border-slate-100 p-4 sm:grid-cols-3 dark:border-white/10">{stages.map(({ label, value, note, icon: Icon, tone }, index) => <div key={label} className="motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 rounded-xl border border-slate-200/80 bg-slate-50/60 p-4 dark:border-white/10 dark:bg-white/[.025]" style={{ animationDelay: `${index * 45}ms` }}><div className="flex items-center justify-between gap-3"><span className={`grid size-8 place-items-center rounded-lg ${tone}`}><Icon aria-hidden="true" className="size-4" /></span><span className="text-2xl font-black tabular-nums text-slate-950">{value}</span></div><div className="mt-3 text-xs font-extrabold text-slate-900">{label}</div><div className="mt-0.5 text-[0.68rem] text-slate-500">{note}</div></div>)}</div>
+    {funnel.people.length ? <OperationsTable rowCount={funnel.people.length}><table className={tableClass}><thead><tr><th className={thClass}>Person</th><th className={thClass}>Current stage</th><th className={thClass}>Link generated</th><th className={thClass}>Form opened</th><th className={thClass}>Enrolled</th><th className={thClass}>Links</th></tr></thead><tbody>{funnel.people.map((person) => <tr key={person.discord_id}><td className={tdClass}><div className="font-semibold text-slate-900">{person.display_name}</div><div className="mt-0.5 text-xs text-slate-500">{person.discord_username ? `@${person.discord_username}` : `Discord ${person.discord_id}`}</div></td><td className={tdClass}><EnrollmentStatus value={person.status} /></td><td className={tdClass}>{formatDate(person.generated_at)}</td><td className={tdClass}>{formatDate(person.opened_at)}</td><td className={tdClass}>{formatDate(person.completed_at)}</td><td className={`${tdClass} text-center font-bold tabular-nums text-slate-900`}>{person.links_issued}</td></tr>)}</tbody></table></OperationsTable> : <EmptyState title="No enrollment activity yet" description="People will appear here after they generate their first Join WTA link." />}
+  </Panel>;
+}
+
+function EnrollmentStatus({ value }: { value: OperationsData['enrollmentFunnel']['people'][number]['status'] }) {
+  const styles = value === 'completed' ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300' : value === 'in_progress' ? 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300' : 'border-western-200 bg-western-50 text-western-800 dark:border-western-800 dark:bg-western-950/50 dark:text-western-300';
+  const label = value === 'completed' ? 'Enrolled' : value === 'in_progress' ? 'Form opened' : 'Link generated';
+  return <span className={`inline-flex rounded-full border px-2 py-0.5 text-[0.68rem] font-extrabold ${styles}`}>{label}</span>;
+}
+
+function conversion(value: number, base: number, suffix: string) { return base ? `${Math.round(value / base * 100)}% ${suffix}` : `0% ${suffix}`; }
 function OutboxPanel({ rows, retrying, dismissing, onRetry, onDismiss }: { rows: OutboxRow[]; retrying: number | null; dismissing: number | null; onRetry: (row: OutboxRow) => Promise<void>; onDismiss: (row: OutboxRow) => Promise<void> }) {
   const ordered = [...rows].sort((a, b) => deliveryRank(deliveryState(a)) - deliveryRank(deliveryState(b)) || b.id - a.id);
   return <Panel className="flex h-full min-h-0 flex-col" title="Delivery queue" description="Failed and waiting work appears first. Delivered and dismissed items remain as recent history.">

@@ -15,6 +15,25 @@ export type OverviewData = {
   recentAudit: AuditRow[];
 };
 
+export type EnrollmentFunnel = {
+  generated: number;
+  linksIssued: number;
+  opened: number;
+  completed: number;
+  people: Array<{
+    discord_id: string;
+    display_name: string;
+    discord_username: string | null;
+    generated_at: string;
+    last_generated_at: string;
+    links_issued: number;
+    opened_at: string | null;
+    completed_at: string | null;
+    last_event_at: string;
+    status: 'link_generated' | 'in_progress' | 'completed';
+  }>;
+};
+
 export type ParticipantRow = {
   id: number; discord_id: string; discord_username: string | null; discord_nickname: string | null; name: string | null; preferred_email: string | null; western_email: string | null;
   year: string | null; program: string | null; opportunities: string | null; prior_wta: number; experience_band: string | null; topics: string | null;
@@ -51,7 +70,7 @@ export type AnalyticsData = {
 export type OutboxRow = { id: number; kind: string; payload: string; participant_name: string | null; attempts: number; run_after: string; done_at: string | null; dismissed_at: string | null; last_error: string | null; created_at: string };
 export type AuditRow = { id: number; actor_participant_id: number | null; actor_name: string | null; action: string; target_type: string | null; target_id: string | null; detail: string | null; created_at: string };
 export type CronHealth = { status: 'healthy' | 'late' | 'never_run'; lastTickAt: string | null; ageMinutes: number | null; expectedEveryMinutes: number };
-export type OperationsData = { outbox: OutboxRow[]; notifications: Array<Record<string, any>>; jobs: Array<Record<string, any>>; audit: AuditRow[]; cron: CronHealth };
+export type OperationsData = { outbox: OutboxRow[]; notifications: Array<Record<string, any>>; jobs: Array<Record<string, any>>; audit: AuditRow[]; cron: CronHealth; enrollmentFunnel: EnrollmentFunnel };
 
 export type AdminSettingsData = { settings: Record<string, string>; cohorts: Cohort[]; timeline: ProgramWeek[]; programWeek: ProgramWeek | null; activeParticipants: number; minimumMatchingPool: number };
 export type AdminMcpData = {

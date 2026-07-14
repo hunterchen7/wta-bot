@@ -54,6 +54,14 @@ const problems: ProblemsData['problems'] = [
 ];
 
 const operations: OperationsData = {
+  enrollmentFunnel: {
+    generated: 18, linksIssued: 22, opened: 15, completed: 12,
+    people: [
+      { discord_id: '200003', display_name: 'Avery Brooks', discord_username: 'avery.brooks', generated_at: '2026-08-13T13:10:00.000Z', last_generated_at: '2026-08-13T13:10:00.000Z', links_issued: 1, opened_at: null, completed_at: null, last_event_at: '2026-08-13T13:10:00.000Z', status: 'link_generated' },
+      { discord_id: '200002', display_name: 'Morgan Bell', discord_username: 'morgan.bell', generated_at: '2026-08-13T12:40:00.000Z', last_generated_at: '2026-08-13T12:40:00.000Z', links_issued: 1, opened_at: '2026-08-13T12:42:00.000Z', completed_at: null, last_event_at: '2026-08-13T12:42:00.000Z', status: 'in_progress' },
+      { discord_id: '200001', display_name: 'Jamie Wu', discord_username: 'jamie.wu', generated_at: '2026-08-13T11:20:00.000Z', last_generated_at: '2026-08-13T11:20:00.000Z', links_issued: 2, opened_at: '2026-08-13T11:22:00.000Z', completed_at: '2026-08-13T11:31:00.000Z', last_event_at: '2026-08-13T11:31:00.000Z', status: 'completed' },
+    ],
+  },
   outbox: [
     { id: 203, kind: 'email', payload: JSON.stringify({ to: 'maya@example.com', subject: 'Your WTA pairing' }), participant_name: 'Maya Singh', attempts: 5, run_after: now, done_at: null, dismissed_at: null, last_error: 'Email binding rejected recipient', created_at: now },
     { id: 202, kind: 'dm', payload: JSON.stringify({ userId: '100000000000000002', message: { content: 'Choose a session time.' } }), participant_name: 'Jordan Lee', attempts: 1, run_after: '2026-08-13T14:05:00.000Z', done_at: null, dismissed_at: null, last_error: 'Discord API 429', created_at: now },
