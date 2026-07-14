@@ -3,9 +3,10 @@ import type { ReviewRow, ReviewsData } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, LoadingState, PageIntro, Panel, Tabs } from '../../components/AdminUI';
 import { useAdminData } from '../../hooks/useAdminData';
+import { LIVE_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
 
 export function ReviewsPage() {
-  const { data, error, loading, reload, setData } = useAdminData<ReviewsData>('/reviews');
+  const { data, error, loading, reload, setData } = useAdminData<ReviewsData>('/reviews', LIVE_REFRESH_INTERVAL_MS);
   const [tab, setTab] = useState('pending'); const [decision, setDecision] = useState<{ row: ReviewRow; action: 'verify' | 'flag' | 'reset' } | null>(null); const [busy, setBusy] = useState(false);
   const rows = useMemo(() => data?.reviews.filter((row) => tab === 'all' || row.review_state === tab) ?? [], [data, tab]);
   if (loading && !data) return <LoadingState />;

@@ -5,9 +5,10 @@ import { adminRequest } from '../../api';
 import { Badge, Button, EmptyState, ErrorState, formatDate, LoadingState, PageIntro, Panel, tableClass, tdClass, thClass, Tabs } from '../../components/AdminUI';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
+import { LIVE_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
 
 export function OperationsPage() {
-  const { data, error, loading, reload } = useAdminData<OperationsData>('/operations'); const [tab, setTab] = useState('outbox'); const [retrying, setRetrying] = useState<number | null>(null); const [dismissing, setDismissing] = useState<number | null>(null);
+  const { data, error, loading, reload } = useAdminData<OperationsData>('/operations', LIVE_REFRESH_INTERVAL_MS); const [tab, setTab] = useState('outbox'); const [retrying, setRetrying] = useState<number | null>(null); const [dismissing, setDismissing] = useState<number | null>(null);
   const failed = useMemo(() => data?.outbox.filter((row) => !row.done_at && !row.dismissed_at && row.attempts >= 5).length ?? 0, [data]);
   if (loading && !data) return <LoadingState />; if (error || !data) return <ErrorState message={error ?? 'No operations data returned.'} onRetry={() => void reload()} />;
   const retry = async (row: OutboxRow) => { setRetrying(row.id); try { await adminRequest(`/operations/outbox/${row.id}/retry`, { method: 'POST', body: '{}' }); await reload(); } finally { setRetrying(null); } };

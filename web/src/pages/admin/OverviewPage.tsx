@@ -3,6 +3,7 @@ import type { OverviewData } from '../../admin-types';
 import { Badge, ErrorState, formatDate, LoadingState, Metric, PageIntro, Panel, tdClass, thClass } from '../../components/AdminUI';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
+import { LIVE_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
 
 const queueLinks: Array<[keyof OverviewData['queues'], string, string]> = [
   ['openForms', 'Reports outstanding', '/app/admin/rounds'], ['incidents', 'Open incidents', '/app/admin/participants'],
@@ -11,7 +12,7 @@ const queueLinks: Array<[keyof OverviewData['queues'], string, string]> = [
 ];
 
 export function OverviewPage() {
-  const { data, error, loading, reload } = useAdminData<OverviewData>('/overview');
+  const { data, error, loading, reload } = useAdminData<OverviewData>('/overview', LIVE_REFRESH_INTERVAL_MS);
   if (loading && !data) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? 'No overview data returned.'} onRetry={() => void reload()} />;
   const totalSessions = data.sessionStates.reduce((sum, row) => sum + Number(row.n), 0);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { getDashboard, logout, type DashboardData } from './api';
 import { AppSidebar } from './components/AppSidebar';
@@ -7,25 +7,38 @@ import { ThemeToggle } from './components/ThemeToggle';
 import { useDocumentTitle } from './components/DocumentTitle';
 import { DashboardContext } from './dashboard-context';
 import { preloadAdminRoute, preloadAllAdminModules } from './admin-routes';
+import { LIVE_REFRESH_INTERVAL_MS, useAutoRefresh } from './hooks/useAutoRefresh';
 
 export function AppLayout() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(readInitialSidebarState);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
   const location = useLocation();
   useDocumentTitle(pageTitle(location.pathname));
 
   const refresh = useCallback(async (options?: { silent?: boolean }) => {
+    if (refreshInFlight.current) return refreshInFlight.current;
+    const request = (async () => {
+      try {
+        setData(await getDashboard());
+        setError(null);
+      } catch (cause) {
+        if (!options?.silent) setError(cause instanceof Error ? cause.message : 'Could not load the dashboard.');
+      }
+    })();
+    refreshInFlight.current = request;
     try {
-      setData(await getDashboard());
-      setError(null);
-    } catch (cause) {
-      if (!options?.silent) setError(cause instanceof Error ? cause.message : 'Could not load the dashboard.');
+      await request;
+    } finally {
+      if (refreshInFlight.current === request) refreshInFlight.current = null;
     }
   }, []);
+  const refreshSilently = useCallback(() => refresh({ silent: true }), [refresh]);
 
   useEffect(() => { void refresh(); }, [refresh]);
+  useAutoRefresh(refreshSilently, location.pathname.startsWith('/app/admin') ? false : LIVE_REFRESH_INTERVAL_MS);
   useEffect(() => { preloadAdminRoute(location.pathname); }, [location.pathname]);
   useEffect(() => {
     if (!data?.viewer.organizer) return;

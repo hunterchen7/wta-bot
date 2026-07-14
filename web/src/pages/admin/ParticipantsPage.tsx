@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/pop
 import { ResumePreviewDialog, type ResumePreviewTarget } from '../../components/ResumePreviewDialog';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
+import { STANDARD_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
 import { SelectControl } from '../../components/SelectControl';
 
 const PARTICIPANT_STATUSES = ['active', 'paused', 'held', 'removed', 'completed'];
@@ -51,7 +52,7 @@ const rosterDateFormatter = new Intl.DateTimeFormat('en-CA', { month: 'short', d
 const rosterTimeFormatter = new Intl.DateTimeFormat('en-CA', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Toronto' });
 
 export function ParticipantsPage() {
-  const { data, error, loading, reload } = useAdminData<ParticipantsData>('/participants');
+  const { data, error, loading, reload } = useAdminData<ParticipantsData>('/participants', STANDARD_REFRESH_INTERVAL_MS);
   const [query, setQuery] = useState(''); const deferredQuery = useDeferredValue(query);
   const [status, setStatus] = useState('all'); const [year, setYear] = useState('all'); const [program, setProgram] = useState('all');
   const [experience, setExperience] = useState('all'); const [opportunity, setOpportunity] = useState('all'); const [topic, setTopic] = useState('all');

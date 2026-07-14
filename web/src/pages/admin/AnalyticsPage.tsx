@@ -1,9 +1,10 @@
 import type { AnalyticsData, CountRow } from '../../admin-types';
 import { Badge, ErrorState, LoadingState, Metric, PageIntro, Panel, tableClass, tableWrapClass, tdClass, thClass } from '../../components/AdminUI';
 import { useAdminData } from '../../hooks/useAdminData';
+import { STANDARD_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
 
 export function AnalyticsPage() {
-  const { data, error, loading, reload } = useAdminData<AnalyticsData>('/analytics');
+  const { data, error, loading, reload } = useAdminData<AnalyticsData>('/analytics', STANDARD_REFRESH_INTERVAL_MS);
   if (loading && !data) return <LoadingState />; if (error || !data) return <ErrorState message={error ?? 'No analytics returned.'} onRetry={() => void reload()} />;
   const totalParticipants = sum(data.participants); const totalSessions = sum(data.sessions); const completed = valueFor(data.sessions, 'completed'); const reportTotal = data.reports.reduce((n, r) => n + Number(r.total), 0); const submitted = data.reports.reduce((n, r) => n + Number(r.submitted), 0);
   return <div className="space-y-7"><PageIntro title="Analytics" description="Cohort outcomes and process quality, kept close to the underlying counts so the numbers stay interpretable." />

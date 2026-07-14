@@ -1,7 +1,4 @@
-import { useEffect } from 'react';
 import { useDashboard } from '../dashboard-context';
-
-const REFRESH_INTERVAL_MS = 15_000;
 
 const stateStyles: Record<string, string> = {
   complete: 'bg-emerald-100 text-emerald-800',
@@ -16,26 +13,8 @@ const stateStyles: Record<string, string> = {
 };
 
 export function ProgressPage() {
-  const { data, refresh } = useDashboard();
+  const { data } = useDashboard();
   const { participant, progress, sessions, owedReports, programWeek } = data;
-
-  useEffect(() => {
-    let refreshing = false;
-    const poll = async () => {
-      if (document.visibilityState !== 'visible' || refreshing) return;
-      refreshing = true;
-      try { await refresh({ silent: true }); } finally { refreshing = false; }
-    };
-    const interval = window.setInterval(() => void poll(), REFRESH_INTERVAL_MS);
-    const onVisible = () => { if (document.visibilityState === 'visible') void poll(); };
-    document.addEventListener('visibilitychange', onVisible);
-    window.addEventListener('focus', onVisible);
-    return () => {
-      window.clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
-      window.removeEventListener('focus', onVisible);
-    };
-  }, [refresh]);
 
   return (
     <div className="space-y-8">

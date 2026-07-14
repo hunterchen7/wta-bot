@@ -3,12 +3,13 @@ import type { RoundsData } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { Badge, Button, EmptyState, ErrorState, formatDate, LoadingState, Metric, PageIntro, Panel, tableClass, tableWrapClass, tdClass, thClass, Tabs } from '../../components/AdminUI';
 import { useAdminData } from '../../hooks/useAdminData';
+import { LIVE_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
 import { SelectControl } from '../../components/SelectControl';
 
 export function RoundsPage() {
   const [weekId, setWeekId] = useState<number | null>(null); const [tab, setTab] = useState('sessions');
   const path = weekId ? `/rounds?week=${weekId}` : '/rounds';
-  const { data, error, loading, reload } = useAdminData<RoundsData>(path);
+  const { data, error, loading, reload } = useAdminData<RoundsData>(path, LIVE_REFRESH_INTERVAL_MS);
   const counts = useMemo(() => ({ completed: data?.sessions.filter((row) => row.state === 'completed').length ?? 0, unscheduled: data?.sessions.filter((row) => row.state === 'pending_schedule').length ?? 0, reports: data?.sessions.reduce((sum, row) => sum + Number(row.reports_in), 0) ?? 0, regularOptins: data?.optins.filter((row) => row.regular_opt_in === 1).length ?? 0, extraInterviewers: data?.optins.filter((row) => row.extra_interviewer === 1).length ?? 0 }), [data]);
   if (loading && !data) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? 'No round data returned.'} onRetry={() => void reload()} />;

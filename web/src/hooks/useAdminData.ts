@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type SetStateAction } from 'react';
 import { adminRequest } from '../api';
+import { useAutoRefresh } from './useAutoRefresh';
 
 type CacheEntry = { data: unknown; updatedAt: number };
 const cache = new Map<string, CacheEntry>();
@@ -30,7 +31,7 @@ async function fetchAdminData<T>(path: string, force = false): Promise<T> {
 
 export function preloadAdminData(path: string) { void fetchAdminData(path).catch(() => undefined); }
 
-export function useAdminData<T>(path: string) {
+export function useAdminData<T>(path: string, refreshIntervalMs: number | false = false) {
   const initial = cached<T>(path);
   const [data, setDataState] = useState<T | null>(() => initial?.data ?? null);
   const [error, setError] = useState<string | null>(null);
@@ -55,5 +56,7 @@ export function useAdminData<T>(path: string) {
       return next;
     });
   }, [path]);
+  const refreshInBackground = useCallback(() => load(true), [load]);
+  useAutoRefresh(refreshInBackground, refreshIntervalMs);
   return { data, error, loading, reload: load, setData };
 }
