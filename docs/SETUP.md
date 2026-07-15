@@ -59,7 +59,8 @@ Rules of the road:
    `applications.commands`** → bot permissions:
    View Channels, Send Messages, Create Public Threads, Create Private
    Threads, Send Messages in Threads, Manage Threads, Embed Links, Attach
-   Files, Mention Everyone *(optional)*, Manage Roles *(optional — needed for
+   Files, Mention Everyone *(optional)*, Manage Server + Manage Channels
+   *(needed for `/admin setup welcome` and annual channel setup)*, Manage Roles *(optional — needed for
    participant roles; bot's role must sit above those
    roles in the server's role list)*, Manage Nicknames *(optional — lets intake
    set members' server nicknames to their entered real names; same hierarchy

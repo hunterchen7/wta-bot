@@ -133,6 +133,11 @@ export const COMMANDS: Command[] = [
             name: 'publish',
             description: 'Go live: flip bootstrapped channels to member-facing permissions',
           },
+          {
+            type: SUB_COMMAND,
+            name: 'welcome',
+            description: 'Create rules, Start Here, the Join WTA button, and Welcome Screen',
+          },
         ],
       },
       {

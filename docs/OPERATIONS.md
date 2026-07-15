@@ -57,6 +57,14 @@ interaction — no deploy.
   forum — no privacy, but a tidy browsable board). The bot adapts automatically.
 - Use Discord's native verification and AutoMod settings for server access;
   the bot does not run a separate verification gate.
+- Run `/admin setup welcome` to create or reuse read-only `#rules` and
+  `#start-here` channels, publish the rules and persistent **Join WTA** button,
+  and enable Discord's Welcome Screen. If Community Onboarding is already
+  enabled, it also adds Start Here and Rules to the default channels without
+  replacing existing prompts. The command is idempotent, so rerunning
+  it edits the bot-owned messages instead of duplicating them. Copy those five
+  rules once into **Server Settings → Safety Setup → Rules Screening**; Discord
+  no longer exposes that editor through its bot API.
 - If the interactions endpoint ever shows as failing in the portal, the Worker
   is down or the public key changed — check `/health`, then secrets.
 

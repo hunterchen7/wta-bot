@@ -9,6 +9,10 @@ export type SettingKey =
   | 'threads_channel_id' // parent channel for session threads
   | 'participant_role_id' // granted on completed enrollment
   | 'organizer_role_id' // dashboard organizer check + admin surfaces
+  | 'rules_channel_id' // public rules channel used by Discord's welcome screen
+  | 'start_here_channel_id' // public enrollment CTA destination
+  | 'rules_message_id' // bot-owned rules message, edited on setup reruns
+  | 'start_here_message_id' // bot-owned Join WTA panel, edited on setup reruns
   | 'commands_json' // syncCommands bookkeeping
   | 'category_id' // current year's category (bootstrap renames it on archive)
   | 'packet_mode' // 'on' enables private interviewer packets delivered when a session is scheduled

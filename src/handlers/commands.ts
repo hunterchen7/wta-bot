@@ -46,7 +46,7 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
         lines.push(
           '',
           '**Organizer toolkit — everything lives under `/admin`:**',
-          '`/admin setup channels|roles|cohort` — configure + launch',
+          '`/admin setup channels|roles|cohort|welcome` — configure + launch',
           '`/admin roster` · `/admin export` · `/admin standing @user` — who\'s where',
           '`/admin pair` · `/admin repair` — manual pairings and repair queueing',
           '`/admin excuse @user` · `/admin participant hold|release|remove @user`',
@@ -399,8 +399,17 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
       }));
       return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
     }
+    case 'welcome': {
+      if (!interaction.guild_id) return c.json(ephemeral('Run this in the server.'));
+      const { provisionWelcome } = await import('../engine/welcome');
+      runInBackground(c, provisionWelcome(c.env, {
+        guildId: interaction.guild_id,
+        interactionToken: interaction.token,
+      }));
+      return c.json({ type: ResponseType.DEFERRED_CHANNEL_MESSAGE, data: { flags: 64 } });
+    }
     default:
-      return c.json(ephemeral('Subcommands: `channels`, `roles`, `cohort`, `bootstrap`, `publish`.'));
+      return c.json(ephemeral('Subcommands: `channels`, `roles`, `cohort`, `bootstrap`, `publish`, `welcome`.'));
   }
 }
 
