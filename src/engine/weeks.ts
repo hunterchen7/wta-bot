@@ -1,8 +1,9 @@
 import type { Env } from '../env';
 import { iso, torontoToUtc } from '../time';
 
-// Cohort calendar (DESIGN.md §2). All anchors are Toronto wall time,
-// stored UTC. Week i runs Monday..Sunday; opt-in opens the Friday before.
+// Cohort calendar (DESIGN.md §2). All anchors are Toronto wall time and stored
+// in UTC. Opt-in has no hard close: match_at publishes the initial batch, then
+// late opt-ins stay available first come, first served through the round.
 
 export type Week = {
   id: number;
@@ -39,7 +40,7 @@ export function weekAnchors(roundOneStart: [number, number, number], idx: number
   return {
     optin_opens_at: at(-3, 16), // 3 days before the round, 16:00
     optin_remind_at: at(-2, 18), // non-responder reminder
-    optin_closes_at: at(-1, 18), // eve of the round, 18:00
+    optin_closes_at: at(-1, 18), // legacy field; no longer enforced as a close
     match_at: at(0, 19), // opening Sunday: pairings + round questions release
     nudge_at: at(3, 18), // mid-week-1 unscheduled nudge
     nudge2_at: at(10, 18), // mid-week-2 unscheduled nudge

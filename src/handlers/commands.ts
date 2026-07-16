@@ -252,7 +252,8 @@ async function optoutCommand(c: Ctx, interaction: Interaction) {
   const now = new Date().toISOString();
   const week = await c.env.DB.prepare(
     `SELECT w.* FROM weeks w JOIN cohorts c ON c.id = w.cohort_id AND c.status = 'active'
-     WHERE w.optin_opens_at <= ?1 AND w.match_at > ?1 ORDER BY w.idx LIMIT 1`,
+     WHERE w.optin_opens_at <= ?1 AND COALESCE(w.grace_until, w.reports_due_at) >= ?1
+     ORDER BY w.idx LIMIT 1`,
   )
     .bind(now)
     .first<any>();
@@ -262,7 +263,13 @@ async function optoutCommand(c: Ctx, interaction: Interaction) {
   await c.env.DB.prepare('DELETE FROM optins WHERE week_id = ?1 AND participant_id = ?2')
     .bind(week.id, p.id)
     .run();
-  return c.json(ephemeral(`You're sitting out round ${week.idx} — no penalty. Catch up later with a double.`));
+  await c.env.DB.prepare(
+    "UPDATE repair_queue SET state = 'expired' WHERE week_id = ?1 AND participant_id = ?2 AND state = 'open'",
+  ).bind(week.id, p.id).run();
+  const existingSessionNote = now >= week.match_at
+    ? ` Existing sessions are unchanged; use **Can't make it** in the session thread if one needs to be cancelled.`
+    : '';
+  return c.json(ephemeral(`You're sitting out round ${week.idx} — no penalty.${existingSessionNote}`));
 }
 
 async function reportCommand(c: Ctx, interaction: Interaction) {

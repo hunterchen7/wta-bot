@@ -6,6 +6,7 @@ import { getSetting, getSettings } from '../config';
 import { buttonRow, ephemeral, modal, stringSelect, textInput } from '../discord/components';
 import { disputeIncident, getSession, reportIncident, resolveCase } from '../engine/incidents';
 import { enqueue } from '../engine/outbox';
+import { queueLateOptinDemand } from '../engine/repair';
 import type { Env } from '../env';
 import { getParticipant } from '../participants';
 import { discordTime, formatToronto, parseTorontoLocal, torontoDateKey } from '../time';
@@ -152,8 +153,9 @@ async function handleOptin(
   const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(weekId).first<any>();
   if (!week) return c.json(ephemeral('This opt-in has expired.'));
   const now = new Date();
-  if (now > new Date(week.optin_closes_at)) {
-    return c.json(ephemeral(`Opt-in for round ${week.idx} closed ${discordTime(week.optin_closes_at, 'R')}. If you're stranded, organizers can pair you manually.`));
+  const roundEnd = new Date(week.grace_until ?? week.reports_due_at);
+  if (now > roundEnd) {
+    return c.json(ephemeral(`Round ${week.idx} ended ${discordTime(roundEnd.toISOString(), 'R')}, so new matches are no longer available.`));
   }
 
   if (choice === 'out') {
@@ -170,7 +172,13 @@ async function handleOptin(
         .bind(weekId, participant.id)
         .run();
     }
-    return c.json(ephemeral(`Sitting out round ${week.idx} — no penalty. Catch up with a double later if you like.`));
+    await c.env.DB.prepare(
+      "UPDATE repair_queue SET state = 'expired' WHERE week_id = ?1 AND participant_id = ?2 AND state = 'open'",
+    ).bind(weekId, participant.id).run();
+    const existingSessionNote = now >= new Date(week.match_at)
+      ? ` Existing sessions are unchanged; use **Can't make it** in the session thread if one needs to be cancelled.`
+      : '';
+    return c.json(ephemeral(`Sitting out round ${week.idx} — no penalty.${existingSessionNote}`));
   }
 
   await c.env.DB.prepare(
@@ -182,7 +190,14 @@ async function handleOptin(
     .run();
   const label =
     choice === 'in' ? "You're in" : choice === 'double' ? "You're in with a catch-up double (if you're behind)" : "You're in, plus standby for extra sessions";
-  return c.json(ephemeral(`✅ ${label} for round ${week.idx}. Pairings drop ${discordTime(week.match_at)}.`));
+  if (now >= new Date(week.match_at)) {
+    await queueLateOptinDemand(c.env, weekId, participant.id, choice === 'double');
+    return c.json(ephemeral(
+      `✅ ${label} for round ${week.idx}. You're in the first-come-first-served late pool; ` +
+      `the bot checks every 15 minutes and will match you when compatible partners are available.`,
+    ));
+  }
+  return c.json(ephemeral(`✅ ${label} for round ${week.idx}. Initial pairings publish ${discordTime(week.match_at)}.`));
 }
 
 async function handleSessionButton(

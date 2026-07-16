@@ -17,12 +17,12 @@ export function RoundsPage() {
   return <div className="space-y-7">
     <PageIntro title="Rounds" description="One operational board for opt-ins, matching results, session exceptions, reports, and repairs." actions={<SelectControl label="Select round" className="min-w-40" value={String(data.selectedWeek?.id ?? '')} onChange={(value) => setWeekId(Number(value))} options={data.weeks.map((week) => ({ value: String(week.id), label: `Round ${week.idx}` }))} />} />
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Opted in" value={counts.regularOptins} note={counts.extraInterviewers ? `${counts.extraInterviewers} extra interviewer${counts.extraInterviewers === 1 ? '' : 's'}` : 'No extra interviewers'} tone={counts.regularOptins >= 3 ? 'good' : 'warn'} /><Metric label="Sessions" value={data.sessions.length} note={`${counts.unscheduled} unscheduled`} tone={counts.unscheduled ? 'warn' : 'default'} /><Metric label="Completed" value={counts.completed} note={data.sessions.length ? `${Math.round(counts.completed / data.sessions.length * 100)}% of sessions` : 'No sessions yet'} /><Metric label="Reports filed" value={`${counts.reports}/${data.sessions.length * 2}`} note={`${Math.max(0, data.sessions.length * 2 - counts.reports)} outstanding`} /></div>
-    {data.selectedWeek ? <Panel><div className="grid gap-px bg-slate-100 sm:grid-cols-4"><Timeline label="Opt-in opens" value={data.selectedWeek.optin_opens_at} /><Timeline label="Opt-in closes" value={data.selectedWeek.optin_closes_at} /><Timeline label="Matching" value={data.selectedWeek.match_at} /><Timeline label="Reports due" value={data.selectedWeek.reports_due_at} /></div></Panel> : null}
+    {data.selectedWeek ? <Panel><div className="grid gap-px bg-slate-100 dark:bg-border sm:grid-cols-4"><Timeline label="Opt-in opens" value={data.selectedWeek.optin_opens_at} /><Timeline label="Initial pairings" value={data.selectedWeek.match_at} /><Timeline label="Late opt-ins" value="FCFS through round" format={false} /><Timeline label="Reports due" value={data.selectedWeek.reports_due_at} /></div></Panel> : null}
     <div className="flex"><Tabs value={tab} onChange={setTab} items={[{ value: 'sessions', label: 'Sessions', count: data.sessions.length }, { value: 'optins', label: 'Opt-ins', count: data.optins.length }, { value: 'repairs', label: 'Repairs', count: data.repairs.filter((row) => row.state === 'open').length }]} /></div>
     {tab === 'sessions' ? <SessionsPanel data={data} /> : tab === 'optins' ? <OptinsPanel data={data} reload={reload} /> : <RepairsPanel data={data} />}
   </div>;
 }
-function Timeline({ label, value }: { label: string; value: string }) { return <div className="bg-white px-5 py-4"><div className="text-[0.65rem] font-black uppercase tracking-wider text-slate-400">{label}</div><div className="mt-1.5 text-sm font-bold text-slate-800">{formatDate(value)}</div></div>; }
+function Timeline({ label, value, format = true }: { label: string; value: string; format?: boolean }) { return <div className="bg-white px-5 py-4 dark:bg-card"><div className="text-[0.65rem] font-black uppercase tracking-wider text-slate-400">{label}</div><div className="mt-1.5 text-sm font-bold text-slate-800 dark:text-foreground">{format ? formatDate(value) : value}</div></div>; }
 function SessionsPanel({ data }: { data: RoundsData }) {
   return <Panel title="Session board" description="Assignments are private to organizers here; participants only receive them through the interviewer packet.">
     {data.sessions.length ? <div className={tableWrapClass}><table className={tableClass}>
@@ -67,7 +67,7 @@ function OptinsPanel({ data, reload }: { data: RoundsData; reload: () => Promise
     } finally { setSavingId(null); }
   };
 
-  return <Panel title="Opt-in pool" description="Weekly opt-ins and organizer-added interviewer capacity.">
+  return <Panel title="Opt-in pool" description="Round opt-ins, late first-come-first-served entries, and organizer-added interviewer capacity.">
     <div className="border-b border-slate-100 bg-slate-50/60 px-5 py-4 dark:border-border dark:bg-muted/20">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div><div className="text-sm font-extrabold text-slate-950 dark:text-foreground">Add an extra interviewer</div><p className="mt-1 max-w-xl text-xs leading-5 text-slate-500 dark:text-muted-foreground">Adds one interviewer assignment for this round. It does not opt them in to be interviewed.</p></div>

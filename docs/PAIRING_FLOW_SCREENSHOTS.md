@@ -4,7 +4,9 @@ These screenshots use a real Round 1 test session between Hunter and the `not hu
 
 ## 1. Opt in for the round
 
-The bot posts and DMs the round opt-in before matching. **I'm in this week** requests the normal one interview in each role. **In + catch-up double** requests extra work to catch up, **In + standby for extras** makes the participant available if another person needs a partner, and **Sitting out** skips the round without a penalty. No response also means sitting out.
+The bot posts and DMs the round opt-in before matching. **I'm in this round** requests the normal one interview in each role. **In + catch-up double** requests extra work to catch up, **In + standby for extras** makes the participant available if another person needs a partner, and **Sitting out** skips the round without a penalty.
+
+The posted date is when the initial pairings are published—not an opt-in deadline. Opt-in stays open afterward, and late participants are matched first come, first served as compatible partners become available.
 
 ![Round opt-in message](screenshots/pairing-guide/00-opt-in-message.png)
 

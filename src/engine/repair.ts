@@ -4,6 +4,7 @@ import { discordTime } from '../time';
 import { sessionButtons } from './cycle';
 import { pickProblem, reserveProblem } from './problems';
 import { enqueue } from './outbox';
+import { creditsOf, demandFor } from './progress';
 import { getWeek } from './weeks';
 
 // Mid-week repair queue (DESIGN §3–4): broken sessions enqueue typed needs;
@@ -22,6 +23,50 @@ export async function enqueueRepair(
   )
     .bind(weekId, participantId, need)
     .run();
+}
+
+/** Add only the still-uncovered slots from a post-publish opt-in to the repair
+ * queue. Repeated button clicks are idempotent: existing sessions and open
+ * queue rows count toward the participant's requested demand. */
+export async function queueLateOptinDemand(
+  env: Env,
+  weekId: number,
+  participantId: number,
+  wantsDouble: boolean,
+): Promise<{ created: number; pending: number }> {
+  const week = await getWeek(env, weekId);
+  if (!week) return { created: 0, pending: 0 };
+
+  const desired = demandFor(week.idx, await creditsOf(env, participantId), wantsDouble);
+  const assigned = await env.DB.prepare(
+    `SELECT
+       sum(CASE WHEN interviewer_id = ?2 THEN 1 ELSE 0 END) AS interviewer,
+       sum(CASE WHEN interviewee_id = ?2 THEN 1 ELSE 0 END) AS interviewee
+     FROM sessions
+     WHERE week_id = ?1 AND state IN ('pending_schedule', 'scheduled', 'completed')
+       AND (interviewer_id = ?2 OR interviewee_id = ?2)`,
+  ).bind(weekId, participantId).first<{ interviewer: number | null; interviewee: number | null }>();
+  const { results: queued } = await env.DB.prepare(
+    `SELECT need, count(*) AS n FROM repair_queue
+     WHERE week_id = ?1 AND participant_id = ?2 AND state = 'open'
+     GROUP BY need`,
+  ).bind(weekId, participantId).all<{ need: 'interviewer' | 'interviewee'; n: number }>();
+  const openByNeed = new Map(queued.map((row) => [row.need, Number(row.n)]));
+
+  const missing = {
+    interviewer: Math.max(0, desired.interviewer - Number(assigned?.interviewer ?? 0) - (openByNeed.get('interviewee') ?? 0)),
+    interviewee: Math.max(0, desired.interviewee - Number(assigned?.interviewee ?? 0) - (openByNeed.get('interviewer') ?? 0)),
+  };
+  for (let index = 0; index < missing.interviewer; index++) {
+    await enqueueRepair(env, weekId, participantId, 'interviewee');
+  }
+  for (let index = 0; index < missing.interviewee; index++) {
+    await enqueueRepair(env, weekId, participantId, 'interviewer');
+  }
+  return {
+    created: missing.interviewer + missing.interviewee,
+    pending: desired.interviewer + desired.interviewee,
+  };
 }
 
 /** Runs each tick during active weeks: match complementary open needs, then

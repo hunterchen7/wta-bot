@@ -26,7 +26,7 @@ const displayName = (p: { name: string | null; discord_id: string }) => p.name ?
 
 export function optinButtons(weekId: number) {
   return buttonRow([
-    { id: `optin:${weekId}:in`, label: "I'm in this week", style: 3 },
+    { id: `optin:${weekId}:in`, label: "I'm in this round", style: 3 },
     { id: `optin:${weekId}:double`, label: 'In + catch-up double', style: 1 },
     { id: `optin:${weekId}:standby`, label: 'In + standby for extras', style: 2 },
     { id: `optin:${weekId}:out`, label: 'Sitting out', style: 4 },
@@ -38,9 +38,14 @@ export async function openOptin(env: Env, week: Week): Promise<void> {
   const mention = cfg.participant_role_id ? `<@&${cfg.participant_role_id}> ` : '';
   const content =
     `${mention}📋 **Round ${week.idx} opt-in is open!** (2 weeks, one interview each side)\n` +
-    `Click below if you're doing interviews this week (one as interviewer, one as interviewee). ` +
-    `Behind pace? Pick the double. Keen for extras if someone's partner flakes? Standby.\n` +
-    `⏰ Closes ${discordTime(week.optin_closes_at)} — silence = sitting out (no penalty).`;
+    `\n` +
+    `**I'm in this round** — one interview as interviewer and one as interviewee.\n` +
+    `**Catch-up double** — extra interviews to make up a missed role.\n` +
+    `**Standby for extras** — available if another participant needs a partner.\n` +
+    `**Sitting out** — no pairing this round and no penalty.\n` +
+    `\n` +
+    `🗓️ Initial pairings publish ${discordTime(week.match_at)}. Opt in before then to join the first batch.\n` +
+    `Opt-in stays open afterward; late participants are matched first come, first served as compatible partners become available.`;
 
   if (cfg.announce_channel_id) {
     await enqueue(env, 'channel_msg', {
@@ -57,7 +62,9 @@ export async function openOptin(env: Env, week: Week): Promise<void> {
         userId: p.discord_id,
         fallbackKind: 'optin_open',
         message: {
-          content: `📋 WTA round ${week.idx} opt-in is open — closes ${discordTime(week.optin_closes_at)}.`,
+          content:
+            `📋 WTA round ${week.idx} opt-in is open. Initial pairings publish ${discordTime(week.match_at)}.\n` +
+            `Opt in before then for the first batch, or afterward to join the first-come-first-served late pool.`,
           components: [optinButtons(week.id)],
         },
       },
@@ -85,7 +92,9 @@ export async function optinReminder(env: Env, week: Week): Promise<void> {
             userId: p.discord_id,
             fallbackKind: 'optin_remind',
             message: {
-              content: `⏰ Last call: WTA round ${week.idx} opt-in closes ${discordTime(week.optin_closes_at, 'R')}. No response = sitting out.`,
+              content:
+                `⏰ WTA round ${week.idx} initial pairings publish ${discordTime(week.match_at, 'R')}. ` +
+                `Opt in now to join the first batch. Opt-in stays open afterward, with late matches made first come, first served.`,
               components: [optinButtons(week.id)],
             },
           },
@@ -96,8 +105,10 @@ export async function optinReminder(env: Env, week: Week): Promise<void> {
           kind: 'email',
           payload: {
             to: p.preferred_email,
-            subject: `WTA round ${week.idx}: opt-in closes soon`,
-            text: `Opt-in for interview round ${week.idx} closes soon. Open Discord and click "I'm in" on the opt-in message if you're participating. No response means sitting out this round (no penalty).`,
+            subject: `WTA round ${week.idx}: initial pairings publish soon`,
+            text:
+              `Initial pairings for interview round ${week.idx} publish soon. Open Discord and click "I'm in this round" to join the first batch. ` +
+              `Opt-in stays open afterward, and late participants are matched first come, first served as compatible partners become available.`,
           },
         });
       }

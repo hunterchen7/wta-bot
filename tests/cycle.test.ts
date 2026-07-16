@@ -4,7 +4,7 @@
 
 import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { closeAndMatch, formDropScan, preInterviewReminderScan } from '../src/engine/cycle';
+import { closeAndMatch, formDropScan, openOptin, preInterviewReminderScan } from '../src/engine/cycle';
 import { executeOutbox } from '../src/engine/executor';
 import { drainOutbox } from '../src/engine/outbox';
 import { repairScan } from '../src/engine/repair';
@@ -144,6 +144,14 @@ describe('full weekly cycle', () => {
        ('threads_channel_id', '555'), ('announce_channel_id', '556'), ('organizer_channel_id', '557')
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ).run();
+
+    await openOptin(env, week1!);
+    const optinAnnouncement = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%opt-in is open%' ORDER BY id DESC LIMIT 1",
+    ).first<{ payload: string }>();
+    expect(optinAnnouncement?.payload).toContain('Initial pairings publish');
+    expect(optinAnnouncement?.payload).toContain('first come, first served');
+    expect(optinAnnouncement?.payload).not.toContain('Closes');
     for (let index = 1; index <= 4; index++) {
       await env.DB.prepare(
         `INSERT INTO problems (id, title, difficulty, available_weeks)
@@ -204,6 +212,28 @@ describe('full weekly cycle', () => {
     expect(await env.DB.prepare(
       "SELECT count(*) AS n FROM outbox WHERE kind = 'dm' AND payload LIKE '%packet%'",
     ).first()).toEqual({ n: 0 });
+
+    // Opt-in remains valid after the initial matching time. A late participant
+    // is queued once for each role, and repeated clicks do not duplicate slots.
+    await enroll('105', 'Late');
+    await env.DB.prepare(
+      "UPDATE weeks SET match_at = '2000-01-01T00:00:00.000Z', reports_due_at = '2099-12-31T23:59:59.000Z' WHERE id = ?1",
+    ).bind(week1!.id).run();
+    const lateOptin = await sendInteraction(signer, button(`optin:${week1!.id}:in`, '105'), OVERRIDES);
+    expect(((await lateOptin.json()) as any).data.content).toContain('first-come-first-served late pool');
+    await sendInteraction(signer, button(`optin:${week1!.id}:in`, '105'), OVERRIDES);
+    const lateParticipant = await env.DB.prepare(
+      'SELECT id FROM participants WHERE discord_id = ?1',
+    ).bind('105').first<{ id: number }>();
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM repair_queue WHERE week_id = ?1 AND participant_id = ?2 AND state = 'open'",
+    ).bind(week1!.id, lateParticipant!.id).first()).toEqual({ n: 2 });
+    await env.DB.batch([
+      env.DB.prepare("UPDATE repair_queue SET state = 'expired' WHERE participant_id = ?1").bind(lateParticipant!.id),
+      env.DB.prepare("UPDATE participants SET status = 'removed' WHERE id = ?1").bind(lateParticipant!.id),
+      env.DB.prepare('UPDATE weeks SET match_at = ?2, reports_due_at = ?3 WHERE id = ?1')
+        .bind(week1!.id, week1!.match_at, week1!.reports_due_at),
+    ]);
 
     // thread fanout + pairing DMs queued
     const outboxKinds = await env.DB.prepare(
