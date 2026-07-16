@@ -121,7 +121,7 @@ export function sessionButtons(sessionId: number) {
   return buttonRow([
     { id: `sess:${sessionId}:sched`, label: 'Choose a time', style: 3 },
     { id: `sess:${sessionId}:cancel`, label: "Can't make it", style: 2 },
-    { id: `sess:${sessionId}:noshow`, label: 'Report no-show', style: 4 },
+    { id: `sess:${sessionId}:unresponsive`, label: 'Partner not responding', style: 4 },
   ]);
 }
 
@@ -418,7 +418,7 @@ export async function scheduleNudge(env: Env, week: Week): Promise<void> {
       await enqueue(env, 'channel_msg', {
         channelId: s.thread_id,
         message: {
-          content: `👋 <@${s.interviewer_did}> <@${s.interviewee_did}> — no confirmed time yet. Lock one in with **Choose a time**, or use *Can't make it* / *Report no-show* if it's not happening. Everything's due ${discordTime(week.grace_until ?? week.reports_due_at)}.`,
+          content: `👋 <@${s.interviewer_did}> <@${s.interviewee_did}> — no confirmed time yet. Lock one in with **Choose a time**. If one person cannot attend, use **Can't make it**; if your partner is not replying, use **Partner not responding**. Everything's due ${discordTime(week.grace_until ?? week.reports_due_at)}.`,
         },
       });
     }

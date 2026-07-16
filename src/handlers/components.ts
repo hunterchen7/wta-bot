@@ -35,7 +35,7 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
   if (optin) return handleOptin(c, interaction, Number(optin[1]), optin[2] as any);
 
   // ---- session thread buttons ---------------------------------------------
-  const sess = /^sess:(\d+):(sched|cancel|noshow|cancel-confirm|noshow-confirm|action-dismiss)$/.exec(id);
+  const sess = /^sess:(\d+):(sched|cancel|unresponsive|noshow|cancel-confirm|unresponsive-confirm|noshow-confirm|action-dismiss)$/.exec(id);
   if (sess) return handleSessionButton(c, interaction, Number(sess[1]), sess[2] as any);
 
   // ---- incident case-file buttons (organizers) ----------------------------
@@ -204,7 +204,7 @@ async function handleSessionButton(
   c: Ctx,
   interaction: Interaction,
   sessionId: number,
-  action: 'sched' | 'cancel' | 'noshow' | 'cancel-confirm' | 'noshow-confirm' | 'action-dismiss',
+  action: 'sched' | 'cancel' | 'unresponsive' | 'noshow' | 'cancel-confirm' | 'unresponsive-confirm' | 'noshow-confirm' | 'action-dismiss',
 ) {
   const user = interactionUser(interaction)!;
   const session = await getSession(c.env, sessionId);
@@ -249,19 +249,37 @@ async function handleSessionButton(
       data: { content: 'No changes made. The session is still open.', components: [] },
     });
   }
-  if (action === 'cancel' || action === 'noshow') {
+  if (action === 'unresponsive' && session.state !== 'pending_schedule') {
+    return c.json(ephemeral('This session already has a confirmed time. If your partner misses it, report that in the feedback form sent at session time.'));
+  }
+  if ((action === 'noshow' || action === 'noshow-confirm') && (!session.scheduled_at || new Date() < new Date(session.scheduled_at))) {
+    return c.json(ephemeral('A no-show can only be reported after a confirmed interview time has passed. If your partner will not help schedule, use **Partner not responding** instead.'));
+  }
+  if (action === 'cancel' || action === 'unresponsive' || action === 'noshow') {
     const cancelling = action === 'cancel';
+    const unresponsive = action === 'unresponsive';
     return c.json(ephemeral(
       cancelling
         ? '**Confirm that you cannot make this session.** This closes the session, records that you cancelled, and puts your partner into the priority repair queue.'
+        : unresponsive
+          ? '**Confirm that your partner is not responding to scheduling.** This closes the unscheduled session, records the issue against your partner, and puts you into the priority re-pair queue.'
         : '**Confirm this no-show report.** This closes the session, records a no-show against your partner, and puts you into the priority repair queue. Only continue if they missed the agreed session.',
       [buttonRow([
-        { id: `sess:${sessionId}:${cancelling ? 'cancel-confirm' : 'noshow-confirm'}`, label: cancelling ? 'Yes, I cannot make it' : 'Confirm no-show', style: 4 },
+        {
+          id: `sess:${sessionId}:${cancelling ? 'cancel-confirm' : unresponsive ? 'unresponsive-confirm' : 'noshow-confirm'}`,
+          label: cancelling ? 'Yes, I cannot make it' : unresponsive ? 'Confirm not responding' : 'Confirm no-show',
+          style: 4,
+        },
         { id: `sess:${sessionId}:action-dismiss`, label: 'Go back', style: 2 },
       ])],
     ));
   }
-  const result = await reportIncident(c.env, session, action === 'cancel-confirm' ? 'late_cancel' : 'ghost', user.id);
+  const result = await reportIncident(
+    c.env,
+    session,
+    action === 'cancel-confirm' ? 'late_cancel' : action === 'unresponsive-confirm' ? 'unresponsive' : 'ghost',
+    user.id,
+  );
   return c.json(ephemeral(result.message));
 }
 

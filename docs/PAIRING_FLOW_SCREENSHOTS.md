@@ -16,13 +16,15 @@ Both participants receive a short Discord DM identifying their role and partner.
 
 ![Pairing DM](screenshots/pairing-guide/02-pairing-dm.png)
 
-The session thread includes the participants, their roles, the report deadline, and the actions available before the interview.
+The session thread includes the participants, their roles, the report deadline, and the steps to schedule.
 
 ![Pairing thread](screenshots/pairing-guide/01-pairing-thread-detail.png)
 
 ## 3. Either participant chooses a time
 
 The **Choose a time** button opens a Discord modal. Participants select a valid date in the current round and enter a Toronto time using the 24-hour clock.
+
+Before a time is confirmed, **Partner not responding** reports a scheduling ghost and puts the reporting participant into the priority re-pair queue. **Can't make it** records that the person cancelling cannot participate and re-queues their partner.
 
 ![Schedule modal](screenshots/pairing-guide/03-schedule-modal-detail.png)
 
@@ -49,3 +51,5 @@ Shortly before the interview, each participant receives a role-specific DM with 
 ## 7. Feedback forms are released
 
 At the scheduled start time, Discord reminds both participants that their role-specific forms are ready. The dashboard also reflects which submission is still outstanding and shows the session as complete only after both reports are submitted.
+
+The feedback form asks whether each person attended. Answering that the partner did not attend automatically records the confirmed-time no-show and puts the reporting participant into the priority re-pair queue; a no-show is not part of the pre-scheduling controls.

@@ -242,6 +242,11 @@ describe('full weekly cycle', () => {
     const kinds = Object.fromEntries(outboxKinds.results.map((r: any) => [r.kind, r.n]));
     expect(kinds.thread_create).toBe(4);
     expect(kinds.dm).toBeGreaterThanOrEqual(4);
+    const sessionThreadPayload = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'thread_create' ORDER BY id LIMIT 1",
+    ).first<{ payload: string }>();
+    expect(sessionThreadPayload?.payload).toContain('Partner not responding');
+    expect(sessionThreadPayload?.payload).not.toContain('Report no-show');
     const pairingAnnouncement = await env.DB.prepare(
       "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%pairings are out%' ORDER BY id DESC LIMIT 1",
     ).first<{ payload: string }>();
@@ -388,36 +393,37 @@ describe('full weekly cycle', () => {
     expect(forms.results.map((f: any) => f.kind)).toEqual(['interviewee_report', 'interviewer_report']);
     expect(await formDropScan(env, 'https://example.test', new Date('2026-09-16T23:32:00Z'))).toBe(0);
 
-    // --- a different session goes wrong: interviewee reports interviewer ghosted --
+    // --- a different session never gets scheduled: interviewee reports the
+    //     interviewer unresponsive and enters the priority re-pair queue ---------
     const s1 = sessions[1]!;
     const victimDiscord = await env.DB.prepare('SELECT discord_id FROM participants WHERE id = ?1')
       .bind(s1.interviewee_id)
       .first<any>();
-    const noshowPrompt = await sendInteraction(
+    const unresponsivePrompt = await sendInteraction(
       signer,
-      button(`sess:${s1.id}:noshow`, victimDiscord.discord_id),
+      button(`sess:${s1.id}:unresponsive`, victimDiscord.discord_id),
       OVERRIDES,
     );
-    const prompt = (await noshowPrompt.json()) as any;
-    expect(prompt.data.content).toContain('Confirm this no-show report');
+    const prompt = (await unresponsivePrompt.json()) as any;
+    expect(prompt.data.content).toContain('not responding to scheduling');
     expect(prompt.data.components[0].components).toEqual(expect.arrayContaining([
-      expect.objectContaining({ custom_id: `sess:${s1.id}:noshow-confirm`, style: 4 }),
+      expect.objectContaining({ custom_id: `sess:${s1.id}:unresponsive-confirm`, style: 4 }),
       expect.objectContaining({ custom_id: `sess:${s1.id}:action-dismiss`, style: 2 }),
     ]));
     expect(await env.DB.prepare('SELECT state FROM sessions WHERE id = ?1').bind(s1.id).first()).not.toEqual({ state: 'broken' });
-    const noshow = await sendInteraction(
+    const unresponsive = await sendInteraction(
       signer,
-      button(`sess:${s1.id}:noshow-confirm`, victimDiscord.discord_id),
+      button(`sess:${s1.id}:unresponsive-confirm`, victimDiscord.discord_id),
       OVERRIDES,
     );
-    expect(((await noshow.json()) as any).data.content).toContain('priority');
+    expect(((await unresponsive.json()) as any).data.content).toContain('priority');
 
     const broken = await env.DB.prepare('SELECT state FROM sessions WHERE id = ?1').bind(s1.id).first<any>();
     expect(broken.state).toBe('broken');
     const incident = await env.DB.prepare(
       'SELECT kind, state, accused_id FROM incidents ORDER BY id DESC LIMIT 1',
     ).first<any>();
-    expect(incident).toMatchObject({ kind: 'ghost', state: 'confirmed', accused_id: s1.interviewer_id });
+    expect(incident).toMatchObject({ kind: 'unresponsive', state: 'confirmed', accused_id: s1.interviewer_id });
 
     // victim entered the repair queue needing an interviewer
     const queue = await env.DB.prepare(
