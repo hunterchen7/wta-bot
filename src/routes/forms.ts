@@ -5,6 +5,7 @@ import { fieldsFor, validate, type Field } from '../forms/schema';
 import { verifyFormToken, verifyToken } from '../forms/token';
 import { sessionFrom } from './web';
 import { isCurrentOrganizer } from '../organizers';
+import { fizzBuzzDemoPacket } from '../demo/fizzbuzz-packet';
 
 // Signed report and problem links now hydrate React pages. This module exposes
 // data and mutations only; it intentionally contains no HTML rendering.
@@ -225,6 +226,7 @@ forms.get('/api/recordings/:id', async (c) => {
 forms.get('/api/problems/:token', async (c) => {
   if (!c.env.FORM_SIGNING_SECRET) return c.json({ error: 'not_configured', message: 'Problem links are not configured.' }, 503);
   const verified = await verifyToken(c.env.FORM_SIGNING_SECRET, c.req.param('token'));
+  if (verified?.subject === 'demo:fizzbuzz') return c.json(fizzBuzzDemoPacket);
   const match = verified && /^(p|sol):(\d+)$/.exec(verified.subject);
   if (!match) return c.json({ error: 'invalid_link', message: 'This problem link is invalid or expired.' }, 404);
   const row = await c.env.DB.prepare(

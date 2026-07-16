@@ -155,6 +155,38 @@ describe('problem bank', () => {
     expect((await app.request('/api/problems/garbage', {}, env)).status).toBe(404);
   });
 
+  it('serves the isolated FizzBuzz demo packet without creating an assignment or exposure', async () => {
+    const { signToken } = await import('../src/forms/token');
+    const before = await env.DB.prepare(
+      'SELECT (SELECT count(*) FROM sessions) AS sessions, (SELECT count(*) FROM exposures) AS exposures, (SELECT count(*) FROM problems) AS problems',
+    ).first<{ sessions: number; exposures: number; problems: number }>();
+    const token = await signToken(
+      env.FORM_SIGNING_SECRET!,
+      'demo:fizzbuzz',
+      new Date(Date.now() + 60_000),
+    );
+
+    const response = await app.request(`/api/problems/${token}`, {}, env);
+
+    expect(response.status).toBe(200);
+    expect(await response.json<any>()).toMatchObject({
+      mode: 'packet',
+      round: 1,
+      intervieweeName: 'Ethan',
+      problem: {
+        number: null,
+        title: 'FizzBuzz',
+        difficulty: 'easy',
+        statement: expect.stringContaining('multiples of `3`'),
+        hints: expect.stringContaining('combined case'),
+        solution: expect.stringContaining('### Complexity'),
+      },
+    });
+    expect(await env.DB.prepare(
+      'SELECT (SELECT count(*) FROM sessions) AS sessions, (SELECT count(*) FROM exposures) AS exposures, (SELECT count(*) FROM problems) AS problems',
+    ).first()).toEqual(before);
+  });
+
   it('keeps the public question-bank API private by default and publishes it only when enabled', async () => {
     const privateRes = await app.request('/api/public/bank', {}, env);
     expect(privateRes.status).toBe(200);
