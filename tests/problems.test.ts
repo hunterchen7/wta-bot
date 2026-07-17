@@ -155,6 +155,35 @@ describe('problem bank', () => {
     expect((await app.request('/api/problems/garbage', {}, env)).status).toBe(404);
   });
 
+  it('pre-fills the interviewer report with its assigned packet problem', async () => {
+    const { signFormToken } = await import('../src/forms/token');
+    const assigned = await env.DB.prepare(
+      'SELECT problem_id FROM sessions WHERE id = ?1',
+    ).bind(sessionId).first<{ problem_id: number | null }>();
+    expect(assigned?.problem_id).not.toBeNull();
+    const created = await env.DB.prepare(
+      `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at)
+       VALUES ('interviewer_report', ?1, 1, ?2, ?3)`,
+    ).bind(sessionId, crypto.randomUUID(), new Date(Date.now() + 86400_000).toISOString()).run();
+    const token = await signFormToken(
+      env.FORM_SIGNING_SECRET!,
+      Number(created.meta.last_row_id),
+      new Date(Date.now() + 86400_000),
+    );
+
+    const response = await app.request(`/api/forms/${token}`, {}, env);
+    const report = await response.json<any>();
+
+    expect(response.status).toBe(200);
+    expect(report.values.problem_used).toBe(String(assigned!.problem_id));
+    expect(report.fields.find((field: any) => field.id === 'problem_used')).toMatchObject({
+      help: expect.stringContaining('Pre-filled'),
+      options: expect.arrayContaining([
+        expect.objectContaining({ value: String(assigned!.problem_id) }),
+      ]),
+    });
+  });
+
   it('serves the isolated FizzBuzz demo packet without creating an assignment or exposure', async () => {
     const { signToken } = await import('../src/forms/token');
     const before = await env.DB.prepare(

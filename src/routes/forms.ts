@@ -14,7 +14,7 @@ export const forms = new Hono<{ Bindings: Env }>();
 type LoadedInstance = {
   id: number; kind: string; session_id: number; assignee_id: number;
   deadline_at: string; submitted_at: string | null; payload: string | null;
-  week_idx: number; scheduled_at: string | null;
+  week_idx: number; scheduled_at: string | null; problem_id: number | null;
   interviewer_name: string | null; interviewee_name: string | null;
   interviewer_id: number; interviewee_id: number; assignee_name: string | null;
   assignee_discord_id: string; assignee_discord_username: string | null;
@@ -27,7 +27,7 @@ async function loadInstance(env: Env, token: string): Promise<LoadedInstance | n
   if (!verified) return null;
   return env.DB.prepare(
     `SELECT f.id, f.kind, f.session_id, f.assignee_id, f.deadline_at, f.submitted_at, f.payload,
-            w.idx AS week_idx, s.scheduled_at, s.interviewer_id, s.interviewee_id,
+            w.idx AS week_idx, s.scheduled_at, s.problem_id, s.interviewer_id, s.interviewee_id,
             pi.name AS interviewer_name, pe.name AS interviewee_name, pa.name AS assignee_name,
             pa.discord_id AS assignee_discord_id,
             pa.discord_username AS assignee_discord_username,
@@ -41,28 +41,38 @@ async function loadInstance(env: Env, token: string): Promise<LoadedInstance | n
 async function dynamicFields(env: Env, instance: LoadedInstance): Promise<Field[] | null> {
   const base = fieldsFor(instance.kind);
   if (!base || instance.kind !== 'interviewer_report') return base;
-  const assigned = await env.DB.prepare('SELECT problem_id FROM sessions WHERE id = ?1')
-    .bind(instance.session_id).first<{ problem_id: number | null }>();
-  if (assigned?.problem_id) return base;
-  const { results } = await env.DB.prepare(
-    `SELECT p.id, p.title, p.number FROM week_problem_sets wps JOIN problems p ON p.id = wps.problem_id
-     WHERE wps.week_id = (SELECT week_id FROM sessions WHERE id = ?1)
-       AND NOT EXISTS (
-         SELECT 1 FROM exposures e
-         WHERE e.problem_id = p.id AND e.participant_id IN (?2, ?3)
-       )
-       AND NOT EXISTS (
-         SELECT 1 FROM sessions seen
-         WHERE seen.problem_id = p.id
-           AND (seen.interviewer_id IN (?2, ?3) OR seen.interviewee_id IN (?2, ?3))
-       )
-     ORDER BY p.id`,
-  ).bind(instance.session_id, instance.interviewer_id, instance.interviewee_id).all<{ id: number; title: string; number: number | null }>();
+  const assigned = instance.problem_id
+    ? await env.DB.prepare('SELECT id, title, number FROM problems WHERE id = ?1')
+      .bind(instance.problem_id).first<{ id: number; title: string; number: number | null }>()
+    : null;
+  const { results } = assigned
+    ? await env.DB.prepare(
+      `SELECT p.id, p.title, p.number FROM week_problem_sets wps JOIN problems p ON p.id = wps.problem_id
+       WHERE wps.week_id = (SELECT week_id FROM sessions WHERE id = ?1)
+       ORDER BY CASE WHEN p.id = ?2 THEN 0 ELSE 1 END, p.id`,
+    ).bind(instance.session_id, assigned.id).all<{ id: number; title: string; number: number | null }>()
+    : await env.DB.prepare(
+      `SELECT p.id, p.title, p.number FROM week_problem_sets wps JOIN problems p ON p.id = wps.problem_id
+       WHERE wps.week_id = (SELECT week_id FROM sessions WHERE id = ?1)
+         AND NOT EXISTS (
+           SELECT 1 FROM exposures e
+           WHERE e.problem_id = p.id AND e.participant_id IN (?2, ?3)
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM sessions seen
+           WHERE seen.problem_id = p.id
+             AND (seen.interviewer_id IN (?2, ?3) OR seen.interviewee_id IN (?2, ?3))
+         )
+       ORDER BY p.id`,
+    ).bind(instance.session_id, instance.interviewer_id, instance.interviewee_id).all<{ id: number; title: string; number: number | null }>();
+  if (assigned && !results.some((problem) => problem.id === assigned.id)) results.unshift(assigned);
   if (!results.length) return base;
   const picker: Field = {
     id: 'problem_used', label: 'Which interview question did you choose?', type: 'select', required: true,
     options: results.map((problem) => ({ value: String(problem.id), label: `${problem.number ? `#${problem.number} ` : ''}${problem.title}` })),
-    help: "Choose the problem you actually used. Your interviewee receives its solution notes after submitting.",
+    help: assigned
+      ? 'Pre-filled with the problem assigned to this session. Change it only if you used a different problem.'
+      : 'Choose the problem you actually used. Your interviewee receives its solution notes after submitting.',
   };
   return [...base.slice(0, 4), picker, ...base.slice(4)];
 }
@@ -249,6 +259,10 @@ forms.get('/api/problems/:token', async (c) => {
 
 function reportPayload(instance: LoadedInstance, fields: Field[]) {
   const isInterviewer = instance.kind === 'interviewer_report';
+  const savedValues: Record<string, string> = instance.payload ? JSON.parse(instance.payload) : {};
+  const values = isInterviewer && instance.problem_id && !savedValues.problem_used
+    ? { ...savedValues, problem_used: String(instance.problem_id) }
+    : savedValues;
   return {
     id: instance.id,
     kind: instance.kind,
@@ -264,7 +278,7 @@ function reportPayload(instance: LoadedInstance, fields: Field[]) {
     submittedAt: instance.submitted_at,
     overdue: !instance.submitted_at && new Date() > new Date(instance.deadline_at),
     fields,
-    values: instance.payload ? JSON.parse(instance.payload) : {},
+    values,
   };
 }
 
