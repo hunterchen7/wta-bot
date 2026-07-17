@@ -41,6 +41,8 @@ describe('web enrollment cutover', () => {
   it('builds a persistent enrollment message with the Join WTA button', () => {
     const message = enrollmentButtonMessage();
     expect(message.content).toContain('Join WTA 2026');
+    expect(message.content).toContain('Press **Join WTA**, and follow the link to complete the enrolment.');
+    expect(message.content).not.toContain('/join');
     expect((message.components as any[])[0].components[0]).toMatchObject({
       custom_id: 'enrollment:open',
       label: 'Join WTA',

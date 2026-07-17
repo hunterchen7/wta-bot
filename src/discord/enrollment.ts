@@ -23,7 +23,7 @@ export function enrollmentButtonMessage(): MessagePayload {
     content:
       '## Welcome to Western Tech Alumni 👋\n' +
       'Join WTA 2026 to access the dashboard, mock-interview rounds, scheduling, workshops, and program updates. You can update your profile later.\n\n' +
-      'Press **Join WTA** to get your private enrollment link. You can also use `/join` at any time.',
+      'Press **Join WTA**, and follow the link to complete the enrolment.',
     components: [
       {
         type: 1,
