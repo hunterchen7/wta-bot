@@ -71,6 +71,12 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       return;
     }
 
+    case 'welcome_refresh': {
+      const { refreshWelcomeMessage } = await import('./welcome');
+      await refreshWelcomeMessage(env);
+      return;
+    }
+
     case 'email':
       await sendEmail(env, payload.to, payload.subject, payload.text);
       return;

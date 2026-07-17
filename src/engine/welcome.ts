@@ -78,6 +78,17 @@ async function upsertBotMessage(
   return posted.id;
 }
 
+/** Refresh the existing bot-owned Start Here panel without recreating channels
+ * or requiring an interaction token. Intended for the durable outbox so copy
+ * changes can be applied through Discord's bot API. */
+export async function refreshWelcomeMessage(env: Env): Promise<void> {
+  if (!env.DISCORD_TOKEN) throw new Error('DISCORD_TOKEN not configured');
+  const channelId = await getSetting(env, 'start_here_channel_id');
+  const messageId = await getSetting(env, 'start_here_message_id');
+  if (!channelId || !messageId) throw new Error('Start Here welcome message is not configured');
+  await new DiscordRest(env.DISCORD_TOKEN).editMessage(channelId, messageId, enrollmentButtonMessage());
+}
+
 /** Provision the public first-run path without relying on a Gateway process.
  * Safe to rerun: named/configured channels are reused and bot messages edited. */
 export async function provisionWelcome(

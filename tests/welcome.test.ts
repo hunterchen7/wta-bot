@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { provisionWelcome } from '../src/engine/welcome';
+import { provisionWelcome, refreshWelcomeMessage } from '../src/engine/welcome';
 
 type Call = { method: string; url: string; body: any };
 
@@ -45,6 +45,37 @@ function stubDiscord() {
 }
 
 describe('new-member welcome provisioning', () => {
+  it('refreshes the existing Start Here panel through the bot API', async () => {
+    await env.DB.prepare(
+      `INSERT INTO settings (key, value) VALUES
+       ('start_here_channel_id', 'start-channel'),
+       ('start_here_message_id', 'start-message')
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    ).run();
+    const calls: Call[] = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      calls.push({
+        method: init?.method ?? 'GET',
+        url,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      return Promise.resolve(Response.json({ id: 'start-message' }));
+    });
+
+    await refreshWelcomeMessage({ ...env, DISCORD_TOKEN: 'token' } as any);
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toMatchObject({
+      method: 'PATCH',
+      url: 'https://discord.com/api/v10/channels/start-channel/messages/start-message',
+      body: {
+        content: expect.stringContaining('follow the link to complete the enrolment'),
+      },
+    });
+    expect(calls[0]!.body.content).not.toContain('/join');
+  });
+
   it('creates the rules and CTA once, enables the welcome screen, and is safe to rerun', async () => {
     await env.DB.prepare(
       `DELETE FROM settings WHERE key IN
