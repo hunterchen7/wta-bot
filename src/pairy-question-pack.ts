@@ -70,7 +70,10 @@ export async function createPairyQuestionPack(
     source: {
       provider: input.source.trim() || 'manual',
       externalId: input.sourceNumber == null ? null : String(input.sourceNumber),
-      url: input.sourceUrl?.trim() || null,
+      // Legacy/admin-authored rows may contain labels or relative URLs. Pairy
+      // intentionally accepts only absolute HTTP(S) links, so omit anything
+      // outside that contract instead of invalidating the whole packet.
+      url: httpUrlOrNull(input.sourceUrl),
     },
     extensions: { wta: { availableRounds } },
   };
@@ -90,6 +93,17 @@ export async function createPairyQuestionPack(
       ...question,
     }],
   };
+}
+
+function httpUrlOrNull(value: string | null): string | null {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? trimmed : null;
+  } catch {
+    return null;
+  }
 }
 
 export function pairyQuestionPackFilename(title: string): string {

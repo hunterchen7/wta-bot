@@ -31,25 +31,28 @@ function PairyExport({ token }: { token: string }) {
     `/api/problems/${encodeURIComponent(token)}/pairy-pack`,
     window.location.origin,
   );
-  const importUrl = new URL(
-    '/questions/import',
-    import.meta.env.VITE_PAIRY_ORIGIN || 'https://pairy.online',
-  );
-  importUrl.searchParams.set('url', packUrl.toString());
+  // Keep the direct action off until the matching Pairy importer is deployed.
+  // Setting VITE_PAIRY_ORIGIN at build time enables it without changing packet
+  // downloads or exposing a dead production CTA during the staged rollout.
+  const importUrl = pairyImportUrl(packUrl);
 
   return <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
     <div>
       <p className="font-bold">Use this question in Pairy</p>
-      <p className="mt-1 text-sm text-muted-foreground">Import this private question directly, or keep the JSON file for later.</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {importUrl
+          ? 'Import this private question directly, or keep the JSON file for later.'
+          : 'Download this private question as a Pairy-compatible JSON file.'}
+      </p>
     </div>
     <div className="flex flex-wrap gap-2">
-      <Button asChild>
+      {importUrl ? <Button asChild>
         <a href={importUrl.toString()} target="_blank" rel="noreferrer">
           <ExternalLink aria-hidden="true" />
           Import to Pairy
         </a>
-      </Button>
-      <Button asChild variant="outline">
+      </Button> : null}
+      <Button asChild variant={importUrl ? 'outline' : 'default'}>
         <a href={packUrl.toString()} download>
           <Download aria-hidden="true" />
           Download JSON
@@ -57,6 +60,19 @@ function PairyExport({ token }: { token: string }) {
       </Button>
     </div>
   </div>;
+}
+
+function pairyImportUrl(packUrl: URL): URL | null {
+  const origin = import.meta.env.VITE_PAIRY_ORIGIN?.trim();
+  if (!origin) return null;
+  try {
+    const url = new URL('/questions/import', origin);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    url.searchParams.set('url', packUrl.toString());
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 function Notice({ children, tone }: { children: React.ReactNode; tone: 'amber' | 'western' }) { return <div className={`mb-6 rounded-2xl border p-4 text-sm font-semibold ${tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-western-200 bg-western-50 text-western-900'}`}>{children}</div>; }

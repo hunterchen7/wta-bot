@@ -6,7 +6,7 @@
     "dev": "npm run build:web && wrangler dev",
     "dev:web": "vite --config web/vite.config.ts",
     "build:web": "vite build --config web/vite.config.ts",
-    "deploy": "npm run build:web && wrangler deploy",
+    "deploy": "npm run build:web && wrangler d1 migrations apply wta-bot --remote && wrangler deploy",
     "deploy:ci": "wrangler d1 migrations apply wta-bot --remote && npm run build:web && wrangler deploy",
     "typecheck": "tsc --noEmit && tsc --noEmit -p web/tsconfig.json",
     "test": "vitest run",

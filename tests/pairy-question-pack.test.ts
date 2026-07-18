@@ -63,6 +63,19 @@ describe('Pairy question packs', () => {
     expect(changed.pack.revision).not.toBe(first.pack.revision);
   });
 
+  it('keeps valid HTTP(S) source URLs and omits incompatible stored values', async () => {
+    const valid = await createPairyQuestionPack({
+      ...problem,
+      sourceUrl: '  http://example.com/problem  ',
+    });
+    const relative = await createPairyQuestionPack({ ...problem, sourceUrl: 'leetcode.com/problem' });
+    const unsafe = await createPairyQuestionPack({ ...problem, sourceUrl: 'javascript:alert(1)' });
+
+    expect(valid.questions[0]!.source.url).toBe('http://example.com/problem');
+    expect(relative.questions[0]!.source.url).toBeNull();
+    expect(unsafe.questions[0]!.source.url).toBeNull();
+  });
+
   it('creates a safe, recognizable download filename', () => {
     expect(pairyQuestionPackFilename(' Merge Intervals! ')).toBe('merge-intervals.pairy.json');
     expect(pairyQuestionPackFilename('🔥')).toBe('wta-question.pairy.json');

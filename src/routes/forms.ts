@@ -260,6 +260,11 @@ forms.get('/api/problems/:token', async (c) => {
 });
 
 forms.get('/api/problems/:token/pairy-pack', async (c) => {
+  // Pairy fetches this endpoint cross-origin. Apply these to failures too so
+  // callers can distinguish an expired link from a generic network error.
+  c.header('Cache-Control', 'private, no-store');
+  c.header('Access-Control-Allow-Origin', '*');
+  c.header('Access-Control-Expose-Headers', 'Content-Disposition');
   if (!c.env.FORM_SIGNING_SECRET) {
     return c.json({ error: 'not_configured', message: 'Problem links are not configured.' }, 503);
   }
@@ -307,9 +312,6 @@ forms.get('/api/problems/:token/pairy-pack', async (c) => {
     sourceUrl: row.url,
     availableRounds: readAvailableWeeks(row.available_weeks),
   });
-  c.header('Cache-Control', 'private, no-store');
-  c.header('Access-Control-Allow-Origin', '*');
-  c.header('Access-Control-Expose-Headers', 'Content-Disposition');
   c.header('Content-Type', 'application/vnd.pairy.question-pack+json; charset=utf-8');
   c.header(
     'Content-Disposition',

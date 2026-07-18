@@ -204,7 +204,25 @@ describe('problem bank', () => {
       `sol:${sessionId}`,
       new Date(Date.now() + 60_000),
     );
-    expect((await app.request(`/api/problems/${solutionToken}/pairy-pack`, {}, env)).status).toBe(404);
+    const rejected = await app.request(`/api/problems/${solutionToken}/pairy-pack`, {}, env);
+    expect(rejected.status).toBe(404);
+    expect(rejected.headers.get('cache-control')).toBe('private, no-store');
+    expect(rejected.headers.get('access-control-allow-origin')).toBe('*');
+
+    await env.DB.prepare(
+      'UPDATE problems SET statement_md = NULL WHERE id = (SELECT problem_id FROM sessions WHERE id = ?1)',
+    )
+      .bind(sessionId)
+      .run();
+    const notExportable = await app.request(`/api/problems/${interviewerToken}/pairy-pack`, {}, env);
+    expect(notExportable.status).toBe(409);
+    expect(notExportable.headers.get('cache-control')).toBe('private, no-store');
+    expect(notExportable.headers.get('access-control-allow-origin')).toBe('*');
+    await env.DB.prepare(
+      'UPDATE problems SET statement_md = ?2 WHERE id = (SELECT problem_id FROM sessions WHERE id = ?1)',
+    )
+      .bind(sessionId, pack.questions[0]!.promptMarkdown)
+      .run();
   });
 
   it('pre-fills the interviewer report with its assigned packet problem', async () => {
