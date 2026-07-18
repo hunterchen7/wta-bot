@@ -162,7 +162,7 @@ describe('MCP server', () => {
       params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'vitest', version: '1.0' } },
     });
     expect(response.status).toBe(200);
-    expect(await response.json<any>()).toMatchObject({ result: { serverInfo: { name: 'wta-admin', version: '1.1.0' } } });
+    expect(await response.json<any>()).toMatchObject({ result: { serverInfo: { name: 'wta-admin', version: '1.2.0' } } });
   });
 
   it('lists scoped tools and invokes a read tool', async () => {
@@ -177,6 +177,13 @@ describe('MCP server', () => {
     expect(getParticipant.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
     expect(getParticipant.inputSchema.properties.participantId.description).toContain('not a Discord user ID');
     expect(tools.find((tool: any) => tool.name === 'list_rounds').inputSchema.properties).toHaveProperty('roundNumber');
+    const createProblem = tools.find((tool: any) => tool.name === 'create_problem');
+    expect(createProblem.inputSchema.properties).toEqual(expect.objectContaining({
+      statementMarkdown: expect.any(Object),
+      interviewerNotesMarkdown: expect.any(Object),
+      execution: expect.any(Object),
+    }));
+    expect(createProblem.inputSchema.properties).not.toHaveProperty('content');
     expect(tools.find((tool: any) => tool.name === 'remove_participant')).toMatchObject({
       description: expect.stringContaining('queues affected partners for re-pairing'),
       annotations: { destructiveHint: true, idempotentHint: true, openWorldHint: false },
@@ -203,13 +210,27 @@ describe('MCP server', () => {
           title: 'MCP Tuned Contract Problem',
           difficulty: 'medium',
           availableRounds: [2, 3],
-          content: '## Statement\n\nReturn the input.\n\n## Hints\n\nRead carefully.\n\n## Solution\n\nReturn it.',
+          statementMarkdown: 'Return the input.',
+          interviewerNotesMarkdown: 'Read carefully.\n\n## Intended solution\n\nReturn it.',
+          execution: {
+            mode: 'stdin_tests',
+            languages: ['python'],
+            starterCode: { python: 'print(input())' },
+            testCases: [{ description: 'example', input: 'hello', expectedOutput: 'hello', isHidden: false }],
+          },
         },
       },
     });
     expect((await created.json<any>()).result.content[0].text).toContain('MCP Tuned Contract Problem');
     expect(await env.DB.prepare(
-      "SELECT available_weeks FROM problems WHERE title = 'MCP Tuned Contract Problem'",
-    ).first()).toEqual({ available_weeks: '[2,3]' });
+      "SELECT available_weeks, interviewer_notes_md, execution_json FROM problems WHERE title = 'MCP Tuned Contract Problem'",
+    ).first()).toEqual({
+      available_weeks: '[2,3]',
+      interviewer_notes_md: 'Read carefully.\n\n## Intended solution\n\nReturn it.',
+      execution_json: JSON.stringify({
+        mode: 'stdin_tests', languages: ['python'], starterCode: { python: 'print(input())' },
+        testCases: [{ description: 'example', input: 'hello', expectedOutput: 'hello', isHidden: false }],
+      }),
+    });
   });
 });

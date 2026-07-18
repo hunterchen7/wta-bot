@@ -1,19 +1,23 @@
-export type PairyExecutableTestCase = {
+export type ExecutableTestCase = {
   description: string;
   input: string;
   expectedOutput: string;
   isHidden: boolean;
 };
 
-export type PairyExecutableProblem = {
+export type ExecutableProblem = {
   languages: ['python'];
   starterCode: { python: string };
-  testCases: PairyExecutableTestCase[];
+  testCases: ExecutableTestCase[];
 };
 
-const executionNote = `### Pairy test runner
+/** Compatibility names for the original Pairy-export-only implementation. */
+export type PairyExecutableTestCase = ExecutableTestCase;
+export type PairyExecutableProblem = ExecutableProblem;
 
-The supplied Python starter reads one JSON value from standard input for each test and prints the result. Implement the requested method or class without removing the runner code.`;
+const executionNote = `### Test runner
+
+The supplied starter code reads one value from standard input for each test and prints the result. Implement the requested method or class without removing the runner code.`;
 
 const specs = {
   304: {
@@ -357,15 +361,16 @@ if _raw.strip():
       hidden('spaces count as characters', { s: 'a b a' }, 3),
     ],
   },
-} satisfies Record<number, { starterCode: string; testCases: PairyExecutableTestCase[] }>;
+} satisfies Record<number, { starterCode: string; testCases: ExecutableTestCase[] }>;
 
-export const PAIRY_EXECUTABLE_SOURCE_NUMBERS = Object.freeze(
+export const EXECUTABLE_SOURCE_NUMBERS = Object.freeze(
   Object.keys(specs).map(Number).sort((a, b) => a - b),
 );
+export const PAIRY_EXECUTABLE_SOURCE_NUMBERS = EXECUTABLE_SOURCE_NUMBERS;
 
-export function getPairyExecutableProblem(
+export function getExecutableProblem(
   sourceNumber: number | null,
-): PairyExecutableProblem | null {
+): ExecutableProblem | null {
   if (sourceNumber == null || !(sourceNumber in specs)) return null;
   const spec = specs[sourceNumber as keyof typeof specs];
   return {
@@ -374,16 +379,18 @@ export function getPairyExecutableProblem(
     testCases: spec.testCases.map((testCase) => ({ ...testCase })),
   };
 }
+export const getPairyExecutableProblem = getExecutableProblem;
 
-export function appendPairyExecutionNote(promptMarkdown: string): string {
+export function appendExecutionNote(promptMarkdown: string): string {
   return `${promptMarkdown.trim()}\n\n${executionNote}`;
 }
+export const appendPairyExecutionNote = appendExecutionNote;
 
-function visible(description: string, input: unknown, output: unknown): PairyExecutableTestCase {
+function visible(description: string, input: unknown, output: unknown): ExecutableTestCase {
   return testCase(description, input, output, false);
 }
 
-function hidden(description: string, input: unknown, output: unknown): PairyExecutableTestCase {
+function hidden(description: string, input: unknown, output: unknown): ExecutableTestCase {
   return testCase(description, input, output, true);
 }
 
@@ -392,7 +399,7 @@ function testCase(
   input: unknown,
   output: unknown,
   isHidden: boolean,
-): PairyExecutableTestCase {
+): ExecutableTestCase {
   return {
     description,
     input: JSON.stringify(input),

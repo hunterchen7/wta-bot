@@ -1,14 +1,12 @@
 import {
-  appendPairyExecutionNote,
-  getPairyExecutableProblem,
-  type PairyExecutableProblem,
+  appendExecutionNote,
+  getExecutableProblem,
 } from './pairy-executable-problems';
+import type { ProblemExecution } from './problem-authoring';
 
 export type PairyQuestionDifficulty = 'easy' | 'medium' | 'hard';
 
-export type PairyQuestionExecution =
-  | { mode: 'manual' }
-  | ({ mode: 'stdin_tests' } & PairyExecutableProblem);
+export type PairyQuestionExecution = ProblemExecution;
 
 export type PairyQuestionPackV1 = {
   kind: 'pairy.question-pack';
@@ -29,8 +27,7 @@ export type PairyQuestionPackV1 = {
     difficulty: PairyQuestionDifficulty;
     promptMarkdown: string;
     interviewer: {
-      hintsMarkdown: string;
-      solutionMarkdown: string;
+      notesMarkdown: string;
     };
     execution: PairyQuestionExecution;
     source: {
@@ -51,8 +48,8 @@ export type WtaPairyQuestionInput = {
   title: string;
   difficulty: PairyQuestionDifficulty;
   promptMarkdown: string;
-  hintsMarkdown: string | null;
-  solutionMarkdown: string | null;
+  interviewerNotesMarkdown: string | null;
+  execution?: ProblemExecution;
   source: string;
   sourceNumber: number | null;
   sourceUrl: string | null;
@@ -70,21 +67,20 @@ export async function createPairyQuestionPack(
   // may reuse the same numeric value, so never infer a harness from the number
   // unless the provider matches as well.
   const executable = input.source.trim().toLowerCase() === 'leetcode'
-    ? getPairyExecutableProblem(input.sourceNumber)
+    ? getExecutableProblem(input.sourceNumber)
     : null;
+  const execution = input.execution
+    ?? (executable ? { mode: 'stdin_tests' as const, ...executable } : { mode: 'manual' as const });
   const question = {
     title: input.title.trim(),
     difficulty: input.difficulty,
-    promptMarkdown: executable
-      ? appendPairyExecutionNote(input.promptMarkdown)
+    promptMarkdown: execution.mode === 'stdin_tests'
+      ? appendExecutionNote(input.promptMarkdown)
       : input.promptMarkdown.trim(),
     interviewer: {
-      hintsMarkdown: input.hintsMarkdown?.trim() ?? '',
-      solutionMarkdown: input.solutionMarkdown?.trim() ?? '',
+      notesMarkdown: input.interviewerNotesMarkdown?.trim() ?? '',
     },
-    execution: executable
-      ? { mode: 'stdin_tests' as const, ...executable }
-      : { mode: 'manual' as const },
+    execution,
     source: {
       provider: input.source.trim() || 'manual',
       externalId: input.sourceNumber == null ? null : String(input.sourceNumber),

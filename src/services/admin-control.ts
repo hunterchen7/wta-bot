@@ -2,7 +2,7 @@ import type { Env } from '../env';
 import { enqueue } from '../engine/outbox';
 import { enqueueRepair } from '../engine/repair';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
-import { composeQuestionMarkdown, normalizeAvailableWeeks, parseQuestionMarkdown } from '../question-markdown';
+import { normalizeProblemInput } from '../problem-authoring';
 import { problemBankWorkspace } from './problem-sets';
 import { writeAdminAudit } from './admin-audit';
 import { enrollmentFunnel } from './enrollment-events';
@@ -247,18 +247,19 @@ export async function automationProblems(env: Env) {
 }
 
 export async function createAutomationProblem(env: Env, actorId: number, body: any) {
-  const question = normalizeQuestionInput(body);
+  const question = normalizeProblemInput(body);
   if (!question) return null;
   const result = await env.DB.prepare(
     `INSERT INTO problems
        (source, number, title, url, difficulty, difficulty_rank, content_md,
-        available_weeks, statement_md, hints_md, solution_md, active)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+        available_weeks, statement_md, hints_md, solution_md, interviewer_notes_md,
+        execution_json, active)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12, ?13)`,
   ).bind(
     question.source, question.number, question.title, question.url, question.difficulty,
     question.difficultyRank, question.content, JSON.stringify(question.availableWeeks),
-    question.sections.statement, question.sections.hints || null, question.sections.solution || null,
-    question.active,
+    question.statement, question.interviewerNotes || null, question.interviewerNotes,
+    question.executionJson, question.active,
   ).run();
   const id = Number(result.meta.last_row_id);
   await writeAdminAudit(env, actorId, 'automation.problem_created', 'problem', id, {
@@ -266,29 +267,4 @@ export async function createAutomationProblem(env: Env, actorId: number, body: a
     availableWeeks: question.availableWeeks,
   });
   return { id, ...question };
-}
-
-function normalizeQuestionInput(body: any) {
-  if (!body?.title?.trim() || !['easy', 'medium', 'hard'].includes(body.difficulty)) return null;
-  const availableWeeks = normalizeAvailableWeeks(body.availableWeeks);
-  const content = String(body.content ?? composeQuestionMarkdown({
-    statement: body.statement,
-    hints: body.hints,
-    solution: body.solution,
-  })).trim().slice(0, 100_000);
-  const sections = parseQuestionMarkdown(content);
-  if (!availableWeeks.length || !sections.statement) return null;
-  const rank = body.difficultyRank == null ? null : Number(body.difficultyRank);
-  return {
-    source: String(body.source ?? 'manual').trim().slice(0, 50) || 'manual',
-    number: body.number == null ? null : Number(body.number),
-    title: String(body.title).trim().slice(0, 200),
-    url: String(body.url ?? '').trim().slice(0, 1000) || null,
-    difficulty: body.difficulty as 'easy' | 'medium' | 'hard',
-    difficultyRank: rank != null && Number.isFinite(rank) ? rank : null,
-    content,
-    availableWeeks,
-    sections,
-    active: body.active === false ? 0 : 1,
-  };
 }

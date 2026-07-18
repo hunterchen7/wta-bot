@@ -58,7 +58,7 @@ export function Tabs({ items, value, onChange }: { items: Array<{ value: string;
   return <ShadcnTabs value={value} onValueChange={onChange} className="max-w-full overflow-x-auto"><TabsList className="border border-slate-200">{items.map((item) => <TabsTrigger aria-label={item.label} key={item.value} value={item.value} className="text-xs font-extrabold">{item.label}{item.count == null ? null : <span className="ml-1.5 tabular-nums text-slate-400">{item.count}</span>}</TabsTrigger>)}</TabsList></ShadcnTabs>;
 }
 
-export function Dialog({ title, description, children, onClose, actions, wide = false, size, bodyClassName = '' }: { title: string; description?: string; children: ReactNode; onClose: () => void; actions?: ReactNode; wide?: boolean; size?: 'default' | 'wide' | 'viewport'; bodyClassName?: string }) {
+export function Dialog({ title, description, children, onClose, actions, wide = false, size, bodyClassName = '', bodyRef }: { title: string; description?: string; children: ReactNode; onClose: () => void; actions?: ReactNode; wide?: boolean; size?: 'default' | 'wide' | 'viewport'; bodyClassName?: string; bodyRef?: React.RefObject<HTMLDivElement | null> }) {
   const [open, setOpen] = useState(true);
   const onCloseRef = useRef(onClose);
   const fallbackTimer = useRef<number | null>(null);
@@ -91,7 +91,7 @@ export function Dialog({ title, description, children, onClose, actions, wide = 
             {description ? <DialogDescription className="text-sm leading-5 text-slate-500">{description}</DialogDescription> : null}
           </DialogHeader>
         </div>
-        <div className={`min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-5 ${bodyClassName}`}>{children}</div>
+        <div ref={bodyRef} className={`min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-5 ${bodyClassName}`}>{children}</div>
         {actions ? <div className="flex shrink-0 justify-end gap-2 border-t border-border bg-card/95 px-5 py-4 backdrop-blur-xl">{actions}</div> : null}
       </DialogContent>
   </ShadcnDialog>;

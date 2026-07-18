@@ -5,36 +5,20 @@ import {
   Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, inputClass,
   LoadingState, PageIntro, Panel, tableClass, tableWrapClass, tdClass, thClass, Tabs,
 } from '../../components/AdminUI';
+import { ProblemEditor } from '../../components/admin/ProblemEditor';
 import { Checkbox } from '../../components/ui/checkbox';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
 import { SelectControl } from '../../components/SelectControl';
 import { ProblemContentSection } from '../../components/ProblemContentSection';
-
-const QUESTION_TEMPLATE = `## Statement
-
-
-
-## Hints
-
-1.
-
-## Solution
-
-`;
-
-const blankProblem: Omit<ProblemRow, 'id' | 'uses' | 'exposures'> = {
-  source: 'manual', number: null, title: '', url: null, difficulty: 'medium',
-  difficulty_rank: 2, content_md: QUESTION_TEMPLATE, available_weeks: [2],
-  statement_md: null, hints_md: null, solution_md: null, active: 1,
-};
+import { createBlankProblem, type EditableProblem } from '../../lib/problem-editor';
 
 export function ProblemsPage() {
   const { data, error, loading, reload } = useAdminData<ProblemsData>('/problems');
   const [tab, setTab] = useState('sets');
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState('all');
-  const [editor, setEditor] = useState<ProblemRow | typeof blankProblem | null>(null);
+  const [editor, setEditor] = useState<EditableProblem | null>(null);
   const [preview, setPreview] = useState<ProblemRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -46,7 +30,7 @@ export function ProblemsPage() {
   if (loading && !data) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? 'No question data returned.'} onRetry={() => void reload()} />;
 
-  const save = async (problem: ProblemRow | typeof blankProblem) => {
+  const save = async (problem: EditableProblem) => {
     setBusy(true);
     try {
       const existing = 'id' in problem;
@@ -55,7 +39,10 @@ export function ProblemsPage() {
         body: JSON.stringify({
           source: problem.source, number: problem.number, title: problem.title, url: problem.url,
           difficulty: problem.difficulty, difficultyRank: problem.difficulty_rank,
-          content: problem.content_md, availableWeeks: problem.available_weeks,
+          statementMarkdown: problem.statement_md,
+          interviewerNotesMarkdown: problem.interviewer_notes_md,
+          execution: problem.execution,
+          availableWeeks: problem.available_weeks,
           active: Boolean(problem.active),
         }),
       });
@@ -70,8 +57,8 @@ export function ProblemsPage() {
   return <div className="space-y-7">
     <PageIntro
       title="Question bank"
-      description="Author each question as one Markdown document, then tag the rounds where it may appear."
-      actions={<Button onClick={() => setEditor({ ...blankProblem })}>Add question</Button>}
+      description="Build reusable interview questions with private notes and optional portable test suites, then tag the rounds where they may appear."
+      actions={<Button onClick={() => setEditor(createBlankProblem())}>Add question</Button>}
     />
     {notice ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-800">{notice}</div> : null}
     <div className="flex"><Tabs value={tab} onChange={setTab} items={[
@@ -89,7 +76,7 @@ export function ProblemsPage() {
         {rows.length ? <div className={tableWrapClass}><table className={tableClass}>
           <thead><tr><th className={thClass}>Question</th><th className={thClass}>Available</th><th className={thClass}>Difficulty</th><th className={thClass}>Usage</th><th className={thClass}>State</th><th className={thClass}></th></tr></thead>
           <tbody>{rows.map((problem) => <tr key={problem.id}>
-            <td className={tdClass}><div className="font-bold text-slate-950">{problem.number ? `#${problem.number} · ` : ''}{problem.title}</div><div className="mt-0.5 text-xs text-slate-400">{problem.source} · Markdown</div></td>
+            <td className={tdClass}><div className="font-bold text-slate-950">{problem.number ? `#${problem.number} · ` : ''}{problem.title}</div><div className="mt-0.5 text-xs text-slate-400">{problem.source} · {problem.execution.mode === 'stdin_tests' ? `${problem.execution.testCases.length} automated tests` : 'discussion only'}</div></td>
             <td className={tdClass}><WeekTags weeks={problem.available_weeks} /></td>
             <td className={tdClass}><Badge value={problem.difficulty} />{problem.difficulty_rank != null ? <span className="ml-2 text-xs font-bold tabular-nums text-slate-400">{problem.difficulty_rank}</span> : null}</td>
             <td className={tdClass}><span className="font-bold tabular-nums text-slate-800">{problem.uses}</span><span className="ml-1 text-xs">sessions</span></td>
@@ -98,7 +85,7 @@ export function ProblemsPage() {
           </tr>)}</tbody>
         </table></div> : <EmptyState title="No questions match" description="Change the filters or add a question." />}
       </Panel>}
-    {editor ? <QuestionEditor value={editor} weeks={data.weeks.map((week) => week.idx)} busy={busy} onClose={() => setEditor(null)} onSave={save} /> : null}
+    {editor ? <ProblemEditor value={editor} weeks={data.weeks.map((week) => week.idx)} busy={busy} onClose={() => setEditor(null)} onSave={save} /> : null}
     {preview ? <QuestionPreview problem={preview} onClose={() => setPreview(null)} /> : null}
   </div>;
 }
@@ -114,8 +101,8 @@ function QuestionPreview({ problem, onClose }: { problem: ProblemRow; onClose: (
     <div className="mb-5 flex flex-wrap items-center gap-2"><Badge value={problem.difficulty} /><WeekTags weeks={problem.available_weeks} />{problem.active ? null : <Badge value="inactive" />}{problem.url ? <a href={problem.url} target="_blank" rel="noreferrer" className="ml-auto font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a> : null}</div>
     <div className="min-w-0 space-y-5">
       <ProblemContentSection title="Statement" value={problem.statement_md?.trim() || 'No statement has been added yet.'} />
-      <ProblemContentSection title="Hint ladder" value={problem.hints_md?.trim() || 'No hints have been added yet.'} />
-      <ProblemContentSection title="Solution" value={problem.solution_md?.trim() || 'No solution notes have been added yet.'} />
+      <ProblemContentSection title="Interviewer notes" value={problem.interviewer_notes_md.trim() || 'No interviewer notes have been added yet.'} />
+      <div className="rounded-2xl border border-border bg-card p-4 text-sm text-card-foreground"><div className="font-black">Test harness</div><div className="mt-1 text-muted-foreground">{problem.execution.mode === 'stdin_tests' ? `${problem.execution.testCases.length} tests · ${problem.execution.languages.join(', ')}` : 'Discussion only'}</div></div>
     </div>
   </Dialog>;
 }
@@ -168,30 +155,6 @@ function RoundSets({ data, reload, onNotice, onPreview }: { data: ProblemsData; 
   </Panel>;
 }
 
-function QuestionEditor({ value, weeks, busy, onClose, onSave }: { value: ProblemRow | typeof blankProblem; weeks: number[]; busy: boolean; onClose: () => void; onSave: (value: ProblemRow | typeof blankProblem) => Promise<void> }) {
-  const [draft, setDraft] = useState(value);
-  const update = (key: string, next: unknown) => setDraft((current) => ({ ...current, [key]: next }));
-  const weekOptions = [...new Set([1, 2, 3, ...weeks])].sort((a, b) => a - b);
-  const toggleWeek = (week: number) => update('available_weeks', draft.available_weeks.includes(week) ? draft.available_weeks.filter((value) => value !== week) : [...draft.available_weeks, week].sort((a, b) => a - b));
-  const valid = draft.title.trim() && draft.content_md.includes('## Statement') && draft.available_weeks.length > 0;
-  return <Dialog wide title={'id' in draft ? `Edit ${draft.title}` : 'Add question'} description="The Markdown document is the canonical question content. Round tags control where it can be selected." onClose={onClose} actions={<><DialogClose><Button variant="secondary">Cancel</Button></DialogClose><Button disabled={busy || !valid} onClick={() => void onSave(draft)}>{busy ? 'Saving…' : 'Save question'}</Button></>}>
-    <div className="grid gap-4 sm:grid-cols-[8rem_minmax(0,1fr)]">
-      <Field label="Number"><input type="number" className={inputClass} value={draft.number ?? ''} onChange={(event) => update('number', event.target.value ? Number(event.target.value) : null)} /></Field>
-      <Field label="Title"><input autoFocus className={inputClass} value={draft.title} onChange={(event) => update('title', event.target.value)} /></Field>
-      <Field label="Difficulty"><SelectControl label="Difficulty" value={draft.difficulty} onChange={(value) => update('difficulty', value)} options={[{ value: 'easy', label: 'easy' }, { value: 'medium', label: 'medium' }, { value: 'hard', label: 'hard' }]} /></Field>
-      <Field label="Difficulty rank"><input type="number" step="0.1" className={inputClass} value={draft.difficulty_rank ?? ''} onChange={(event) => update('difficulty_rank', event.target.value ? Number(event.target.value) : null)} /></Field>
-      <div className="sm:col-span-2"><Field label="Source URL"><input className={inputClass} value={draft.url ?? ''} onChange={(event) => update('url', event.target.value)} /></Field></div>
-      <fieldset className="sm:col-span-2"><legend className="text-sm font-bold text-slate-800">Available rounds</legend><div className="mt-2 flex flex-wrap gap-2">{weekOptions.map((week) => <label key={week} className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-800"><Checkbox checked={draft.available_weeks.includes(week)} onCheckedChange={() => toggleWeek(week)} />Round {week}</label>)}</div></fieldset>
-      <div className="sm:col-span-2"><Field label="Question Markdown"><textarea className={`${inputClass} min-h-[28rem] resize-y font-mono leading-6`} value={draft.content_md} onChange={(event) => update('content_md', event.target.value)} /><span className="mt-2 block text-xs font-medium text-slate-500">Use <code>## Statement</code>, <code>## Hints</code>, and <code>## Solution</code>. These headings control what each participant is allowed to see.</span></Field></div>
-      <label className="sm:col-span-2 flex cursor-pointer items-center gap-3 rounded-xl bg-slate-50 p-3 text-sm font-bold text-slate-800"><Checkbox checked={Boolean(draft.active)} onCheckedChange={(checked) => update('active', checked ? 1 : 0)} />Active in the question bank</label>
-    </div>
-  </Dialog>;
-}
-
 function WeekTags({ weeks }: { weeks: number[] }) {
   return <div className="flex flex-wrap gap-1">{weeks.map((week) => <span key={week} className="rounded-md bg-western-50 px-2 py-1 text-[0.68rem] font-black text-western-800">R{week}</span>)}</div>;
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block text-sm font-bold text-slate-800">{label}<div className="mt-2">{children}</div></label>;
 }

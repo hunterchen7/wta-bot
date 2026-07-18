@@ -7,6 +7,7 @@ import { sessionFrom } from './web';
 import { isCurrentOrganizer } from '../organizers';
 import { fizzBuzzDemoPacket } from '../demo/fizzbuzz-packet';
 import { createPairyQuestionPack, pairyQuestionPackFilename } from '../pairy-question-pack';
+import { effectiveInterviewerNotes, effectiveProblemExecution } from '../problem-authoring';
 import { readAvailableWeeks } from '../question-markdown';
 
 // Signed report and problem links now hydrate React pages. This module exposes
@@ -243,7 +244,7 @@ forms.get('/api/problems/:token', async (c) => {
   if (!match) return c.json({ error: 'invalid_link', message: 'This problem link is invalid or expired.' }, 404);
   const row = await c.env.DB.prepare(
     `SELECT s.id, s.scheduled_at, w.idx AS week_idx, p.number, p.title, p.url, p.difficulty,
-            p.statement_md, p.solution_md, p.hints_md, pe.name AS interviewee_name
+            p.statement_md, p.solution_md, p.hints_md, p.interviewer_notes_md, pe.name AS interviewee_name
      FROM sessions s JOIN weeks w ON w.id = s.week_id JOIN problems p ON p.id = s.problem_id
      JOIN participants pe ON pe.id = s.interviewee_id WHERE s.id = ?1`,
   ).bind(Number(match[2])).first<any>();
@@ -254,7 +255,10 @@ forms.get('/api/problems/:token', async (c) => {
     intervieweeName: packet ? row.interviewee_name : null,
     problem: {
       number: row.number, title: row.title, url: row.url, difficulty: row.difficulty,
-      statement: row.statement_md, hints: packet ? row.hints_md : null, solution: row.solution_md,
+      statement: row.statement_md,
+      notes: packet ? effectiveInterviewerNotes(row) : null,
+      hints: packet ? row.hints_md : null,
+      solution: row.solution_md,
     },
   });
 });
@@ -277,7 +281,8 @@ forms.get('/api/problems/:token/pairy-pack', async (c) => {
   }
   const row = await c.env.DB.prepare(
     `SELECT p.id, p.portable_id, p.source, p.number, p.title, p.url, p.difficulty,
-            p.statement_md, p.solution_md, p.hints_md, p.available_weeks
+            p.statement_md, p.solution_md, p.hints_md, p.interviewer_notes_md,
+            p.execution_json, p.available_weeks
      FROM sessions s JOIN problems p ON p.id = s.problem_id
      WHERE s.id = ?1`,
   ).bind(Number(match[1])).first<{
@@ -291,6 +296,8 @@ forms.get('/api/problems/:token/pairy-pack', async (c) => {
     statement_md: string | null;
     solution_md: string | null;
     hints_md: string | null;
+    interviewer_notes_md: string | null;
+    execution_json: string | null;
     available_weeks: string | null;
   }>();
   if (!row) {
@@ -305,8 +312,8 @@ forms.get('/api/problems/:token/pairy-pack', async (c) => {
     title: row.title,
     difficulty: row.difficulty,
     promptMarkdown: row.statement_md,
-    hintsMarkdown: row.hints_md,
-    solutionMarkdown: row.solution_md,
+    interviewerNotesMarkdown: effectiveInterviewerNotes(row),
+    execution: effectiveProblemExecution(row),
     source: row.source,
     sourceNumber: row.number,
     sourceUrl: row.url,

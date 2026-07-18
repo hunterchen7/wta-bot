@@ -61,7 +61,12 @@ export type RoundsData = { cohort: Cohort | null; weeks: Week[]; selectedWeek: W
 export type ReviewRow = { id: number; review_state: string; state: string; round: number; interviewer_name: string; interviewee_name: string; interviewee_id: number; video_url: string | null };
 export type ReviewsData = { reviews: ReviewRow[] };
 
-export type ProblemRow = { id: number; source: string; number: number | null; title: string; url: string | null; difficulty: 'easy' | 'medium' | 'hard'; difficulty_rank: number | null; content_md: string; available_weeks: number[]; statement_md: string | null; solution_md: string | null; hints_md: string | null; active: number; uses: number; exposures: number };
+export type ProblemLanguage = 'python' | 'javascript' | 'typescript' | 'java' | 'cpp';
+export type ProblemTestCase = { description: string; input: string; expectedOutput: string; isHidden: boolean };
+export type ProblemExecution =
+  | { mode: 'manual' }
+  | { mode: 'stdin_tests'; languages: ProblemLanguage[]; starterCode: Partial<Record<ProblemLanguage, string>>; testCases: ProblemTestCase[] };
+export type ProblemRow = { id: number; source: string; number: number | null; title: string; url: string | null; difficulty: 'easy' | 'medium' | 'hard'; difficulty_rank: number | null; content_md: string; available_weeks: number[]; statement_md: string | null; interviewer_notes_md: string; solution_md: string | null; hints_md: string | null; execution: ProblemExecution; active: number; uses: number; exposures: number };
 export type ProblemsData = {
   problems: ProblemRow[];
   sets: Array<{ week_id: number; round: number; cohort_name: string; problem_id: number; title: string }>;
