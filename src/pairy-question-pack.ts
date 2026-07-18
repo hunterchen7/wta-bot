@@ -1,4 +1,14 @@
+import {
+  appendPairyExecutionNote,
+  getPairyExecutableProblem,
+  type PairyExecutableProblem,
+} from './pairy-executable-problems';
+
 export type PairyQuestionDifficulty = 'easy' | 'medium' | 'hard';
+
+export type PairyQuestionExecution =
+  | { mode: 'manual' }
+  | ({ mode: 'stdin_tests' } & PairyExecutableProblem);
 
 export type PairyQuestionPackV1 = {
   kind: 'pairy.question-pack';
@@ -22,9 +32,7 @@ export type PairyQuestionPackV1 = {
       hintsMarkdown: string;
       solutionMarkdown: string;
     };
-    execution: {
-      mode: 'manual';
-    };
+    execution: PairyQuestionExecution;
     source: {
       provider: string;
       externalId: string | null;
@@ -58,15 +66,25 @@ export async function createPairyQuestionPack(
   const availableRounds = [...new Set(input.availableRounds)]
     .filter((round) => Number.isInteger(round) && round > 0 && round <= 52)
     .sort((a, b) => a - b);
+  // The specs are keyed by their upstream LeetCode IDs. A manual/custom bank
+  // may reuse the same numeric value, so never infer a harness from the number
+  // unless the provider matches as well.
+  const executable = input.source.trim().toLowerCase() === 'leetcode'
+    ? getPairyExecutableProblem(input.sourceNumber)
+    : null;
   const question = {
     title: input.title.trim(),
     difficulty: input.difficulty,
-    promptMarkdown: input.promptMarkdown.trim(),
+    promptMarkdown: executable
+      ? appendPairyExecutionNote(input.promptMarkdown)
+      : input.promptMarkdown.trim(),
     interviewer: {
       hintsMarkdown: input.hintsMarkdown?.trim() ?? '',
       solutionMarkdown: input.solutionMarkdown?.trim() ?? '',
     },
-    execution: { mode: 'manual' as const },
+    execution: executable
+      ? { mode: 'stdin_tests' as const, ...executable }
+      : { mode: 'manual' as const },
     source: {
       provider: input.source.trim() || 'manual',
       externalId: input.sourceNumber == null ? null : String(input.sourceNumber),

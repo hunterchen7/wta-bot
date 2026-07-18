@@ -4,6 +4,10 @@ import {
   pairyQuestionPackFilename,
   type WtaPairyQuestionInput,
 } from '../src/pairy-question-pack';
+import {
+  getPairyExecutableProblem,
+  PAIRY_EXECUTABLE_SOURCE_NUMBERS,
+} from '../src/pairy-executable-problems';
 
 const problem: WtaPairyQuestionInput = {
   portableId: '019f6d13e39a71009ab220bed566f322',
@@ -61,6 +65,39 @@ describe('Pairy question packs', () => {
 
     expect(same.pack.revision).toBe(first.pack.revision);
     expect(changed.pack.revision).not.toBe(first.pack.revision);
+  });
+
+  it('exports every current WTA problem with runnable Python metadata and four cases', async () => {
+    expect(PAIRY_EXECUTABLE_SOURCE_NUMBERS).toEqual([2, 3, 19, 49, 138, 304, 349, 901, 1700, 2594]);
+
+    for (const sourceNumber of PAIRY_EXECUTABLE_SOURCE_NUMBERS) {
+      const execution = getPairyExecutableProblem(sourceNumber);
+      expect(execution?.languages).toEqual(['python']);
+      expect(execution?.starterCode.python).toContain('sys.stdin.read()');
+      expect(execution?.starterCode.python).toContain('json.loads(_raw)');
+      expect(execution?.testCases).toHaveLength(4);
+      expect(execution?.testCases.filter(({ isHidden }) => isHidden)).toHaveLength(2);
+      expect(execution?.testCases.filter(({ isHidden }) => !isHidden)).toHaveLength(2);
+      for (const testCase of execution?.testCases ?? []) {
+        expect(() => JSON.parse(testCase.input)).not.toThrow();
+        expect(() => JSON.parse(testCase.expectedOutput)).not.toThrow();
+      }
+
+      const pack = await createPairyQuestionPack({ ...problem, sourceNumber });
+      expect(pack.questions[0]?.execution).toEqual({ mode: 'stdin_tests', ...execution });
+      expect(pack.questions[0]?.promptMarkdown).toContain('### Pairy test runner');
+      expect(new Blob([JSON.stringify(pack)]).size).toBeLessThan(1_000_000);
+    }
+  });
+
+  it('keeps problems outside the executable bank on the manual fallback', async () => {
+    expect(getPairyExecutableProblem(56)).toBeNull();
+    expect((await createPairyQuestionPack(problem)).questions[0]?.execution).toEqual({ mode: 'manual' });
+    expect((await createPairyQuestionPack({
+      ...problem,
+      source: 'manual',
+      sourceNumber: 3,
+    })).questions[0]?.execution).toEqual({ mode: 'manual' });
   });
 
   it('keeps valid HTTP(S) source URLs and omits incompatible stored values', async () => {
