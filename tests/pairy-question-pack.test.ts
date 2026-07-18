@@ -5,8 +5,8 @@ import {
   type WtaPairyQuestionInput,
 } from '../src/pairy-question-pack';
 import {
-  getPairyExecutableProblem,
-  PAIRY_EXECUTABLE_SOURCE_NUMBERS,
+  EXECUTABLE_SOURCE_NUMBERS,
+  getExecutableProblem,
 } from '../src/pairy-executable-problems';
 
 const problem: WtaPairyQuestionInput = {
@@ -14,8 +14,7 @@ const problem: WtaPairyQuestionInput = {
   title: 'Merge Intervals',
   difficulty: 'medium',
   promptMarkdown: 'Merge every overlapping interval.',
-  hintsMarkdown: 'Sort by start time.',
-  solutionMarkdown: 'Sort, then sweep once.',
+  interviewerNotesMarkdown: 'Sort by start time.\n\n## Intended solution\n\nSort, then sweep once.',
   source: 'leetcode',
   sourceNumber: 56,
   sourceUrl: 'https://leetcode.com/problems/merge-intervals/',
@@ -43,8 +42,7 @@ describe('Pairy question packs', () => {
         },
         promptMarkdown: 'Merge every overlapping interval.',
         interviewer: {
-          hintsMarkdown: 'Sort by start time.',
-          solutionMarkdown: 'Sort, then sweep once.',
+          notesMarkdown: 'Sort by start time.\n\n## Intended solution\n\nSort, then sweep once.',
         },
         execution: { mode: 'manual' },
         source: {
@@ -61,17 +59,17 @@ describe('Pairy question packs', () => {
   it('uses a deterministic content revision and changes it with the question', async () => {
     const first = await createPairyQuestionPack(problem);
     const same = await createPairyQuestionPack({ ...problem, availableRounds: [2, 3] });
-    const changed = await createPairyQuestionPack({ ...problem, solutionMarkdown: 'A new solution.' });
+    const changed = await createPairyQuestionPack({ ...problem, interviewerNotesMarkdown: 'A new solution.' });
 
     expect(same.pack.revision).toBe(first.pack.revision);
     expect(changed.pack.revision).not.toBe(first.pack.revision);
   });
 
   it('exports every current WTA problem with runnable Python metadata and four cases', async () => {
-    expect(PAIRY_EXECUTABLE_SOURCE_NUMBERS).toEqual([2, 3, 19, 49, 138, 304, 349, 901, 1700, 2594]);
+    expect(EXECUTABLE_SOURCE_NUMBERS).toEqual([2, 3, 19, 49, 138, 304, 349, 901, 1700, 2594]);
 
-    for (const sourceNumber of PAIRY_EXECUTABLE_SOURCE_NUMBERS) {
-      const execution = getPairyExecutableProblem(sourceNumber);
+    for (const sourceNumber of EXECUTABLE_SOURCE_NUMBERS) {
+      const execution = getExecutableProblem(sourceNumber);
       expect(execution?.languages).toEqual(['python']);
       expect(execution?.starterCode.python).toContain('sys.stdin.read()');
       expect(execution?.starterCode.python).toContain('json.loads(_raw)');
@@ -85,19 +83,34 @@ describe('Pairy question packs', () => {
 
       const pack = await createPairyQuestionPack({ ...problem, sourceNumber });
       expect(pack.questions[0]?.execution).toEqual({ mode: 'stdin_tests', ...execution });
-      expect(pack.questions[0]?.promptMarkdown).toContain('### Pairy test runner');
+      expect(pack.questions[0]?.promptMarkdown).toContain('### Test runner');
       expect(new Blob([JSON.stringify(pack)]).size).toBeLessThan(1_000_000);
     }
   });
 
   it('keeps problems outside the executable bank on the manual fallback', async () => {
-    expect(getPairyExecutableProblem(56)).toBeNull();
+    expect(getExecutableProblem(56)).toBeNull();
     expect((await createPairyQuestionPack(problem)).questions[0]?.execution).toEqual({ mode: 'manual' });
     expect((await createPairyQuestionPack({
       ...problem,
       source: 'manual',
       sourceNumber: 3,
     })).questions[0]?.execution).toEqual({ mode: 'manual' });
+  });
+
+  it('uses a stored portable execution definition instead of inferring a Pairy-specific spec', async () => {
+    const execution = {
+      mode: 'stdin_tests' as const,
+      languages: ['javascript' as const],
+      starterCode: { javascript: 'const input = require("fs").readFileSync(0, "utf8");' },
+      testCases: [{ description: 'echoes input', input: 'hello', expectedOutput: 'hello', isHidden: false }],
+    };
+    const pack = await createPairyQuestionPack({ ...problem, source: 'manual', execution });
+    expect(pack.questions[0]).toMatchObject({
+      execution,
+      interviewer: { notesMarkdown: expect.stringContaining('Intended solution') },
+    });
+    expect(pack.questions[0]!.promptMarkdown).toContain('### Test runner');
   });
 
   it('keeps valid HTTP(S) source URLs and omits incompatible stored values', async () => {

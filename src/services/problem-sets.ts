@@ -2,6 +2,7 @@ import type { Env } from '../env';
 import { generateWeekSet } from '../engine/problems';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
 import { composeQuestionMarkdown, readAvailableWeeks } from '../question-markdown';
+import { effectiveInterviewerNotes, effectiveProblemExecution } from '../problem-authoring';
 
 export class ProblemSetError extends Error {
   constructor(message: string, readonly status: 400 | 404 = 400) { super(message); }
@@ -31,6 +32,8 @@ export async function problemBankWorkspace(env: Env) {
         solution: problem.solution_md,
       }),
       available_weeks: readAvailableWeeks(problem.available_weeks),
+      interviewer_notes_md: effectiveInterviewerNotes(problem),
+      execution: effectiveProblemExecution(problem),
     })),
     sets: sets.results,
     cohort,

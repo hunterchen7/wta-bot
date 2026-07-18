@@ -6,7 +6,7 @@ import { ProblemContentSection } from '../components/ProblemContentSection';
 import { PublicIntro, PublicShell } from '../components/PublicShell';
 import { Button } from '../components/ui/button';
 
-type ProblemData = { mode: 'packet' | 'solution'; round: number; scheduledAt: string | null; intervieweeName: string | null; problem: { number: number | null; title: string; url: string | null; difficulty: string; statement: string | null; hints: string | null; solution: string | null } };
+type ProblemData = { mode: 'packet' | 'solution'; round: number; scheduledAt: string | null; intervieweeName: string | null; problem: { number: number | null; title: string; url: string | null; difficulty: string; statement: string | null; notes: string | null; hints?: string | null; solution: string | null } };
 
 export function ProblemPage({ preview = false }: { preview?: boolean }) {
   const { token } = useParams();
@@ -22,7 +22,7 @@ export function ProblemPage({ preview = false }: { preview?: boolean }) {
     {data.mode === 'packet' ? <Notice tone="amber">Private interviewer material. Do not share.</Notice> : null}
     {data.mode === 'packet' && !preview && token ? <PairyExport token={token} /> : null}
     {problem.url ? <div className="mb-6 text-sm text-muted-foreground"><a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a></div> : null}
-    <div className="space-y-5">{problem.statement ? <ProblemContentSection title="Statement" value={problem.statement} /> : null}{problem.hints ? <ProblemContentSection title="Hint ladder" value={problem.hints} /> : null}<ProblemContentSection title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} /></div>
+    <div className="space-y-5">{problem.statement ? <ProblemContentSection title="Statement" value={problem.statement} /> : null}{data.mode === 'packet' ? <ProblemContentSection title="Interviewer notes" value={problem.notes ?? 'No interviewer notes have been added yet.'} /> : <ProblemContentSection title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} />}</div>
   </PublicShell>;
 }
 
@@ -92,9 +92,15 @@ The first two intervals overlap, so they become \`[1, 6]\`. The remaining interv
 - The input contains at least one interval.
 - Every interval has exactly two endpoints.
 - For each interval, \`start <= end\`.
-- The intervals may arrive in any order.`, hints: `1. **Ordering:** What useful property do you gain by sorting intervals by their start value?
+- The intervals may arrive in any order.`, notes: `### Hint ladder
+
+1. **Ordering:** What useful property do you gain by sorting intervals by their start value?
 2. **Overlap check:** After sorting, compare the next interval's start with the end of the interval you are currently building.
-3. **Single sweep:** Keep one current merged interval. Extend its end on overlap; otherwise, save it and begin a new one.`, solution: `Sort all intervals by their start value. Initialize the result with the first interval, then visit each remaining interval once.
+3. **Single sweep:** Keep one current merged interval. Extend its end on overlap; otherwise, save it and begin a new one.
+
+### Intended solution
+
+Sort all intervals by their start value. Initialize the result with the first interval, then visit each remaining interval once.
 
 - If the next start is less than or equal to the current end, the intervals overlap. Update the current end to the larger of the two ends.
 - Otherwise, the current interval is complete. Append it and begin a new current interval.
@@ -106,4 +112,4 @@ After sorting, no later interval can begin before the one currently being consid
 ### Complexity
 
 - **Time:** \`O(n log n)\` for sorting, followed by an \`O(n)\` scan.
-- **Extra space:** \`O(n)\` for the returned intervals; the sweep itself uses constant auxiliary space.` } };
+- **Extra space:** \`O(n)\` for the returned intervals; the sweep itself uses constant auxiliary space.`, solution: null } };

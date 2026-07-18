@@ -97,5 +97,5 @@ automationApi.post('/api/admin/v1/problems', async (c) => {
   const result = await createAutomationProblem(c.env, principal.actorParticipantId, body);
   return result
     ? c.json({ ok: true, problem: result }, 201)
-    : c.json({ error: 'invalid_problem', message: 'Title, difficulty, Markdown statement, and available rounds are required.' }, 400);
+    : c.json({ error: 'invalid_problem', message: 'Title, difficulty, statement Markdown, and available rounds are required. Automated problems also need starter code for each language and at least one test.' }, 400);
 });

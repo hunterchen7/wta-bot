@@ -3,6 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { Hono } from 'hono';
 import * as z from 'zod/v4';
 import type { Env } from '../env';
+import { PROBLEM_LANGUAGES } from '../problem-authoring';
 import {
   automationOverview,
   automationParticipant,
@@ -21,8 +22,27 @@ const result = (value: unknown) => ({
   content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
 });
 
+const testCaseSchema = z.object({
+  description: z.string().min(1).max(200).describe('Short organizer-facing name for this case.'),
+  input: z.string().max(50_000).describe('Exact standard input passed to the submitted program.'),
+  expectedOutput: z.string().max(50_000).describe('Exact expected standard output after trailing whitespace is normalized.'),
+  isHidden: z.boolean().default(false).describe('Hide the input and expected output from candidates when true.'),
+});
+
+const executionSchema = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('manual').describe('Discussion-only question with no automated runner.') }),
+  z.object({
+    mode: z.literal('stdin_tests').describe('Run submitted code against standard-input test cases.'),
+    languages: z.array(z.enum(PROBLEM_LANGUAGES)).min(1).max(PROBLEM_LANGUAGES.length)
+      .describe('Portable runtime identifiers supported by this definition.'),
+    starterCode: z.partialRecord(z.enum(PROBLEM_LANGUAGES), z.string().min(1).max(100_000))
+      .describe('Starter source keyed by every runtime language listed in languages.'),
+    testCases: z.array(testCaseSchema).min(1).max(100).describe('Ordered public and hidden test cases.'),
+  }),
+]);
+
 function buildMcpServer(env: Env, principal: AdminPrincipal): McpServer {
-  const server = new McpServer({ name: 'wta-admin', version: '1.1.0' });
+  const server = new McpServer({ name: 'wta-admin', version: '1.2.0' });
 
   server.registerTool('get_overview', {
     title: 'Get program health overview',
@@ -65,7 +85,7 @@ function buildMcpServer(env: Env, principal: AdminPrincipal): McpServer {
 
   server.registerTool('list_problems', {
     title: 'List question bank',
-    description: 'Return the complete organizer question bank, including participant-facing statements, interviewer-only hints and solutions, round availability, generated sets, usage, and practice problems. This response can be large.',
+    description: 'Return the complete organizer question bank, including participant-facing statements, private interviewer notes, portable execution definitions, round availability, generated sets, usage, and practice problems. This response can be large.',
     inputSchema: {},
     annotations: { readOnlyHint: true, openWorldHint: false },
   }, async () => result(await automationProblems(env)));
@@ -123,11 +143,13 @@ function buildMcpServer(env: Env, principal: AdminPrincipal): McpServer {
   if (hasAdminScope(principal, 'problems:write')) {
     server.registerTool('create_problem', {
       title: 'Create question-bank problem',
-      description: 'Create a question-bank entry from Markdown and mark it available for specified technical rounds. This writes immediately, but does not add the problem to an already generated round set.',
+      description: 'Create a structured question-bank entry with Markdown content and an optional portable standard-input test harness. This writes immediately, but does not add the problem to an already generated round set.',
       inputSchema: {
         title: z.string().min(1).max(200).describe('Participant-facing problem title.'),
         difficulty: z.enum(['easy', 'medium', 'hard']).describe('Coarse interview difficulty.'),
-        content: z.string().min(1).max(100_000).describe('Markdown containing a required ## Statement section and optional ## Hints and ## Solution sections.'),
+        statementMarkdown: z.string().min(1).max(100_000).describe('Participant-facing Markdown statement.'),
+        interviewerNotesMarkdown: z.string().max(100_000).default('').describe('Private Markdown notes for the interviewer.'),
+        execution: executionSchema.default({ mode: 'manual' }).describe('Portable execution contract. Use manual when the question is discussion-only.'),
         availableRounds: z.array(z.number().int().min(1).max(52)).min(1).describe('Technical round numbers in which the problem may be assigned, usually 1, 2, or 3.'),
         source: z.string().max(50).default('manual').describe('Source label such as leetcode or manual.'),
         number: z.number().int().positive().optional().describe('Optional source problem number, such as a LeetCode number.'),

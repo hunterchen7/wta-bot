@@ -316,18 +316,26 @@ describe('admin mutations and audit history', () => {
   it('creates and edits problems', async () => {
     const create = await request('/api/admin/problems', {
       method: 'POST',
-      body: JSON.stringify({ title: 'Merge Intervals', difficulty: 'medium', difficultyRank: 2.4, availableWeeks: [2, 3], content: '## Statement\n\nMerge overlaps.\n\n## Hints\n\nSort first.\n\n## Solution\n\nSweep once.' }),
+      body: JSON.stringify({
+        title: 'Merge Intervals', difficulty: 'medium', difficultyRank: 2.4,
+        availableWeeks: [2, 3], statementMarkdown: 'Merge overlaps.',
+        interviewerNotesMarkdown: 'Sort first.\n\n## Intended solution\n\nSweep once.',
+        execution: {
+          mode: 'stdin_tests', languages: ['python'], starterCode: { python: 'print(input())' },
+          testCases: [{ description: 'example', input: '1', expectedOutput: '1', isHidden: false }],
+        },
+      }),
     });
     expect(create.status).toBe(201);
     const { id } = await create.json<any>();
 
     const update = await request(`/api/admin/problems/${id}`, {
       method: 'POST',
-      body: JSON.stringify({ title: 'Merge Intervals', difficulty: 'medium', difficultyRank: 2.5, active: false, availableWeeks: [3], content: '## Statement\n\nMerge overlaps.\n\n## Hints\n\nSort first.\n\n## Solution\n\nSort first.' }),
+      body: JSON.stringify({ title: 'Merge Intervals', difficulty: 'medium', difficultyRank: 2.5, active: false, availableWeeks: [3], statementMarkdown: 'Merge overlaps.', interviewerNotesMarkdown: 'Sort first.', execution: { mode: 'manual' } }),
     });
     expect(update.status).toBe(200);
-    const row = await env.DB.prepare('SELECT difficulty_rank, active, solution_md, available_weeks FROM problems WHERE id = ?1').bind(id).first<any>();
-    expect(row).toEqual({ difficulty_rank: 2.5, active: 0, solution_md: 'Sort first.', available_weeks: '[3]' });
+    const row = await env.DB.prepare('SELECT difficulty_rank, active, interviewer_notes_md, execution_json, available_weeks FROM problems WHERE id = ?1').bind(id).first<any>();
+    expect(row).toEqual({ difficulty_rank: 2.5, active: 0, interviewer_notes_md: 'Sort first.', execution_json: '{"mode":"manual"}', available_weeks: '[3]' });
   });
 
   it('stages and generates problem sets for future rounds', async () => {

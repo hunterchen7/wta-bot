@@ -7,7 +7,7 @@ import type { Env } from '../env';
 import { fieldsFor } from '../forms/schema';
 import { signToken } from '../forms/token';
 import { listParticipants, participantsToCsv } from '../participants';
-import { composeQuestionMarkdown, normalizeAvailableWeeks, parseQuestionMarkdown } from '../question-markdown';
+import { normalizeProblemInput } from '../problem-authoring';
 import { currentProgramPhase, programTimeline } from '../program-calendar';
 import { generateProblemSet, ProblemSetError, problemBankWorkspace, replaceProblemSet } from '../services/problem-sets';
 import { writeAdminAudit as audit } from '../services/admin-audit';
@@ -482,18 +482,19 @@ adminApi.post('/api/admin/problems', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const body = await c.req.json<any>().catch(() => null);
-  const question = questionInput(body);
-  if (!question) return c.json({ error: 'invalid_request', message: 'Title, statement Markdown, difficulty, and at least one available round are required.' }, 400);
+  const question = normalizeProblemInput(body);
+  if (!question) return c.json({ error: 'invalid_request', message: 'Title, statement Markdown, difficulty, and at least one available round are required. Automated problems also need starter code for each language and at least one test.' }, 400);
   const result = await c.env.DB.prepare(
     `INSERT INTO problems
        (source, number, title, url, difficulty, difficulty_rank, content_md,
-        available_weeks, statement_md, hints_md, solution_md, active)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)`,
+        available_weeks, statement_md, hints_md, solution_md, interviewer_notes_md,
+        execution_json, active)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, NULL, ?11, ?12, ?13)`,
   ).bind(
     question.source, question.number, question.title, question.url, question.difficulty,
     question.difficultyRank, question.content, JSON.stringify(question.availableWeeks),
-    question.sections.statement, question.sections.hints || null, question.sections.solution || null,
-    question.active,
+    question.statement, question.interviewerNotes || null, question.interviewerNotes,
+    question.executionJson, question.active,
   ).run();
   const id = Number(result.meta.last_row_id);
   await audit(c.env, gate.participantId, 'problem.created', 'problem', id, { title: question.title, availableWeeks: question.availableWeeks });
@@ -505,17 +506,18 @@ adminApi.post('/api/admin/problems/:id', async (c) => {
   if (gate instanceof Response) return gate;
   const id = Number(c.req.param('id'));
   const body = await c.req.json<any>().catch(() => null);
-  const question = questionInput(body);
-  if (!Number.isInteger(id) || !question) return c.json({ error: 'invalid_request', message: 'Title, statement Markdown, difficulty, and at least one available round are required.' }, 400);
+  const question = normalizeProblemInput(body);
+  if (!Number.isInteger(id) || !question) return c.json({ error: 'invalid_request', message: 'Title, statement Markdown, difficulty, and at least one available round are required. Automated problems also need starter code for each language and at least one test.' }, 400);
   const result = await c.env.DB.prepare(
     `UPDATE problems SET source = ?2, number = ?3, title = ?4, url = ?5,
        difficulty = ?6, difficulty_rank = ?7, content_md = ?8, available_weeks = ?9,
-       statement_md = ?10, hints_md = ?11, solution_md = ?12, active = ?13 WHERE id = ?1`,
+       statement_md = ?10, hints_md = ?11, solution_md = NULL, interviewer_notes_md = ?12,
+       execution_json = ?13, active = ?14 WHERE id = ?1`,
   ).bind(
     id, question.source, question.number, question.title, question.url, question.difficulty,
     question.difficultyRank, question.content, JSON.stringify(question.availableWeeks),
-    question.sections.statement, question.sections.hints || null, question.sections.solution || null,
-    question.active,
+    question.statement, question.interviewerNotes || null, question.interviewerNotes,
+    question.executionJson, question.active,
   ).run();
   if (!result.meta.changes) return c.json({ error: 'not_found' }, 404);
   await c.env.DB.prepare(
@@ -528,31 +530,6 @@ adminApi.post('/api/admin/problems/:id', async (c) => {
   await audit(c.env, gate.participantId, 'problem.updated', 'problem', id, { title: question.title, availableWeeks: question.availableWeeks });
   return c.json({ ok: true });
 });
-
-function questionInput(body: any) {
-  if (!body?.title?.trim() || !['easy', 'medium', 'hard'].includes(body.difficulty)) return null;
-  const availableWeeks = normalizeAvailableWeeks(body.availableWeeks);
-  const content = String(body.content ?? composeQuestionMarkdown({
-    statement: body.statement,
-    hints: body.hints,
-    solution: body.solution,
-  })).trim().slice(0, 100_000);
-  const sections = parseQuestionMarkdown(content);
-  if (!availableWeeks.length || !sections.statement) return null;
-  const rawRank = body.difficultyRank == null ? null : Number(body.difficultyRank);
-  return {
-    source: String(body.source ?? 'manual').trim().slice(0, 50) || 'manual',
-    number: body.number ? Number(body.number) : null,
-    title: String(body.title).trim().slice(0, 200),
-    url: String(body.url ?? '').trim().slice(0, 1000) || null,
-    difficulty: body.difficulty as 'easy' | 'medium' | 'hard',
-    difficultyRank: rawRank != null && Number.isFinite(rawRank) ? rawRank : null,
-    content,
-    availableWeeks,
-    sections,
-    active: body.active === false ? 0 : 1,
-  };
-}
 
 adminApi.get('/api/admin/analytics', async (c) => {
   const gate = await requireOrganizer(c);

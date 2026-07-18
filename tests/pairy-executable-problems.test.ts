@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  getPairyExecutableProblem,
-  PAIRY_EXECUTABLE_SOURCE_NUMBERS,
+  EXECUTABLE_SOURCE_NUMBERS,
+  getExecutableProblem,
 } from '../src/pairy-executable-problems';
 
-describe('current executable Pairy problem bank (#3)', () => {
+describe('current portable executable problem bank (#3)', () => {
   it('ships independently verified expected output for every test case', () => {
-    for (const sourceNumber of PAIRY_EXECUTABLE_SOURCE_NUMBERS) {
-      const spec = getPairyExecutableProblem(sourceNumber);
+    for (const sourceNumber of EXECUTABLE_SOURCE_NUMBERS) {
+      const spec = getExecutableProblem(sourceNumber);
       expect(spec).not.toBeNull();
       for (const testCase of spec?.testCases ?? []) {
         expect(referenceOutput(sourceNumber, JSON.parse(testCase.input))).toBe(
@@ -18,9 +18,9 @@ describe('current executable Pairy problem bank (#3)', () => {
   });
 
   it('returns defensive test-case copies', () => {
-    const first = getPairyExecutableProblem(3)!;
+    const first = getExecutableProblem(3)!;
     first.testCases[0]!.description = 'changed';
-    expect(getPairyExecutableProblem(3)!.testCases[0]!.description).toBe('repeating cycle');
+    expect(getExecutableProblem(3)!.testCases[0]!.description).toBe('repeating cycle');
   });
 });
 
