@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Download } from 'lucide-react';
+import { Download, ExternalLink } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { publicRequest } from '../api';
 import { ProblemContentSection } from '../components/ProblemContentSection';
@@ -27,17 +27,35 @@ export function ProblemPage({ preview = false }: { preview?: boolean }) {
 }
 
 function PairyExport({ token }: { token: string }) {
+  const packUrl = new URL(
+    `/api/problems/${encodeURIComponent(token)}/pairy-pack`,
+    window.location.origin,
+  );
+  const importUrl = new URL(
+    '/questions/import',
+    import.meta.env.VITE_PAIRY_ORIGIN || 'https://pairy.online',
+  );
+  importUrl.searchParams.set('url', packUrl.toString());
+
   return <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
     <div>
       <p className="font-bold">Use this question in Pairy</p>
-      <p className="mt-1 text-sm text-muted-foreground">Download the private question pack, then upload it from your Pairy question library.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Import this private question directly, or keep the JSON file for later.</p>
     </div>
-    <Button asChild variant="outline">
-      <a href={`/api/problems/${encodeURIComponent(token)}/pairy-pack`} download>
-        <Download aria-hidden="true" />
-        Download Pairy JSON
-      </a>
-    </Button>
+    <div className="flex flex-wrap gap-2">
+      <Button asChild>
+        <a href={importUrl.toString()} target="_blank" rel="noreferrer">
+          <ExternalLink aria-hidden="true" />
+          Import to Pairy
+        </a>
+      </Button>
+      <Button asChild variant="outline">
+        <a href={packUrl.toString()} download>
+          <Download aria-hidden="true" />
+          Download JSON
+        </a>
+      </Button>
+    </div>
   </div>;
 }
 

@@ -183,6 +183,8 @@ describe('problem bank', () => {
     expect(response.headers.get('content-type')).toContain('application/vnd.pairy.question-pack+json');
     expect(response.headers.get('content-disposition')).toMatch(/^attachment; filename=".+\.pairy\.json"$/);
     expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(response.headers.get('access-control-expose-headers')).toBe('Content-Disposition');
     expect(pack).toMatchObject({
       kind: 'pairy.question-pack',
       schemaVersion: 1,

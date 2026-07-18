@@ -308,6 +308,8 @@ forms.get('/api/problems/:token/pairy-pack', async (c) => {
     availableRounds: readAvailableWeeks(row.available_weeks),
   });
   c.header('Cache-Control', 'private, no-store');
+  c.header('Access-Control-Allow-Origin', '*');
+  c.header('Access-Control-Expose-Headers', 'Content-Disposition');
   c.header('Content-Type', 'application/vnd.pairy.question-pack+json; charset=utf-8');
   c.header(
     'Content-Disposition',
