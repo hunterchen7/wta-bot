@@ -1,5 +1,5 @@
 import { Eye, EyeOff, Plus, Trash2 } from 'lucide-react';
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import type {
   ProblemExecution,
   ProblemLanguage,
@@ -7,7 +7,7 @@ import type {
 } from '../../admin-types';
 import type { SupportedLanguage } from '../../lib/code-language';
 import type { EditableProblem } from '../../lib/problem-editor';
-import { Button, Dialog, DialogClose, Tabs } from '../AdminUI';
+import { Button, Dialog, DialogClose } from '../AdminUI';
 import { CodeEditor } from '../CodeEditor';
 import { SelectControl } from '../SelectControl';
 import { Checkbox } from '../ui/checkbox';
@@ -36,8 +36,6 @@ export function ProblemEditor({
   onSave: (value: EditableProblem) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(value);
-  const [tab, setTab] = useState('content');
-  const bodyRef = useRef<HTMLDivElement>(null);
   const [selectedLanguage, setSelectedLanguage] = useState<ProblemLanguage>(
     value.execution.mode === 'stdin_tests' ? value.execution.languages[0] ?? 'python' : 'python',
   );
@@ -55,7 +53,6 @@ export function ProblemEditor({
       && draft.available_weeks.length > 0
       && executionValid,
   );
-  useLayoutEffect(() => { bodyRef.current?.scrollTo({ top: 0 }); }, [tab]);
 
   return <Dialog
     size="viewport"
@@ -63,25 +60,30 @@ export function ProblemEditor({
     description="Create reusable participant content, private interviewer notes, and an optional portable test harness."
     onClose={onClose}
     bodyClassName="p-0"
-    bodyRef={bodyRef}
     actions={<>
       <DialogClose><Button variant="secondary">Cancel</Button></DialogClose>
       <Button className="min-w-32" disabled={busy || !valid} onClick={() => void onSave(draft)}>{busy ? 'Saving…' : 'Save question'}</Button>
     </>}
   >
-    <div className="sticky top-0 z-10 border-b border-border bg-background/95 px-5 py-3 backdrop-blur-xl">
-      <Tabs value={tab} onChange={setTab} items={[
-        { value: 'content', label: 'Content' },
-        { value: 'tests', label: 'Test harness', count: draft.execution.mode === 'stdin_tests' ? draft.execution.testCases.length : undefined },
-        { value: 'settings', label: 'Settings' },
-      ]} />
-    </div>
-    <div className="mx-auto w-full max-w-5xl p-5 sm:p-7">
-      {tab === 'content' ? <ContentFields draft={draft} update={update} /> : null}
-      {tab === 'tests' ? <ExecutionFields draft={draft} selectedLanguage={selectedLanguage} onSelectLanguage={setSelectedLanguage} update={update} /> : null}
-      {tab === 'settings' ? <SettingsFields draft={draft} weeks={weeks} update={update} /> : null}
+    <div className="mx-auto w-full max-w-5xl space-y-10 p-5 sm:p-7">
+      <EditorSection id="problem-content" title="Content">
+        <ContentFields draft={draft} update={update} />
+      </EditorSection>
+      <EditorSection id="problem-test-harness" title="Test harness" divided>
+        <ExecutionFields draft={draft} selectedLanguage={selectedLanguage} onSelectLanguage={setSelectedLanguage} update={update} />
+      </EditorSection>
+      <EditorSection id="problem-settings" title="Settings" divided>
+        <SettingsFields draft={draft} weeks={weeks} update={update} />
+      </EditorSection>
     </div>
   </Dialog>;
+}
+
+function EditorSection({ id, title, divided = false, children }: { id: string; title: string; divided?: boolean; children: React.ReactNode }) {
+  return <section aria-labelledby={id} className={divided ? 'space-y-6 border-t border-border pt-10' : 'space-y-6'}>
+    <h2 id={id} className="text-lg font-black tracking-tight text-foreground">{title}</h2>
+    {children}
+  </section>;
 }
 
 function ContentFields({ draft, update }: EditorSectionProps) {
@@ -102,7 +104,7 @@ function ExecutionFields({ draft, selectedLanguage, onSelectLanguage, update }: 
   const enableTests = () => setExecution({ mode: 'stdin_tests', languages: ['python'], starterCode: {}, testCases: [blankTestCase()] });
 
   if (execution.mode === 'manual') {
-    return <div className="flex min-h-[24rem] flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-muted/30 p-8 text-center">
+    return <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-border bg-muted/30 p-8 text-center">
       <div className="rounded-full bg-western-100 p-3 text-western-700 dark:bg-western-950 dark:text-western-300"><Plus aria-hidden="true" /></div>
       <h3 className="mt-5 text-lg font-black text-foreground">Discussion-only question</h3>
       <p className="mt-2 max-w-lg text-sm leading-6 text-muted-foreground">Add a standard-input harness when this problem should run in Pairy or another compatible interview tool.</p>
