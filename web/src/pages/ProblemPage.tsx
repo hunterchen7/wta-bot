@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Download } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { publicRequest } from '../api';
 import { ProblemContentSection } from '../components/ProblemContentSection';
 import { PublicIntro, PublicShell } from '../components/PublicShell';
+import { Button } from '../components/ui/button';
 
 type ProblemData = { mode: 'packet' | 'solution'; round: number; scheduledAt: string | null; intervieweeName: string | null; problem: { number: number | null; title: string; url: string | null; difficulty: string; statement: string | null; hints: string | null; solution: string | null } };
 
@@ -18,9 +20,25 @@ export function ProblemPage({ preview = false }: { preview?: boolean }) {
     <PublicIntro eyebrow={preview ? 'Read-only preview' : `Round ${data.round}`} title={data.mode === 'packet' ? 'Interviewer packet' : 'Solution notes'} description={`${problem.number ? `#${problem.number} · ` : ''}${problem.title} · ${problem.difficulty}${data.intervieweeName ? ` · interviewing ${data.intervieweeName}` : ''}`} />
     {preview ? <Notice tone="western">Preview mode. Live packets are private, signed, and expire automatically.</Notice> : null}
     {data.mode === 'packet' ? <Notice tone="amber">Private interviewer material. Do not share.</Notice> : null}
+    {data.mode === 'packet' && !preview && token ? <PairyExport token={token} /> : null}
     {problem.url ? <div className="mb-6 text-sm text-muted-foreground"><a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a></div> : null}
     <div className="space-y-5">{problem.statement ? <ProblemContentSection title="Statement" value={problem.statement} /> : null}{problem.hints ? <ProblemContentSection title="Hint ladder" value={problem.hints} /> : null}<ProblemContentSection title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} /></div>
   </PublicShell>;
+}
+
+function PairyExport({ token }: { token: string }) {
+  return <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+    <div>
+      <p className="font-bold">Use this question in Pairy</p>
+      <p className="mt-1 text-sm text-muted-foreground">Download the private question pack, then upload it from your Pairy question library.</p>
+    </div>
+    <Button asChild variant="outline">
+      <a href={`/api/problems/${encodeURIComponent(token)}/pairy-pack`} download>
+        <Download aria-hidden="true" />
+        Download Pairy JSON
+      </a>
+    </Button>
+  </div>;
 }
 
 function Notice({ children, tone }: { children: React.ReactNode; tone: 'amber' | 'western' }) { return <div className={`mb-6 rounded-2xl border p-4 text-sm font-semibold ${tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-western-200 bg-western-50 text-western-900'}`}>{children}</div>; }
