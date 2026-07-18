@@ -6,6 +6,8 @@ import { verifyFormToken, verifyToken } from '../forms/token';
 import { sessionFrom } from './web';
 import { isCurrentOrganizer } from '../organizers';
 import { fizzBuzzDemoPacket } from '../demo/fizzbuzz-packet';
+import { createPairyQuestionPack, pairyQuestionPackFilename } from '../pairy-question-pack';
+import { readAvailableWeeks } from '../question-markdown';
 
 // Signed report and problem links now hydrate React pages. This module exposes
 // data and mutations only; it intentionally contains no HTML rendering.
@@ -255,6 +257,67 @@ forms.get('/api/problems/:token', async (c) => {
       statement: row.statement_md, hints: packet ? row.hints_md : null, solution: row.solution_md,
     },
   });
+});
+
+forms.get('/api/problems/:token/pairy-pack', async (c) => {
+  // Pairy fetches this endpoint cross-origin. Apply these to failures too so
+  // callers can distinguish an expired link from a generic network error.
+  c.header('Cache-Control', 'private, no-store');
+  c.header('Access-Control-Allow-Origin', '*');
+  c.header('Access-Control-Expose-Headers', 'Content-Disposition');
+  if (!c.env.FORM_SIGNING_SECRET) {
+    return c.json({ error: 'not_configured', message: 'Problem links are not configured.' }, 503);
+  }
+  const verified = await verifyToken(c.env.FORM_SIGNING_SECRET, c.req.param('token'));
+  // The downloadable pack contains the private hint ladder and solution, so only
+  // an interviewer packet token may reach it. Solution and demo links stay out.
+  const match = verified && /^p:(\d+)$/.exec(verified.subject);
+  if (!match) {
+    return c.json({ error: 'invalid_link', message: 'This problem link is invalid or expired.' }, 404);
+  }
+  const row = await c.env.DB.prepare(
+    `SELECT p.id, p.portable_id, p.source, p.number, p.title, p.url, p.difficulty,
+            p.statement_md, p.solution_md, p.hints_md, p.available_weeks
+     FROM sessions s JOIN problems p ON p.id = s.problem_id
+     WHERE s.id = ?1`,
+  ).bind(Number(match[1])).first<{
+    id: number;
+    portable_id: string | null;
+    source: string;
+    number: number | null;
+    title: string;
+    url: string | null;
+    difficulty: 'easy' | 'medium' | 'hard';
+    statement_md: string | null;
+    solution_md: string | null;
+    hints_md: string | null;
+    available_weeks: string | null;
+  }>();
+  if (!row) {
+    return c.json({ error: 'not_found', message: 'No problem is assigned to this session yet.' }, 404);
+  }
+  if (!row.statement_md?.trim()) {
+    return c.json({ error: 'not_exportable', message: 'This problem needs a statement before it can be exported.' }, 409);
+  }
+
+  const pack = await createPairyQuestionPack({
+    portableId: row.portable_id ?? `legacy-${row.id}`,
+    title: row.title,
+    difficulty: row.difficulty,
+    promptMarkdown: row.statement_md,
+    hintsMarkdown: row.hints_md,
+    solutionMarkdown: row.solution_md,
+    source: row.source,
+    sourceNumber: row.number,
+    sourceUrl: row.url,
+    availableRounds: readAvailableWeeks(row.available_weeks),
+  });
+  c.header('Content-Type', 'application/vnd.pairy.question-pack+json; charset=utf-8');
+  c.header(
+    'Content-Disposition',
+    `attachment; filename="${pairyQuestionPackFilename(row.title)}"`,
+  );
+  return c.body(`${JSON.stringify(pack, null, 2)}\n`);
 });
 
 function reportPayload(instance: LoadedInstance, fields: Field[]) {

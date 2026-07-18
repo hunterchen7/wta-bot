@@ -44,6 +44,19 @@ beforeAll(async () => {
 });
 
 describe('problem bank', () => {
+  it('assigns an immutable portable ID to every problem', async () => {
+    const problem = await env.DB.prepare(
+      'SELECT id, portable_id FROM problems ORDER BY id LIMIT 1',
+    ).first<{ id: number; portable_id: string | null }>();
+
+    expect(problem?.portable_id).toMatch(/^[a-f0-9]{32}$/);
+    await expect(
+      env.DB.prepare('UPDATE problems SET portable_id = ?2 WHERE id = ?1')
+        .bind(problem!.id, 'replacement-id')
+        .run(),
+    ).rejects.toThrow('problem portable_id is immutable');
+  });
+
   it('generates week sets inside the difficulty bands', async () => {
     const w1 = await generateWeekSet(env, weekIds[0]!, 1, 5);
     expect(w1.chosen.length).toBe(3); // only 3 questions are tagged for round 1
@@ -153,6 +166,63 @@ describe('problem bank', () => {
     });
 
     expect((await app.request('/api/problems/garbage', {}, env)).status).toBe(404);
+  });
+
+  it('exports an interviewer packet as private Pairy JSON without assignment PII', async () => {
+    const { signToken } = await import('../src/forms/token');
+    const interviewerToken = await signToken(
+      env.FORM_SIGNING_SECRET!,
+      `p:${sessionId}`,
+      new Date(Date.now() + 60_000),
+    );
+    const response = await app.request(`/api/problems/${interviewerToken}/pairy-pack`, {}, env);
+    const body = await response.text();
+    const pack = JSON.parse(body);
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toContain('application/vnd.pairy.question-pack+json');
+    expect(response.headers.get('content-disposition')).toMatch(/^attachment; filename=".+\.pairy\.json"$/);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(response.headers.get('access-control-expose-headers')).toBe('Content-Disposition');
+    expect(pack).toMatchObject({
+      kind: 'pairy.question-pack',
+      schemaVersion: 1,
+      pack: { access: 'assigned-private' },
+      questions: [{
+        origin: { namespace: 'wta-bot', key: expect.stringMatching(/^[a-f0-9]{32}$/) },
+        promptMarkdown: expect.stringContaining('### Examples'),
+        execution: { mode: 'manual' },
+      }],
+    });
+    expect(body).not.toContain('intervieweeName');
+    expect(body).not.toContain('scheduledAt');
+    expect(body).not.toContain('sessionId');
+
+    const solutionToken = await signToken(
+      env.FORM_SIGNING_SECRET!,
+      `sol:${sessionId}`,
+      new Date(Date.now() + 60_000),
+    );
+    const rejected = await app.request(`/api/problems/${solutionToken}/pairy-pack`, {}, env);
+    expect(rejected.status).toBe(404);
+    expect(rejected.headers.get('cache-control')).toBe('private, no-store');
+    expect(rejected.headers.get('access-control-allow-origin')).toBe('*');
+
+    await env.DB.prepare(
+      'UPDATE problems SET statement_md = NULL WHERE id = (SELECT problem_id FROM sessions WHERE id = ?1)',
+    )
+      .bind(sessionId)
+      .run();
+    const notExportable = await app.request(`/api/problems/${interviewerToken}/pairy-pack`, {}, env);
+    expect(notExportable.status).toBe(409);
+    expect(notExportable.headers.get('cache-control')).toBe('private, no-store');
+    expect(notExportable.headers.get('access-control-allow-origin')).toBe('*');
+    await env.DB.prepare(
+      'UPDATE problems SET statement_md = ?2 WHERE id = (SELECT problem_id FROM sessions WHERE id = ?1)',
+    )
+      .bind(sessionId, pack.questions[0]!.promptMarkdown)
+      .run();
   });
 
   it('pre-fills the interviewer report with its assigned packet problem', async () => {

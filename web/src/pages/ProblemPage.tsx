@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { Download, ExternalLink } from 'lucide-react';
 import { useParams } from 'react-router-dom';
 import { publicRequest } from '../api';
 import { ProblemContentSection } from '../components/ProblemContentSection';
 import { PublicIntro, PublicShell } from '../components/PublicShell';
+import { Button } from '../components/ui/button';
 
 type ProblemData = { mode: 'packet' | 'solution'; round: number; scheduledAt: string | null; intervieweeName: string | null; problem: { number: number | null; title: string; url: string | null; difficulty: string; statement: string | null; hints: string | null; solution: string | null } };
 
@@ -18,9 +20,59 @@ export function ProblemPage({ preview = false }: { preview?: boolean }) {
     <PublicIntro eyebrow={preview ? 'Read-only preview' : `Round ${data.round}`} title={data.mode === 'packet' ? 'Interviewer packet' : 'Solution notes'} description={`${problem.number ? `#${problem.number} · ` : ''}${problem.title} · ${problem.difficulty}${data.intervieweeName ? ` · interviewing ${data.intervieweeName}` : ''}`} />
     {preview ? <Notice tone="western">Preview mode. Live packets are private, signed, and expire automatically.</Notice> : null}
     {data.mode === 'packet' ? <Notice tone="amber">Private interviewer material. Do not share.</Notice> : null}
+    {data.mode === 'packet' && !preview && token ? <PairyExport token={token} /> : null}
     {problem.url ? <div className="mb-6 text-sm text-muted-foreground"><a href={problem.url} target="_blank" rel="noreferrer" className="font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a></div> : null}
     <div className="space-y-5">{problem.statement ? <ProblemContentSection title="Statement" value={problem.statement} /> : null}{problem.hints ? <ProblemContentSection title="Hint ladder" value={problem.hints} /> : null}<ProblemContentSection title="Solution" value={problem.solution ?? 'No solution notes have been added yet.'} /></div>
   </PublicShell>;
+}
+
+function PairyExport({ token }: { token: string }) {
+  const packUrl = new URL(
+    `/api/problems/${encodeURIComponent(token)}/pairy-pack`,
+    window.location.origin,
+  );
+  // Keep the direct action off until the matching Pairy importer is deployed.
+  // Setting VITE_PAIRY_ORIGIN at build time enables it without changing packet
+  // downloads or exposing a dead production CTA during the staged rollout.
+  const importUrl = pairyImportUrl(packUrl);
+
+  return <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
+    <div>
+      <p className="font-bold">Use this question in Pairy</p>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {importUrl
+          ? 'Import this private question directly, or keep the JSON file for later.'
+          : 'Download this private question as a Pairy-compatible JSON file.'}
+      </p>
+    </div>
+    <div className="flex flex-wrap gap-2">
+      {importUrl ? <Button asChild>
+        <a href={importUrl.toString()} target="_blank" rel="noreferrer">
+          <ExternalLink aria-hidden="true" />
+          Import to Pairy
+        </a>
+      </Button> : null}
+      <Button asChild variant={importUrl ? 'outline' : 'default'}>
+        <a href={packUrl.toString()} download>
+          <Download aria-hidden="true" />
+          Download JSON
+        </a>
+      </Button>
+    </div>
+  </div>;
+}
+
+function pairyImportUrl(packUrl: URL): URL | null {
+  const origin = import.meta.env.VITE_PAIRY_ORIGIN?.trim();
+  if (!origin) return null;
+  try {
+    const url = new URL('/questions/import', origin);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    url.searchParams.set('url', packUrl.toString());
+    return url;
+  } catch {
+    return null;
+  }
 }
 
 function Notice({ children, tone }: { children: React.ReactNode; tone: 'amber' | 'western' }) { return <div className={`mb-6 rounded-2xl border p-4 text-sm font-semibold ${tone === 'amber' ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-western-200 bg-western-50 text-western-900'}`}>{children}</div>; }
