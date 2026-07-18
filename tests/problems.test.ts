@@ -225,6 +225,47 @@ describe('problem bank', () => {
       .run();
   });
 
+  it('serves executable Pairy metadata for a supported current-bank problem', async () => {
+    const original = await env.DB.prepare(
+      'SELECT problem_id FROM sessions WHERE id = ?1',
+    ).bind(sessionId).first<{ problem_id: number }>();
+    const supported = await env.DB.prepare(
+      'SELECT id FROM problems WHERE number = 3',
+    ).first<{ id: number }>();
+    expect(original?.problem_id).toBeTruthy();
+    expect(supported?.id).toBeTruthy();
+
+    await env.DB.prepare('UPDATE sessions SET problem_id = ?2 WHERE id = ?1')
+      .bind(sessionId, supported!.id)
+      .run();
+    try {
+      const { signToken } = await import('../src/forms/token');
+      const token = await signToken(
+        env.FORM_SIGNING_SECRET!,
+        `p:${sessionId}`,
+        new Date(Date.now() + 60_000),
+      );
+      const response = await app.request(`/api/problems/${token}/pairy-pack`, {}, env);
+      const pack = await response.json<any>();
+
+      expect(response.status).toBe(200);
+      expect(pack.questions[0].execution).toMatchObject({
+        mode: 'stdin_tests',
+        languages: ['python'],
+        starterCode: { python: expect.stringContaining('lengthOfLongestSubstring') },
+        testCases: expect.arrayContaining([
+          expect.objectContaining({ isHidden: false }),
+          expect.objectContaining({ isHidden: true }),
+        ]),
+      });
+      expect(pack.questions[0].execution.testCases).toHaveLength(4);
+    } finally {
+      await env.DB.prepare('UPDATE sessions SET problem_id = ?2 WHERE id = ?1')
+        .bind(sessionId, original!.problem_id)
+        .run();
+    }
+  });
+
   it('pre-fills the interviewer report with its assigned packet problem', async () => {
     const { signFormToken } = await import('../src/forms/token');
     const assigned = await env.DB.prepare(
