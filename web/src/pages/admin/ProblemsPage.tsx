@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ProblemRow, ProblemsData } from '../../admin-types';
-import { adminRequest } from '../../api';
+import { adminRequest, sendPacketPreview } from '../../api';
 import {
   Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, inputClass,
   LoadingState, PageIntro, Panel, tableClass, tableWrapClass, tdClass, thClass, Tabs,
@@ -91,12 +91,33 @@ export function ProblemsPage() {
 }
 
 function QuestionPreview({ problem, onClose }: { problem: ProblemRow; onClose: () => void }) {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const sendToDiscord = async () => {
+    setSending(true);
+    setError(null);
+    try {
+      await sendPacketPreview(problem.id);
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send the packet.');
+    } finally {
+      setSending(false);
+    }
+  };
   return <Dialog
     wide
     title={`${problem.number ? `#${problem.number} · ` : ''}${problem.title}`}
     description="Participant-facing interviewer packet preview"
     onClose={onClose}
-    actions={<DialogClose><Button variant="secondary">Close preview</Button></DialogClose>}
+    actions={<>
+      {error ? <span className="mr-auto self-center text-sm font-semibold text-red-600 dark:text-red-400">{error}</span> : null}
+      <Button variant="secondary" disabled={sending || sent} onClick={() => void sendToDiscord()}>
+        {sent ? 'Sent to your DMs ✓' : sending ? 'Sending…' : 'DM me this packet'}
+      </Button>
+      <DialogClose><Button variant="secondary">Close preview</Button></DialogClose>
+    </>}
   >
     <div className="mb-5 flex flex-wrap items-center gap-2"><Badge value={problem.difficulty} /><WeekTags weeks={problem.available_weeks} />{problem.active ? null : <Badge value="inactive" />}{problem.url ? <a href={problem.url} target="_blank" rel="noreferrer" className="ml-auto font-bold text-western-700 underline decoration-western-300 underline-offset-4 dark:text-western-300">Open on LeetCode ↗</a> : null}</div>
     <div className="min-w-0 space-y-5">

@@ -448,6 +448,39 @@ adminApi.get('/api/admin/problems', async (c) => {
   return c.json(await problemBankWorkspace(c.env));
 });
 
+// DM the requesting organizer a real, live interviewer packet for one problem
+// so they can see exactly what interviewers receive (statement, notes, hints,
+// solution) end-to-end — the bot DM and the signed packet page — without a
+// real session. The post-POST outbox drain flushes the DM within seconds.
+adminApi.post('/api/admin/problems/:id/send-packet', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  if (!c.env.FORM_SIGNING_SECRET) return c.json({ error: 'not_configured', message: 'Packet links are not configured yet.' }, 503);
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id) || id <= 0) return c.json({ error: 'invalid_request' }, 400);
+  const problem = await c.env.DB.prepare('SELECT id, title FROM problems WHERE id = ?1')
+    .bind(id).first<{ id: number; title: string }>();
+  if (!problem) return c.json({ error: 'not_found', message: 'That problem no longer exists.' }, 404);
+  const viewer = await c.env.DB.prepare('SELECT discord_id FROM participants WHERE id = ?1')
+    .bind(gate.participantId).first<{ discord_id: string | null }>();
+  if (!viewer?.discord_id) return c.json({ error: 'no_discord', message: 'Your account has no linked Discord ID to DM.' }, 400);
+
+  const token = await signToken(c.env.FORM_SIGNING_SECRET, `pp:${problem.id}`, new Date(Date.now() + 7 * 86400_000));
+  const origin = c.env.PUBLIC_ORIGIN ?? new URL(c.req.url).origin;
+  await enqueue(c.env, 'dm', {
+    userId: viewer.discord_id,
+    fallbackKind: 'packet_preview',
+    message: {
+      content:
+        `🎯 **Sample interviewer packet** — ${problem.title}\n${origin}/p/${token}\n` +
+        `This is exactly what an interviewer receives (statement, notes, hint ladder, and solution). ` +
+        `It's a preview — not tied to any real session. Link valid 7 days.`,
+    },
+  });
+  await audit(c.env, gate.participantId, 'problem.packet_preview_sent', 'problem', problem.id, {});
+  return c.json({ ok: true });
+});
+
 adminApi.put('/api/admin/problem-sets/:weekId', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;

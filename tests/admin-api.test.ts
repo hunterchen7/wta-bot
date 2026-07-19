@@ -440,3 +440,33 @@ describe('admin mutations and audit history', () => {
     expect(await env.DB.prepare('SELECT attempts, last_error, dismissed_at FROM outbox WHERE id = 9501').first()).toEqual({ attempts: 0, last_error: null, dismissed_at: null });
   });
 });
+
+describe('send interviewer packet preview to self', () => {
+  it('DMs the requesting organizer a real packet link that renders without a session', async () => {
+    const res = await request('/api/admin/problems/9301/send-packet', { method: 'POST', body: '{}' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    // A DM to the organizer's own Discord id was enqueued with a /p/ packet link.
+    const dm = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'dm' AND payload LIKE '%admin-9101%' AND payload LIKE '%/p/%' ORDER BY id DESC LIMIT 1",
+    ).first<{ payload: string }>();
+    expect(dm).not.toBeNull();
+    const link = JSON.parse(dm!.payload).message.content.match(/\/p\/(\S+)/)![1];
+
+    // The link resolves to the full interviewer packet for problem 9301, no session.
+    const packet = await app.request(`/api/problems/${link}`, {}, env);
+    expect(packet.status).toBe(200);
+    const body = await packet.json<any>();
+    expect(body).toMatchObject({ mode: 'packet', preview: true, scheduledAt: null, intervieweeName: null });
+    expect(body.problem.title).toBe('Two Sum');
+  });
+
+  it('rejects non-organizers and unknown problems', async () => {
+    const denied = await request('/api/admin/problems/9301/send-packet', { method: 'POST', body: '{}' }, false);
+    expect([401, 403]).toContain(denied.status);
+
+    const missing = await request('/api/admin/problems/999999/send-packet', { method: 'POST', body: '{}' });
+    expect(missing.status).toBe(404);
+  });
+});

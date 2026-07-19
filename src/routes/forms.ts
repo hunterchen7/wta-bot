@@ -240,6 +240,25 @@ forms.get('/api/problems/:token', async (c) => {
   if (!c.env.FORM_SIGNING_SECRET) return c.json({ error: 'not_configured', message: 'Problem links are not configured.' }, 503);
   const verified = await verifyToken(c.env.FORM_SIGNING_SECRET, c.req.param('token'));
   if (verified?.subject === 'demo:fizzbuzz') return c.json(fizzBuzzDemoPacket);
+
+  // Organizer self-preview (pp:<problemId>): the full interviewer packet for one
+  // problem with no session context — powers the "DM me a sample packet" action.
+  const previewMatch = verified && /^pp:(\d+)$/.exec(verified.subject);
+  if (previewMatch) {
+    const p = await c.env.DB.prepare(
+      `SELECT number, title, url, difficulty, statement_md, solution_md, hints_md, interviewer_notes_md
+       FROM problems WHERE id = ?1`,
+    ).bind(Number(previewMatch[1])).first<any>();
+    if (!p) return c.json({ error: 'not_found', message: 'This problem no longer exists.' }, 404);
+    return c.json({
+      mode: 'packet', preview: true, round: null, scheduledAt: null, intervieweeName: null,
+      problem: {
+        number: p.number, title: p.title, url: p.url, difficulty: p.difficulty,
+        statement: p.statement_md, notes: effectiveInterviewerNotes(p), hints: p.hints_md, solution: p.solution_md,
+      },
+    });
+  }
+
   const match = verified && /^(p|sol):(\d+)$/.exec(verified.subject);
   if (!match) return c.json({ error: 'invalid_link', message: 'This problem link is invalid or expired.' }, 404);
   const row = await c.env.DB.prepare(

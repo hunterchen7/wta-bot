@@ -213,6 +213,10 @@ export async function adminRequest<T>(path: string, init?: RequestInit): Promise
   return result as T;
 }
 
+export async function sendPacketPreview(problemId: number): Promise<void> {
+  await adminRequest(`/problems/${problemId}/send-packet`, { method: 'POST' });
+}
+
 export async function adminFileRequest(path: string, signal?: AbortSignal): Promise<Blob> {
   if (import.meta.env.DEV && demoEnabled()) {
     const { adminDemoFile } = await import('./demo-admin');
