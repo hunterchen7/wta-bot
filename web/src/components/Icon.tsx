@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-export type IconName = 'analytics' | 'chevron' | 'close' | 'collapse' | 'filter' | 'forms' | 'grip' | 'mcp' | 'menu' | 'operations' | 'overview' | 'participants' | 'problems' | 'progress' | 'reviews' | 'rounds' | 'settings' | 'sort' | 'sortAsc' | 'sortDesc';
+export type IconName = 'analytics' | 'chevron' | 'close' | 'collapse' | 'filter' | 'forms' | 'grip' | 'inbox' | 'mcp' | 'menu' | 'operations' | 'overview' | 'participants' | 'problems' | 'progress' | 'reviews' | 'rounds' | 'settings' | 'sort' | 'sortAsc' | 'sortDesc';
 
 export function Icon({ name, className = 'size-5' }: { name: IconName; className?: string }) {
   const paths: Record<IconName, ReactNode> = {
@@ -11,6 +11,7 @@ export function Icon({ name, className = 'size-5' }: { name: IconName; className
     filter: <><path d="M4 5h16" /><path d="M7 12h10" /><path d="M10 19h4" /></>,
     forms: <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h6" /></>,
     grip: <><circle cx="9" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="6" r="1" fill="currentColor" stroke="none" /><circle cx="9" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="12" r="1" fill="currentColor" stroke="none" /><circle cx="9" cy="18" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="18" r="1" fill="currentColor" stroke="none" /></>,
+    inbox: <><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11Z" /></>,
     mcp: <><path d="M8 12h8" /><path d="M12 8v8" /><path d="M4.9 4.9a10 10 0 0 1 14.2 0" /><path d="M4.9 19.1a10 10 0 0 0 14.2 0" /><circle cx="12" cy="12" r="9" /></>,
     menu: <><path d="M4 7h16" /><path d="M4 12h16" /><path d="M4 17h16" /></>,
     operations: <><path d="M12 2v4" /><path d="M12 18v4" /><path d="m4.93 4.93 2.83 2.83" /><path d="m16.24 16.24 2.83 2.83" /><path d="M2 12h4" /><path d="M18 12h4" /><circle cx="12" cy="12" r="3" /></>,

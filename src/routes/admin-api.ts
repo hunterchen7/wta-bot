@@ -648,6 +648,40 @@ adminApi.post('/api/admin/operations/outbox/:id/dismiss', async (c) => {
   return c.json({ ok: true, dismissedAt });
 });
 
+// Consolidated DM inbox: replies students sent to the bot (captured by the cron
+// inboxScan), newest first, with an unread count for the nav badge.
+adminApi.get('/api/admin/inbox', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const { results } = await c.env.DB.prepare(
+    `SELECT m.id, m.content, m.created_at, m.read_at,
+            p.id AS participant_id, p.name, p.discord_username, p.discord_id, p.status
+     FROM inbox_messages m JOIN participants p ON p.id = m.participant_id
+     ORDER BY m.id DESC LIMIT 300`,
+  ).all<any>();
+  const unread = await c.env.DB.prepare('SELECT count(*) AS n FROM inbox_messages WHERE read_at IS NULL')
+    .first<{ n: number }>();
+  return c.json({ messages: results, unread: unread?.n ?? 0 });
+});
+
+adminApi.post('/api/admin/inbox/:id/read', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const id = Number(c.req.param('id'));
+  const read = c.req.query('read') !== '0';
+  await c.env.DB.prepare('UPDATE inbox_messages SET read_at = ?2 WHERE id = ?1')
+    .bind(id, read ? new Date().toISOString() : null).run();
+  return c.json({ ok: true });
+});
+
+adminApi.post('/api/admin/inbox/read-all', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  await c.env.DB.prepare("UPDATE inbox_messages SET read_at = ?1 WHERE read_at IS NULL")
+    .bind(new Date().toISOString()).run();
+  return c.json({ ok: true });
+});
+
 adminApi.get('/api/admin/settings', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;

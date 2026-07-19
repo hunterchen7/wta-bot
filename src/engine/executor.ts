@@ -20,7 +20,13 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
   switch (kind) {
     case 'dm': {
       try {
-        await needRest().dm(payload.userId, payload.message);
+        const { channelId } = await needRest().dm(payload.userId, payload.message);
+        // Remember the DM channel so inboxScan can poll it for the student's replies.
+        if (channelId) {
+          await env.DB.prepare(
+            'UPDATE participants SET dm_channel_id = ?2 WHERE discord_id = ?1 AND (dm_channel_id IS NULL OR dm_channel_id != ?2)',
+          ).bind(payload.userId, channelId).run().catch(() => {});
+        }
       } catch (err) {
         // DM-failure fallback (DESIGN §7): email if we can, plus organizer note.
         await dmFallback(env, payload, err);

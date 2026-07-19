@@ -470,3 +470,35 @@ describe('send interviewer packet preview to self', () => {
     expect(missing.status).toBe(404);
   });
 });
+
+describe('DM inbox', () => {
+  it('lists captured messages with an unread count and toggles read state', async () => {
+    await env.DB.prepare(
+      `INSERT INTO inbox_messages (id, participant_id, discord_message_id, content, created_at)
+       VALUES (9601, ?1, 'dm-9601', 'hey organizers, quick question', '2026-07-14T12:00:00Z')`,
+    ).bind(STUDENT_ID).run();
+
+    const list = await request('/api/admin/inbox');
+    expect(list.status).toBe(200);
+    const body = await list.json<any>();
+    expect(body.unread).toBeGreaterThanOrEqual(1);
+    expect(body.messages[0]).toMatchObject({ id: 9601, content: 'hey organizers, quick question', name: 'Student Person', read_at: null });
+
+    const read = await request('/api/admin/inbox/9601/read', { method: 'POST', body: '{}' });
+    expect(read.status).toBe(200);
+    expect((await env.DB.prepare('SELECT read_at FROM inbox_messages WHERE id = 9601').first<any>()).read_at).not.toBeNull();
+
+    // Toggle back to unread.
+    await request('/api/admin/inbox/9601/read?read=0', { method: 'POST', body: '{}' });
+    expect((await env.DB.prepare('SELECT read_at FROM inbox_messages WHERE id = 9601').first<any>()).read_at).toBeNull();
+
+    // Mark-all clears it.
+    await request('/api/admin/inbox/read-all', { method: 'POST', body: '{}' });
+    expect((await env.DB.prepare('SELECT read_at FROM inbox_messages WHERE id = 9601').first<any>()).read_at).not.toBeNull();
+  });
+
+  it('denies non-organizers', async () => {
+    const denied = await request('/api/admin/inbox', {}, false);
+    expect([401, 403]).toContain(denied.status);
+  });
+});

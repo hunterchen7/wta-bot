@@ -90,7 +90,8 @@ function pageTitle(pathname: string) {
   const titles: Record<string, string> = {
     '/app': 'My progress', '/app/practice': 'Practice problems', '/app/settings': 'My settings', '/app/admin': 'Overview',
     '/app/admin/participants': 'Participants', '/app/admin/rounds': 'Rounds', '/app/admin/reviews': 'Reviews',
-    '/app/admin/forms': 'Forms', '/app/admin/problems': 'Questions', '/app/admin/analytics': 'Analytics', '/app/admin/operations': 'Operations',
+    '/app/admin/forms': 'Forms', '/app/admin/problems': 'Questions', '/app/admin/analytics': 'Analytics',
+    '/app/admin/inbox': 'Inbox', '/app/admin/operations': 'Operations',
     '/app/admin/settings': 'Program settings',
     '/app/admin/mcp': 'MCP',
   };

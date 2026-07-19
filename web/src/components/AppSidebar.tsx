@@ -25,6 +25,7 @@ const adminItems: NavEntry[] = [
   { label: 'Participants', to: '/app/admin/participants', icon: 'participants' },
   { label: 'Rounds', to: '/app/admin/rounds', icon: 'rounds' },
   { label: 'Reviews', to: '/app/admin/reviews', icon: 'reviews' },
+  { label: 'Inbox', to: '/app/admin/inbox', icon: 'inbox' },
   { label: 'Forms', to: '/app/admin/forms', icon: 'forms' },
   { label: 'Questions', to: '/app/admin/problems', icon: 'problems' },
   { label: 'Analytics', to: '/app/admin/analytics', icon: 'analytics' },

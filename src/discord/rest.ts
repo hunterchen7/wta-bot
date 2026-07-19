@@ -41,7 +41,19 @@ export class DiscordRest {
     const channel = await this.request<{ id: string }>('POST', '/users/@me/channels', {
       recipient_id: userId,
     });
-    return this.request<{ id: string }>('POST', `/channels/${channel.id}/messages`, message);
+    const sent = await this.request<{ id: string }>('POST', `/channels/${channel.id}/messages`, message);
+    return { channelId: channel.id, messageId: sent.id };
+  }
+
+  /** Fetch messages from a channel (newest first). Used to poll DM channels for
+   *  replies students send the bot — DM content is exempt from the Message
+   *  Content intent, so this returns full content without the privileged flag. */
+  async getChannelMessages(channelId: string, opts: { after?: string; limit?: number } = {}) {
+    const params = new URLSearchParams({ limit: String(opts.limit ?? 50) });
+    if (opts.after) params.set('after', opts.after);
+    return this.request<
+      Array<{ id: string; content: string; timestamp: string; author: { id: string; bot?: boolean } }>
+    >('GET', `/channels/${channelId}/messages?${params.toString()}`);
   }
 
   async send(channelId: string, message: MessagePayload) {

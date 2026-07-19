@@ -99,3 +99,17 @@ export type AdminMcpData = {
     createdAt: string;
   };
 };
+
+export type InboxMessage = {
+  id: number;
+  content: string;
+  created_at: string;
+  read_at: string | null;
+  participant_id: number;
+  name: string | null;
+  discord_username: string | null;
+  discord_id: string;
+  status: string;
+};
+
+export type InboxData = { messages: InboxMessage[]; unread: number };

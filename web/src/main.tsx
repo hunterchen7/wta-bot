@@ -9,6 +9,7 @@ import { OrganizerPreviewGate } from './components/OrganizerPreviewGate';
 import { DocumentTitle } from './components/DocumentTitle';
 import './styles.css';
 
+const InboxPage = lazy(adminRouteModules.inbox);
 const OperationsPage = lazy(adminRouteModules.operations);
 const FormsPage = lazy(adminRouteModules.forms);
 const ProblemsPage = lazy(adminRouteModules.problems);
@@ -54,6 +55,7 @@ const router = createBrowserRouter(
         { path: 'admin/participants', element: deferred(<ParticipantsPage />) },
         { path: 'admin/rounds', element: deferred(<RoundsPage />) },
         { path: 'admin/reviews', element: deferred(<ReviewsPage />) },
+        { path: 'admin/inbox', element: deferred(<InboxPage />) },
         { path: 'admin/forms', element: deferred(<FormsPage />) },
         { path: 'admin/problems', element: deferred(<ProblemsPage />) },
         { path: 'admin/analytics', element: deferred(<AnalyticsPage />) },

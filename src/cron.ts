@@ -5,6 +5,7 @@ import { executeOutbox } from './engine/executor';
 import { drainOutbox } from './engine/outbox';
 import { packetScan } from './engine/problems';
 import { cleanupOrphanedRecordings } from './engine/recording-cleanup';
+import { inboxScan } from './engine/inbox';
 import { repairScan } from './engine/repair';
 import { activeCohort, cohortStartTuple, cohortWeeks, weekAnchors } from './engine/weeks';
 import type { Env } from './env';
@@ -58,6 +59,8 @@ export async function tick(env: Env, now: Date): Promise<void> {
   }
 
   await cleanupOrphanedRecordings(env, now).catch((err) => console.error('recording cleanup failed:', err));
+  // Poll DM channels for student replies to the bot (runs regardless of cohort).
+  await inboxScan(env, now).catch((err) => console.error('inboxScan failed:', err));
 
   const budget = Math.max(1, Number(env.OUTBOX_BUDGET ?? 100) || 100);
   // Jobs above enqueue rows using the wall clock, which can be a few seconds

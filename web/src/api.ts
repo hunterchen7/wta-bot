@@ -217,6 +217,14 @@ export async function sendPacketPreview(problemId: number): Promise<void> {
   await adminRequest(`/problems/${problemId}/send-packet`, { method: 'POST' });
 }
 
+export async function markInboxRead(id: number, read = true): Promise<void> {
+  await adminRequest(`/inbox/${id}/read${read ? '' : '?read=0'}`, { method: 'POST' });
+}
+
+export async function markAllInboxRead(): Promise<void> {
+  await adminRequest('/inbox/read-all', { method: 'POST' });
+}
+
 export async function adminFileRequest(path: string, signal?: AbortSignal): Promise<Blob> {
   if (import.meta.env.DEV && demoEnabled()) {
     const { adminDemoFile } = await import('./demo-admin');
