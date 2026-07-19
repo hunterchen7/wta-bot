@@ -31,9 +31,8 @@ function PairyExport({ token }: { token: string }) {
     `/api/problems/${encodeURIComponent(token)}/pairy-pack`,
     window.location.origin,
   );
-  // Keep the direct action off until the matching Pairy importer is deployed.
-  // Setting VITE_PAIRY_ORIGIN at build time enables it without changing packet
-  // downloads or exposing a dead production CTA during the staged rollout.
+  // Pairy's importer is live, so the "Import to Pairy" action is on by default.
+  // VITE_PAIRY_ORIGIN overrides the target at build time (e.g. a staging Pairy).
   const importUrl = pairyImportUrl(packUrl);
 
   return <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-border bg-card p-4 text-card-foreground shadow-sm">
@@ -62,9 +61,10 @@ function PairyExport({ token }: { token: string }) {
   </div>;
 }
 
+const PAIRY_ORIGIN = 'https://pairy.online';
+
 function pairyImportUrl(packUrl: URL): URL | null {
-  const origin = import.meta.env.VITE_PAIRY_ORIGIN?.trim();
-  if (!origin) return null;
+  const origin = import.meta.env.VITE_PAIRY_ORIGIN?.trim() || PAIRY_ORIGIN;
   try {
     const url = new URL('/questions/import', origin);
     if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;

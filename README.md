@@ -56,10 +56,10 @@ manages its own deploy credentials). One-time setup in the dashboard:
 - Build command: `npm ci && npm run typecheck && npm test`  ← failing tests block the deploy
 - Deploy command: `npm run deploy:ci`  (applies D1 migrations, then deploys)
 
-Optional build variable `VITE_PAIRY_ORIGIN` enables the interviewer packet's
-direct **Import to Pairy** action (for example, `https://pairy.online`). Leave
-it unset until that Pairy deployment includes the matching `/questions/import`
-route; JSON downloads remain available during a staged rollout.
+The interviewer packet's direct **Import to Pairy** action is on by default,
+targeting `https://pairy.online`. Set the optional build variable
+`VITE_PAIRY_ORIGIN` to override the target (e.g. a staging Pairy). The JSON
+download remains available alongside it.
 
 GitHub Actions (`.github/workflows/ci.yml`) additionally runs the same checks
 on every push/PR — no secrets needed. Local `npm run deploy` also works via
