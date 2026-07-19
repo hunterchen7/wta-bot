@@ -469,6 +469,17 @@ describe('send interviewer packet preview to self', () => {
     const missing = await request('/api/admin/problems/999999/send-packet', { method: 'POST', body: '{}' });
     expect(missing.status).toBe(404);
   });
+
+  it('lets a preview (pp:) token download the Pairy pack, like a real packet', async () => {
+    await env.DB.prepare(
+      `INSERT INTO problems (id, title, difficulty, difficulty_rank, statement_md)
+       VALUES (9391, 'Reverse String', 'easy', 1.0, 'Reverse the given string in place.')`,
+    ).run();
+    const token = await signToken(env.FORM_SIGNING_SECRET!, 'pp:9391', new Date(Date.now() + 3600_000));
+    const res = await app.request(`/api/problems/${token}/pairy-pack`, {}, env);
+    expect(res.status).toBe(200);
+    expect(JSON.stringify(await res.json())).toContain('Reverse String');
+  });
 });
 
 describe('DM inbox', () => {

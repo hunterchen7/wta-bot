@@ -293,18 +293,21 @@ forms.get('/api/problems/:token/pairy-pack', async (c) => {
   }
   const verified = await verifyToken(c.env.FORM_SIGNING_SECRET, c.req.param('token'));
   // The downloadable pack contains the private hint ladder and solution, so only
-  // an interviewer packet token may reach it. Solution and demo links stay out.
-  const match = verified && /^p:(\d+)$/.exec(verified.subject);
+  // an interviewer packet token may reach it: a real session packet (p:<session>)
+  // or an organizer's self-preview (pp:<problem>). Solution and demo links stay out.
+  const match = verified && /^(pp?):(\d+)$/.exec(verified.subject);
   if (!match) {
     return c.json({ error: 'invalid_link', message: 'This problem link is invalid or expired.' }, 404);
   }
-  const row = await c.env.DB.prepare(
-    `SELECT p.id, p.portable_id, p.source, p.number, p.title, p.url, p.difficulty,
+  const isPreview = match[1] === 'pp';
+  const columns = `p.id, p.portable_id, p.source, p.number, p.title, p.url, p.difficulty,
             p.statement_md, p.solution_md, p.hints_md, p.interviewer_notes_md,
-            p.execution_json, p.available_weeks
-     FROM sessions s JOIN problems p ON p.id = s.problem_id
-     WHERE s.id = ?1`,
-  ).bind(Number(match[1])).first<{
+            p.execution_json, p.available_weeks`;
+  const row = await c.env.DB.prepare(
+    isPreview
+      ? `SELECT ${columns} FROM problems p WHERE p.id = ?1`
+      : `SELECT ${columns} FROM sessions s JOIN problems p ON p.id = s.problem_id WHERE s.id = ?1`,
+  ).bind(Number(match[2])).first<{
     id: number;
     portable_id: string | null;
     source: string;
@@ -320,7 +323,7 @@ forms.get('/api/problems/:token/pairy-pack', async (c) => {
     available_weeks: string | null;
   }>();
   if (!row) {
-    return c.json({ error: 'not_found', message: 'No problem is assigned to this session yet.' }, 404);
+    return c.json({ error: 'not_found', message: isPreview ? 'This problem no longer exists.' : 'No problem is assigned to this session yet.' }, 404);
   }
   if (!row.statement_md?.trim()) {
     return c.json({ error: 'not_exportable', message: 'This problem needs a statement before it can be exported.' }, 409);
