@@ -20,12 +20,21 @@ export function ProblemsPage() {
   const [difficulty, setDifficulty] = useState('all');
   const [editor, setEditor] = useState<EditableProblem | null>(null);
   const [preview, setPreview] = useState<ProblemRow | null>(null);
+  const [pendingPreviewId, setPendingPreviewId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const rows = useMemo(() => (data?.problems ?? []).filter((problem) =>
     (difficulty === 'all' || problem.difficulty === difficulty)
     && (!query.trim() || `${problem.number ?? ''} ${problem.title}`.toLowerCase().includes(query.trim().toLowerCase())),
   ), [data, difficulty, query]);
+
+  useEffect(() => {
+    if (!pendingPreviewId || !data) return;
+    const created = data.problems.find((problem) => problem.id === pendingPreviewId);
+    if (!created) return;
+    setPreview(created);
+    setPendingPreviewId(null);
+  }, [data, pendingPreviewId]);
 
   if (loading && !data) return <LoadingState />;
   if (error || !data) return <ErrorState message={error ?? 'No question data returned.'} onRetry={() => void reload()} />;
@@ -34,7 +43,7 @@ export function ProblemsPage() {
     setBusy(true);
     try {
       const existing = 'id' in problem;
-      await adminRequest(existing ? `/problems/${problem.id}` : '/problems', {
+      const response = await adminRequest<{ id?: number }>(existing ? `/problems/${problem.id}` : '/problems', {
         method: 'POST',
         body: JSON.stringify({
           source: problem.source, number: problem.number, title: problem.title, url: problem.url,
@@ -47,7 +56,8 @@ export function ProblemsPage() {
         }),
       });
       setEditor(null);
-      setNotice(existing ? 'Question saved.' : 'Question added.');
+      setNotice(existing ? 'Question saved.' : 'Question added. You can create a session from its preview.');
+      if (!existing && response.id) setPendingPreviewId(response.id);
       await reload();
     } finally {
       setBusy(false);
@@ -86,11 +96,11 @@ export function ProblemsPage() {
         </table></div> : <EmptyState title="No questions match" description="Change the filters or add a question." />}
       </Panel>}
     {editor ? <ProblemEditor value={editor} weeks={data.weeks.map((week) => week.idx)} busy={busy} onClose={() => setEditor(null)} onSave={save} /> : null}
-    {preview ? <QuestionPreview problem={preview} onClose={() => setPreview(null)} /> : null}
+    {preview ? <QuestionPreview problem={preview} weeks={data.weeks} participants={data.participants} reload={reload} onClose={() => setPreview(null)} /> : null}
   </div>;
 }
 
-function QuestionPreview({ problem, onClose }: { problem: ProblemRow; onClose: () => void }) {
+function QuestionPreview({ problem, weeks, participants, reload, onClose }: { problem: ProblemRow; weeks: ProblemsData['weeks']; participants: ProblemsData['participants']; reload: () => Promise<void>; onClose: () => void }) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,8 +134,66 @@ function QuestionPreview({ problem, onClose }: { problem: ProblemRow; onClose: (
       <ProblemContentSection title="Statement" value={problem.statement_md?.trim() || 'No statement has been added yet.'} />
       <ProblemContentSection title="Interviewer notes" value={problem.interviewer_notes_md.trim() || 'No interviewer notes have been added yet.'} />
       <div className="rounded-2xl border border-border bg-card p-4 text-sm text-card-foreground"><div className="font-black">Test harness</div><div className="mt-1 text-muted-foreground">{problem.execution.mode === 'stdin_tests' ? `${problem.execution.testCases.length} tests · ${problem.execution.languages.join(', ')}` : 'Discussion only'}</div></div>
+      <ProblemSessionCreator problem={problem} weeks={weeks} participants={participants} reload={reload} />
     </div>
   </Dialog>;
+}
+
+function ProblemSessionCreator({ problem, weeks, participants, reload }: { problem: ProblemRow; weeks: ProblemsData['weeks']; participants: ProblemsData['participants']; reload: () => Promise<void> }) {
+  const empty = '__none';
+  const eligibleWeeks = weeks.filter((week) => problem.available_weeks.includes(week.idx));
+  const [weekId, setWeekId] = useState(String(eligibleWeeks[0]?.id ?? empty));
+  const [interviewerId, setInterviewerId] = useState(empty);
+  const [intervieweeId, setIntervieweeId] = useState(empty);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const participantOptions = participants.map((participant) => ({
+    value: String(participant.id),
+    label: `${participant.name ?? 'Unnamed'}${participant.discord_username ? ` · @${participant.discord_username}` : ''}`,
+  }));
+  const selected = {
+    week: weekId !== empty,
+    interviewer: interviewerId !== empty,
+    interviewee: intervieweeId !== empty,
+  };
+  const canSubmit = selected.week && selected.interviewer && selected.interviewee && interviewerId !== intervieweeId && !busy;
+  const create = async () => {
+    setBusy(true);
+    setError(null);
+    setResult(null);
+    try {
+      const response = await adminRequest<{ sessionId: number }>(`/problems/${problem.id}/session`, {
+        method: 'POST',
+        body: JSON.stringify({ weekId: Number(weekId), interviewerId: Number(interviewerId), intervieweeId: Number(intervieweeId) }),
+      });
+      setResult(`Session #${response.sessionId} created. Thread and DMs are queued.`);
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not create the session.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <section className="rounded-2xl border border-western-200 bg-western-50/70 p-4 text-sm dark:border-western-900/60 dark:bg-western-950/20">
+    <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <div className="font-black text-foreground">Create a session with this question</div>
+        <p className="mt-1 text-muted-foreground">Creates a real organizer-arranged session and pins this packet to the interviewer.</p>
+      </div>
+      {result ? <Badge value="queued" /> : null}
+    </div>
+    <div className="mt-4 grid gap-3 lg:grid-cols-3">
+      <SelectControl label="Round" value={weekId} onChange={setWeekId} options={[{ value: empty, label: 'Choose round' }, ...eligibleWeeks.map((week) => ({ value: String(week.id), label: `Round ${week.idx}` }))]} />
+      <SelectControl label="Interviewer" value={interviewerId} onChange={setInterviewerId} options={[{ value: empty, label: 'Choose interviewer' }, ...participantOptions]} />
+      <SelectControl label="Interviewee" value={intervieweeId} onChange={setIntervieweeId} options={[{ value: empty, label: 'Choose interviewee' }, ...participantOptions]} />
+    </div>
+    {error ? <p className="mt-3 font-semibold text-rose-700 dark:text-rose-300">{error}</p> : null}
+    {result ? <p className="mt-3 font-semibold text-emerald-700 dark:text-emerald-300">{result}</p> : null}
+    <div className="mt-4 flex justify-end">
+      <Button disabled={!canSubmit} onClick={() => void create()}>{busy ? 'Creating…' : 'Create session'}</Button>
+    </div>
+  </section>;
 }
 
 function RoundSets({ data, reload, onNotice, onPreview }: { data: ProblemsData; reload: () => Promise<void>; onNotice: (notice: string) => void; onPreview: (problem: ProblemRow) => void }) {

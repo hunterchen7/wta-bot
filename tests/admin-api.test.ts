@@ -40,7 +40,7 @@ beforeAll(async () => {
   weekId = cohort.weeks[0]!.id;
   futureWeekId = cohort.weeks[1]!.id;
   await env.DB.prepare(
-    `INSERT INTO problems (id, title, difficulty, difficulty_rank) VALUES (9301, 'Two Sum', 'easy', 1.0)`,
+    `INSERT INTO problems (id, title, difficulty, difficulty_rank, available_weeks) VALUES (9301, 'Two Sum', 'easy', 1.0, '[1]')`,
   ).run();
   await env.DB.prepare(
     `INSERT INTO sessions (id, week_id, interviewer_id, interviewee_id, state, problem_id, review_state)
@@ -336,6 +336,38 @@ describe('admin mutations and audit history', () => {
     expect(update.status).toBe(200);
     const row = await env.DB.prepare('SELECT difficulty_rank, active, interviewer_notes_md, execution_json, available_weeks FROM problems WHERE id = ?1').bind(id).first<any>();
     expect(row).toEqual({ difficulty_rank: 2.5, active: 0, interviewer_notes_md: 'Sort first.', execution_json: '{"mode":"manual"}', available_weeks: '[3]' });
+  });
+
+  it('creates a manual session from a selected problem', async () => {
+    const response = await request('/api/admin/problems/9301/session', {
+      method: 'POST',
+      body: JSON.stringify({ weekId, interviewerId: ADMIN_ID, intervieweeId: STUDENT_ID }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json<any>();
+    expect(body).toMatchObject({ ok: true, sessionId: expect.any(Number) });
+    const session = await env.DB.prepare(
+      'SELECT week_id, interviewer_id, interviewee_id, origin, state, problem_id FROM sessions WHERE id = ?1',
+    ).bind(body.sessionId).first<any>();
+    expect(session).toMatchObject({
+      week_id: weekId,
+      interviewer_id: ADMIN_ID,
+      interviewee_id: STUDENT_ID,
+      origin: 'manual',
+      state: 'pending_schedule',
+      problem_id: 9301,
+    });
+    const audit = await env.DB.prepare(
+      "SELECT action, target_type, target_id FROM audit_log WHERE action = 'problem.session_created' ORDER BY id DESC LIMIT 1",
+    ).first<any>();
+    expect(audit).toEqual({ action: 'problem.session_created', target_type: 'problem', target_id: '9301' });
+
+    const wrongRound = await request('/api/admin/problems/9301/session', {
+      method: 'POST',
+      body: JSON.stringify({ weekId: futureWeekId, interviewerId: ADMIN_ID, intervieweeId: STUDENT_ID }),
+    });
+    expect(wrongRound.status).toBe(400);
+    expect((await wrongRound.json<any>()).message).toContain('not tagged for round 2');
   });
 
   it('stages and generates problem sets for future rounds', async () => {

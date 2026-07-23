@@ -11,7 +11,7 @@ export class ProblemSetError extends Error {
 export async function problemBankWorkspace(env: Env) {
   const cohort = await activeCohort(env);
   const weeks = cohort ? await cohortWeeks(env, cohort.id) : [];
-  const [problems, sets] = await Promise.all([
+  const [problems, sets, participants] = await Promise.all([
     env.DB.prepare(
       `SELECT p.*, (SELECT count(*) FROM sessions s WHERE s.problem_id = p.id) AS uses,
               (SELECT count(*) FROM exposures e WHERE e.problem_id = p.id) AS exposures
@@ -22,6 +22,11 @@ export async function problemBankWorkspace(env: Env) {
        FROM week_problem_sets wps JOIN weeks w ON w.id = wps.week_id JOIN cohorts c ON c.id = w.cohort_id
        JOIN problems p ON p.id = wps.problem_id WHERE c.id = ?1 ORDER BY w.idx, p.title`,
     ).bind(cohort.id).all<any>() : Promise.resolve({ results: [] as any[] }),
+    env.DB.prepare(
+      `SELECT id, name, discord_username FROM participants
+       WHERE status = 'active' AND pairing_excluded = 0
+       ORDER BY lower(name), id`,
+    ).all<any>(),
   ]);
   return {
     problems: problems.results.map((problem: any) => ({
@@ -38,6 +43,7 @@ export async function problemBankWorkspace(env: Env) {
     sets: sets.results,
     cohort,
     weeks,
+    participants: participants.results,
   };
 }
 

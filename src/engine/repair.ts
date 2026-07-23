@@ -186,6 +186,7 @@ export async function spawnSession(
   interviewerId: number,
   intervieweeId: number,
   origin: 'repair' | 'manual',
+  problemId?: number | null,
 ): Promise<number> {
   const eligible = await env.DB.prepare(
     `SELECT count(*) AS n FROM participants
@@ -201,7 +202,7 @@ export async function spawnSession(
     .bind(weekId, interviewerId, intervieweeId, origin)
     .run();
   const sessionId = Number(ins.meta.last_row_id);
-  const problem = await pickProblem(env, weekId, interviewerId, intervieweeId);
+  const problem = problemId ? { id: problemId, title: '' } : await pickProblem(env, weekId, interviewerId, intervieweeId);
   if (problem) await reserveProblem(env, sessionId, problem.id);
 
   const week = await getWeek(env, weekId);

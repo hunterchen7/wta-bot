@@ -23,6 +23,8 @@ import { sessionFrom, type SessionUser } from './web';
 import { isCurrentOrganizer } from '../organizers';
 import { participantResume, resumeDownloadHeaders, resumeSummary, ResumeUploadError } from '../services/resumes';
 import { enrollmentFunnel } from '../services/enrollment-events';
+import { spawnSession } from '../engine/repair';
+import { readAvailableWeeks } from '../question-markdown';
 
 export const adminApi = new Hono<{ Bindings: Env }>();
 
@@ -479,6 +481,43 @@ adminApi.post('/api/admin/problems/:id/send-packet', async (c) => {
   });
   await audit(c.env, gate.participantId, 'problem.packet_preview_sent', 'problem', problem.id, {});
   return c.json({ ok: true });
+});
+
+adminApi.post('/api/admin/problems/:id/session', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const problemId = Number(c.req.param('id'));
+  const body = await c.req.json<{ weekId?: number; interviewerId?: number; intervieweeId?: number }>().catch(() => null);
+  const weekId = Number(body?.weekId);
+  const interviewerId = Number(body?.interviewerId);
+  const intervieweeId = Number(body?.intervieweeId);
+  if (![problemId, weekId, interviewerId, intervieweeId].every((value) => Number.isInteger(value) && value > 0) || interviewerId === intervieweeId) {
+    return c.json({ error: 'invalid_request', message: 'Choose a round, interviewer, and different interviewee.' }, 400);
+  }
+
+  const [week, problem] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT w.id, w.idx FROM weeks w JOIN cohorts c ON c.id = w.cohort_id
+       WHERE w.id = ?1 AND c.status = 'active'`,
+    ).bind(weekId).first<{ id: number; idx: number }>(),
+    c.env.DB.prepare('SELECT id, title, active, available_weeks FROM problems WHERE id = ?1')
+      .bind(problemId).first<{ id: number; title: string; active: number; available_weeks: string | null }>(),
+  ]);
+  if (!week) return c.json({ error: 'not_found', message: 'That round is not part of the active cohort.' }, 404);
+  if (!problem || problem.active !== 1) return c.json({ error: 'not_found', message: 'That active question no longer exists.' }, 404);
+  if (!readAvailableWeeks(problem.available_weeks).includes(week.idx)) {
+    return c.json({ error: 'invalid_request', message: `This question is not tagged for round ${week.idx}.` }, 400);
+  }
+
+  try {
+    const sessionId = await spawnSession(c.env, weekId, interviewerId, intervieweeId, 'manual', problemId);
+    await audit(c.env, gate.participantId, 'problem.session_created', 'problem', problemId, {
+      weekId, interviewerId, intervieweeId, sessionId,
+    });
+    return c.json({ ok: true, sessionId });
+  } catch (error) {
+    return c.json({ error: 'invalid_request', message: error instanceof Error ? error.message : 'Could not create the session.' }, 400);
+  }
 });
 
 adminApi.put('/api/admin/problem-sets/:weekId', async (c) => {

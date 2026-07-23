@@ -72,6 +72,7 @@ export type ProblemsData = {
   sets: Array<{ week_id: number; round: number; cohort_name: string; problem_id: number; title: string }>;
   cohort: Cohort | null;
   weeks: Week[];
+  participants: Array<{ id: number; name: string | null; discord_username: string | null }>;
 };
 
 export type AnalyticsData = {
