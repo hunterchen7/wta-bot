@@ -173,7 +173,24 @@ describe('full weekly cycle', () => {
     await env.DB.prepare(
       'UPDATE optins SET extra_interviewer = 1 WHERE week_id = ?1 AND participant_id = ?2',
     ).bind(week1!.id, alice!.id).run();
-    await sendInteraction(signer, button(`optin:${week1!.id}:out`, '101'), OVERRIDES);
+    const optOutPrompt = await sendInteraction(signer, button(`optin:${week1!.id}:out`, '101'), OVERRIDES);
+    const optOutPromptJson = await optOutPrompt.json<any>();
+    expect(optOutPromptJson.data.content).toContain('Sit out round');
+    expect(optOutPromptJson.data.components[0].components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ custom_id: `optin:${week1!.id}:out-confirm`, style: 4 }),
+      expect.objectContaining({ custom_id: `optin:${week1!.id}:out-cancel`, style: 2 }),
+    ]));
+    expect(await env.DB.prepare(
+      'SELECT regular_opt_in, extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(week1!.id, alice!.id).first()).toEqual({ regular_opt_in: 1, extra_interviewer: 1 });
+
+    const keepIn = await sendInteraction(signer, button(`optin:${week1!.id}:out-cancel`, '101'), OVERRIDES);
+    expect((await keepIn.json<any>()).data.content).toContain('No changes made');
+    expect(await env.DB.prepare(
+      'SELECT regular_opt_in, extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(week1!.id, alice!.id).first()).toEqual({ regular_opt_in: 1, extra_interviewer: 1 });
+
+    await sendInteraction(signer, button(`optin:${week1!.id}:out-confirm`, '101'), OVERRIDES);
     expect(await env.DB.prepare(
       'SELECT regular_opt_in, extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
     ).bind(week1!.id, alice!.id).first()).toEqual({ regular_opt_in: 0, extra_interviewer: 1 });

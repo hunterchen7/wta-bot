@@ -31,7 +31,7 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
   if (id === ENROLLMENT_BUTTON_ID) return enrollmentLinkResponse(c, interaction, 'join_button');
 
   // ---- weekly opt-in ------------------------------------------------------
-  const optin = /^optin:(\d+):(in|double|standby|out)$/.exec(id);
+  const optin = /^optin:(\d+):(in|double|standby|out|out-confirm|out-cancel)$/.exec(id);
   if (optin) return handleOptin(c, interaction, Number(optin[1]), optin[2] as any);
 
   // ---- session thread buttons ---------------------------------------------
@@ -135,9 +135,15 @@ async function handleOptin(
   c: Ctx,
   interaction: Interaction,
   weekId: number,
-  choice: 'in' | 'double' | 'standby' | 'out',
+  choice: 'in' | 'double' | 'standby' | 'out' | 'out-confirm' | 'out-cancel',
 ) {
   const user = interactionUser(interaction)!;
+  if (choice === 'out-cancel') {
+    return c.json({
+      type: ResponseType.UPDATE_MESSAGE,
+      data: { content: 'No changes made — your current round choice is unchanged.', components: [] },
+    });
+  }
   const participant = await getParticipant(c.env, user.id);
   if (!participant || participant.topics === null) {
     return c.json(ephemeral("You're not enrolled yet — run `/join` first (takes ~a minute)."));
@@ -159,6 +165,17 @@ async function handleOptin(
   }
 
   if (choice === 'out') {
+    return c.json(ephemeral(
+      `**Sit out round ${week.idx}?** You will not be included in new pairings for this round. ` +
+      'There is no penalty, and you can opt back in later while the round is still open.',
+      [buttonRow([
+        { id: `optin:${weekId}:out-confirm`, label: 'Confirm sitting out', style: 4 },
+        { id: `optin:${weekId}:out-cancel`, label: 'Keep me in', style: 2 },
+      ])],
+    ));
+  }
+
+  if (choice === 'out-confirm') {
     const optin = await c.env.DB.prepare(
       'SELECT extra_interviewer FROM optins WHERE week_id = ?1 AND participant_id = ?2',
     ).bind(weekId, participant.id).first<{ extra_interviewer: number }>();
@@ -178,7 +195,10 @@ async function handleOptin(
     const existingSessionNote = now >= new Date(week.match_at)
       ? ` Existing sessions are unchanged; use **Can't make it** in the session thread if one needs to be cancelled.`
       : '';
-    return c.json(ephemeral(`Sitting out round ${week.idx} — no penalty.${existingSessionNote}`));
+    return c.json({
+      type: ResponseType.UPDATE_MESSAGE,
+      data: { content: `Sitting out round ${week.idx} — no penalty.${existingSessionNote}`, components: [] },
+    });
   }
 
   await c.env.DB.prepare(
