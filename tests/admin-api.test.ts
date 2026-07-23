@@ -418,12 +418,13 @@ describe('admin mutations and audit history', () => {
   it('updates program settings and creates a cohort calendar', async () => {
     const settings = await request('/api/admin/settings', {
       method: 'POST',
-      body: JSON.stringify({ settings: { packet_mode: 'on', packet_lead_hours: '24', question_bank_public: 'off', organizer_role_id: 'role-123', unsupported: 'ignored' } }),
+      body: JSON.stringify({ settings: { packet_mode: 'on', packet_lead_hours: '24', question_bank_public: 'off', organizer_role_id: 'role-123', pairing_channel_id: 'channel-456', unsupported: 'ignored' } }),
     });
-    expect(await settings.json<any>()).toMatchObject({ ok: true, updated: 4 });
+    expect(await settings.json<any>()).toMatchObject({ ok: true, updated: 5 });
     expect(await env.DB.prepare("SELECT value FROM settings WHERE key = 'packet_mode'").first()).toEqual({ value: 'on' });
     expect(await env.DB.prepare("SELECT value FROM settings WHERE key = 'packet_lead_hours'").first()).toEqual({ value: '24' });
     expect(await env.DB.prepare("SELECT value FROM settings WHERE key = 'question_bank_public'").first()).toEqual({ value: 'off' });
+    expect(await env.DB.prepare("SELECT value FROM settings WHERE key = 'pairing_channel_id'").first()).toEqual({ value: 'channel-456' });
 
     const invalidTiming = await request('/api/admin/settings', {
       method: 'POST',

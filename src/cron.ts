@@ -7,6 +7,7 @@ import { packetScan } from './engine/problems';
 import { cleanupOrphanedRecordings } from './engine/recording-cleanup';
 import { inboxScan } from './engine/inbox';
 import { repairScan } from './engine/repair';
+import { ensurePairingChannel } from './engine/bootstrap';
 import { activeCohort, cohortStartTuple, cohortWeeks, weekAnchors } from './engine/weeks';
 import type { Env } from './env';
 
@@ -22,6 +23,7 @@ export async function tick(env: Env, now: Date): Promise<void> {
   if (!claimed) return;
 
   await syncCommands(env).catch((err) => console.error('command sync failed:', err));
+  await ensurePairingChannel(env).catch((err) => console.error('pairing channel setup failed:', err));
 
   const origin = env.PUBLIC_ORIGIN ?? 'https://wta.hunterchen.ca';
   const cohort = await activeCohort(env).catch(() => null);

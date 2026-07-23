@@ -99,7 +99,8 @@ export const COMMANDS: Command[] = [
             name: 'channels',
             description: 'Where the bot posts',
             options: [
-              { type: CHANNEL, name: 'announce', description: 'Opt-ins + pairing announcements' },
+              { type: CHANNEL, name: 'announce', description: 'Public program news + important dates' },
+              { type: CHANNEL, name: 'pairing', description: 'Participant-only opt-ins + pairings' },
               { type: CHANNEL, name: 'organizer', description: 'Digests, case files, enrollment feed' },
               { type: CHANNEL, name: 'threads', description: 'Parent channel for session threads' },
             ],

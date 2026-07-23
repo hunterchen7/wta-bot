@@ -141,7 +141,8 @@ describe('full weekly cycle', () => {
     // channels configured (normally via /setup channels)
     await env.DB.prepare(
       `INSERT INTO settings (key, value) VALUES
-       ('threads_channel_id', '555'), ('announce_channel_id', '556'), ('organizer_channel_id', '557')
+       ('threads_channel_id', '555'), ('announce_channel_id', '556'),
+       ('pairing_channel_id', '558'), ('organizer_channel_id', '557')
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ).run();
 
@@ -150,6 +151,7 @@ describe('full weekly cycle', () => {
       "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%opt-in is open%' ORDER BY id DESC LIMIT 1",
     ).first<{ payload: string }>();
     expect(optinAnnouncement?.payload).toContain('Initial pairings publish');
+    expect(JSON.parse(optinAnnouncement!.payload).channelId).toBe('558');
     expect(optinAnnouncement?.payload).toContain('first come, first served');
     expect(optinAnnouncement?.payload).not.toContain('Closes');
     for (let index = 1; index <= 4; index++) {
@@ -251,6 +253,7 @@ describe('full weekly cycle', () => {
       "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%pairings are out%' ORDER BY id DESC LIMIT 1",
     ).first<{ payload: string }>();
     expect(pairingAnnouncement).not.toBeNull();
+    expect(JSON.parse(pairingAnnouncement!.payload).channelId).toBe('558');
     expect(pairingAnnouncement!.payload).not.toContain('Round one problem');
     expect(pairingAnnouncement!.payload).not.toContain('/bank');
 

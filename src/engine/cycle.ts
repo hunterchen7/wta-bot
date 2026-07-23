@@ -34,7 +34,7 @@ export function optinButtons(weekId: number) {
 }
 
 export async function openOptin(env: Env, week: Week): Promise<void> {
-  const cfg = await getSettings(env, ['announce_channel_id', 'participant_role_id']);
+  const cfg = await getSettings(env, ['pairing_channel_id', 'announce_channel_id', 'participant_role_id']);
   const mention = cfg.participant_role_id ? `<@&${cfg.participant_role_id}> ` : '';
   const content =
     `${mention}📋 **Round ${week.idx} opt-in is open!** (2 weeks, one interview each side)\n` +
@@ -47,9 +47,10 @@ export async function openOptin(env: Env, week: Week): Promise<void> {
     `🗓️ Initial pairings publish ${discordTime(week.match_at)}. Opt in before then to join the first batch.\n` +
     `Opt-in stays open afterward; late participants are matched first come, first served as compatible partners become available.`;
 
-  if (cfg.announce_channel_id) {
+  const pairingChannelId = cfg.pairing_channel_id ?? cfg.announce_channel_id;
+  if (pairingChannelId) {
     await enqueue(env, 'channel_msg', {
-      channelId: cfg.announce_channel_id,
+      channelId: pairingChannelId,
       message: { content, components: [optinButtons(week.id)] },
     });
   }
@@ -126,7 +127,7 @@ export function sessionButtons(sessionId: number) {
 }
 
 export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promise<{ sessions: number; unmatched: number }> {
-  const cfg = await getSettings(env, ['announce_channel_id', 'threads_channel_id', 'organizer_channel_id', 'question_bank_public']);
+  const cfg = await getSettings(env, ['pairing_channel_id', 'announce_channel_id', 'threads_channel_id', 'organizer_channel_id', 'question_bank_public']);
 
   const { results: optins } = await env.DB.prepare(
     `SELECT o.participant_id, o.wants_double, o.standby, o.regular_opt_in, o.extra_interviewer,
@@ -243,7 +244,8 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
     }
   }
 
-  if (cfg.announce_channel_id) {
+  const pairingChannelId = cfg.pairing_channel_id ?? cfg.announce_channel_id;
+  if (pairingChannelId) {
     let bankLines = '';
     if (cfg.question_bank_public === 'on') {
       const { results: bank } = await env.DB.prepare(
@@ -259,7 +261,7 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
         : '';
     }
     await enqueue(env, 'channel_msg', {
-      channelId: cfg.announce_channel_id,
+      channelId: pairingChannelId,
       message: {
         content: `🤝 **Round ${week.idx} pairings are out** — ${result.edges.length} sessions across ${perPerson.size} participants. Check your DMs and session threads!${bankLines}`,
       },

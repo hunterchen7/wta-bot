@@ -4,7 +4,8 @@ import type { Env } from './env';
 // /setup and read everywhere. Keys are typed here so usage stays greppable.
 
 export type SettingKey =
-  | 'announce_channel_id' // weekly opt-in + pairing announcements
+  | 'announce_channel_id' // public program news + important dates
+  | 'pairing_channel_id' // participant-only opt-ins + pairing announcements
   | 'organizer_channel_id' // digests, case files, enrollment feed
   | 'threads_channel_id' // parent channel for session threads
   | 'participant_role_id' // granted on completed enrollment

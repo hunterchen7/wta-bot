@@ -1,4 +1,4 @@
-import { getSettings, setSetting } from '../config';
+import { getSetting, getSettings, setSetting } from '../config';
 import { DiscordRest } from '../discord/rest';
 import type { Env } from '../env';
 
@@ -41,6 +41,13 @@ function publicOverwrites(kind: string, r: Roles): unknown[] {
         { id: r.everyone, type: 0, allow: VIEW_HIST, deny: SEND },
         ...botAllow,
       ];
+    case 'pairing':
+      return [
+        { id: r.everyone, type: 0, deny: String(1024) },
+        { id: r.participantRole, type: 0, allow: VIEW_HIST, deny: SEND },
+        { id: r.organizerRole, type: 0, allow: VIEW_HIST_SEND },
+        ...botAllow,
+      ];
     case 'interviews':
       return [
         { id: r.everyone, type: 0, deny: String(1024) },
@@ -69,6 +76,7 @@ function privateOverwrites(kind: string, r: Roles): unknown[] {
 
 const CHANNEL_KINDS: Array<{ kind: string; name: string; settingKey: any }> = [
   { kind: 'announce', name: 'announcements', settingKey: 'announce_channel_id' },
+  { kind: 'pairing', name: 'pairing', settingKey: 'pairing_channel_id' },
   { kind: 'interviews', name: 'interviews', settingKey: 'threads_channel_id' },
   { kind: 'organizers', name: 'wta-organizers', settingKey: 'organizer_channel_id' },
 ];
@@ -92,6 +100,26 @@ async function loadRoles(env: Env, rest: DiscordRest, guildId: string, createMis
     botUser: env.DISCORD_APP_ID ?? '',
     everyone: guildId,
   };
+}
+
+/** Upgrade an already-published guild without requiring another bootstrap. */
+export async function ensurePairingChannel(env: Env, requestedGuildId?: string): Promise<string | null> {
+  const existing = await getSetting(env, 'pairing_channel_id');
+  if (existing) return existing;
+  const guildId = requestedGuildId ?? env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
+  if (!env.DISCORD_TOKEN || !guildId) return null;
+
+  const rest = new DiscordRest(env.DISCORD_TOKEN);
+  const roles = await loadRoles(env, rest, guildId, false);
+  const categoryId = await getSetting(env, 'category_id');
+  const pairing = await rest.request<{ id: string }>('POST', `/guilds/${guildId}/channels`, {
+    name: 'pairing',
+    type: 0,
+    ...(categoryId ? { parent_id: categoryId } : {}),
+    permission_overwrites: publicOverwrites('pairing', roles),
+  });
+  await setSetting(env, 'pairing_channel_id', pairing.id);
+  return pairing.id;
 }
 
 export async function bootstrapGuild(
@@ -151,6 +179,7 @@ export async function publishGuild(env: Env, payload: { guildId: string; interac
 
   try {
     const roles = await loadRoles(env, rest, payload.guildId, false);
+    await ensurePairingChannel(env, payload.guildId);
     const cfg = await getSettings(env, CHANNEL_KINDS.map((c) => c.settingKey));
     const flipped: string[] = [];
     for (const ch of CHANNEL_KINDS) {
@@ -162,7 +191,7 @@ export async function publishGuild(env: Env, payload: { guildId: string; interac
       flipped.push(`<#${id}>`);
     }
     await report(
-      `📢 **Live!** ${flipped.join(' ')} now carry their live permissions: everyone can read announcements, Participants use interview threads, and organizers keep their room. Discord native verification handles server entry.`,
+      `📢 **Live!** ${flipped.join(' ')} now carry their live permissions: everyone can read announcements, Participants get the private pairing feed and use interview threads, and organizers keep their room. Discord native verification handles server entry.`,
     );
   } catch (err) {
     await report(`⚠️ Publish failed: \`${String(err).slice(0, 300)}\` — check the bot's Manage Channels permission and that bootstrap ran first.`);

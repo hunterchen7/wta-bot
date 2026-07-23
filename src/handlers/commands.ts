@@ -342,6 +342,7 @@ async function setupCommand(c: Ctx, interaction: Interaction, s: Opt) {
     case 'channels': {
       const mapping: Array<[string, any]> = [
         ['announce_channel_id', optVal(opts, 'announce')],
+        ['pairing_channel_id', optVal(opts, 'pairing')],
         ['organizer_channel_id', optVal(opts, 'organizer')],
         ['threads_channel_id', optVal(opts, 'threads')],
       ];

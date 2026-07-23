@@ -54,9 +54,9 @@ describe('annual bootstrap', () => {
     const roles = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/guilds/G1/roles'));
     expect(roles.map((r) => r.body.name).sort()).toEqual(['Organizer', 'Participant']);
 
-    // category + three program channels, all private-first
+    // category + four program channels, all private-first
     const channels = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/guilds/G1/channels'));
-    expect(channels).toHaveLength(4);
+    expect(channels).toHaveLength(5);
     expect(channels[0]!.body).toMatchObject({ name: 'WTA 2026', type: 4 });
     for (const ch of channels.slice(1)) {
       const everyone = ch.body.permission_overwrites.find((o: any) => o.id === 'G1');
@@ -66,9 +66,9 @@ describe('annual bootstrap', () => {
     // settings point at the new ids
     const { results } = await env.DB.prepare(
       `SELECT key, value FROM settings WHERE key IN
-       ('announce_channel_id','threads_channel_id','organizer_channel_id','participant_role_id','organizer_role_id','category_id')`,
+       ('announce_channel_id','pairing_channel_id','threads_channel_id','organizer_channel_id','participant_role_id','organizer_role_id','category_id')`,
     ).all<any>();
-    expect(results).toHaveLength(6);
+    expect(results).toHaveLength(7);
     for (const r of results) expect(String(r.value)).toMatch(/^id-/);
     expect(calls.some((call) => JSON.stringify(call.body).includes('verify:start'))).toBe(false);
 
@@ -95,13 +95,38 @@ describe('publish', () => {
       { guildId: 'G1', interactionToken: 'ptok' },
     );
     const patches = calls.filter((c) => c.method === 'PATCH' && !c.url.includes('/webhooks/'));
-    expect(patches).toHaveLength(3);
+    expect(patches).toHaveLength(4);
 
     const announcementsId = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'announce_channel_id'").first<any>())!.value;
     const announcements = patches.find((patch) => patch.url.endsWith(`/channels/${announcementsId}`))!;
     const everyone = announcements.body.permission_overwrites.find((overwrite: any) => overwrite.id === 'G1');
     expect(everyone.allow).toBe(String(1024 + 65536));
 
+    const pairingId = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'pairing_channel_id'").first<any>())!.value;
+    const pairing = patches.find((patch) => patch.url.endsWith(`/channels/${pairingId}`))!;
+    const pairingEveryone = pairing.body.permission_overwrites.find((overwrite: any) => overwrite.id === 'G1');
+    const participantId = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'participant_role_id'").first<any>())!.value;
+    const pairingParticipant = pairing.body.permission_overwrites.find((overwrite: any) => overwrite.id === participantId);
+    expect(pairingEveryone.deny).toBe('1024');
+    expect(pairingParticipant).toMatchObject({ allow: String(1024 + 65536), deny: String(2048) });
+
     expect(followupOf(calls).join('')).toContain('Live!');
+  });
+
+  it('creates the participant-only pairing channel when upgrading an existing guild', async () => {
+    await env.DB.prepare("DELETE FROM settings WHERE key = 'pairing_channel_id'").run();
+    const calls = stubDiscord();
+
+    await publishGuild(
+      { ...env, DISCORD_TOKEN: 't', DISCORD_APP_ID: 'botid' } as any,
+      { guildId: 'G1', interactionToken: 'migration-token' },
+    );
+
+    const created = calls.find((call) => call.method === 'POST' && call.url.endsWith('/guilds/G1/channels'));
+    expect(created?.body).toMatchObject({ name: 'pairing', type: 0 });
+    const everyone = created!.body.permission_overwrites.find((overwrite: any) => overwrite.id === 'G1');
+    expect(everyone.deny).toBe('1024');
+    const stored = await env.DB.prepare("SELECT value FROM settings WHERE key = 'pairing_channel_id'").first<{ value: string }>();
+    expect(stored?.value).toMatch(/^id-/);
   });
 });

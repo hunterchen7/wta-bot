@@ -30,7 +30,7 @@ export const adminApi = new Hono<{ Bindings: Env }>();
 
 const participantStatuses = new Set(['active', 'paused', 'held', 'removed', 'completed']);
 const editableSettingKeys = new Set<SettingKey>([
-  'announce_channel_id', 'organizer_channel_id', 'threads_channel_id',
+  'announce_channel_id', 'pairing_channel_id', 'organizer_channel_id', 'threads_channel_id',
   'participant_role_id', 'organizer_role_id', 'packet_mode', 'packet_lead_hours', 'question_bank_public',
 ]);
 const packetLeadOptions = new Set(['scheduled', '1', '6', '12', '24', '48']);

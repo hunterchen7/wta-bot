@@ -8,7 +8,9 @@ import { SelectControl } from '../../components/SelectControl';
 import { useAdminData } from '../../hooks/useAdminData';
 
 const settingFields = [
-  ['announce_channel_id', 'Announcements channel', 'Weekly opt-in and pairing announcements'], ['organizer_channel_id', 'Organizer channel', 'Digests, case files, and operational alerts'],
+  ['announce_channel_id', 'Announcements channel', 'Public program news and important dates'],
+  ['pairing_channel_id', 'Pairing channel', 'Participant-only round opt-ins and pairing notices'],
+  ['organizer_channel_id', 'Organizer channel', 'Digests, case files, and operational alerts'],
   ['threads_channel_id', 'Interview threads channel', 'Parent channel for session threads'],
   ['participant_role_id', 'Participant role', 'Granted after completed enrollment'], ['organizer_role_id', 'Organizer role', 'Admin access fallback and Discord permissions'],
 ] as const;
