@@ -271,6 +271,12 @@ describe('full weekly cycle', () => {
     ).first<{ payload: string }>();
     expect(pairingAnnouncement).not.toBeNull();
     expect(JSON.parse(pairingAnnouncement!.payload).channelId).toBe('558');
+    expect(pairingAnnouncement!.payload).toContain(
+      'Round 1 pairings are out!** Check your DMs and session threads.',
+    );
+    expect(pairingAnnouncement!.payload).not.toMatch(
+      /\d+ sessions across \d+ participants/,
+    );
     expect(pairingAnnouncement!.payload).not.toContain('Round one problem');
     expect(pairingAnnouncement!.payload).not.toContain('/bank');
 

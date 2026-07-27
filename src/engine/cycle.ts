@@ -263,7 +263,7 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
     await enqueue(env, 'channel_msg', {
       channelId: pairingChannelId,
       message: {
-        content: `🤝 **Round ${week.idx} pairings are out** — ${result.edges.length} sessions across ${perPerson.size} participants. Check your DMs and session threads!${bankLines}`,
+        content: `🤝 **Round ${week.idx} pairings are out!** Check your DMs and session threads.${bankLines}`,
       },
     });
   }
