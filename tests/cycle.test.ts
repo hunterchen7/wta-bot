@@ -142,7 +142,8 @@ describe('full weekly cycle', () => {
     await env.DB.prepare(
       `INSERT INTO settings (key, value) VALUES
        ('threads_channel_id', '555'), ('announce_channel_id', '556'),
-       ('pairing_channel_id', '558'), ('organizer_channel_id', '557')
+       ('pairing_channel_id', '558'), ('organizer_channel_id', '557'),
+       ('participant_role_id', 'participant-role')
        ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
     ).run();
 
@@ -270,10 +271,18 @@ describe('full weekly cycle', () => {
       "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%pairings are out%' ORDER BY id DESC LIMIT 1",
     ).first<{ payload: string }>();
     expect(pairingAnnouncement).not.toBeNull();
-    expect(JSON.parse(pairingAnnouncement!.payload).channelId).toBe('558');
+    const pairingAnnouncementPayload = JSON.parse(pairingAnnouncement!.payload);
+    expect(pairingAnnouncementPayload.channelId).toBe('558');
     expect(pairingAnnouncement!.payload).toContain(
       'Round 1 pairings are out!** Check your DMs and session threads.',
     );
+    expect(pairingAnnouncementPayload.message.content).toContain(
+      '<@&participant-role> 🤝',
+    );
+    expect(pairingAnnouncementPayload.message.allowed_mentions).toEqual({
+      parse: [],
+      roles: ['participant-role'],
+    });
     expect(pairingAnnouncement!.payload).not.toMatch(
       /\d+ sessions across \d+ participants/,
     );

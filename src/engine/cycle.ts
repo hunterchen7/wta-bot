@@ -127,7 +127,14 @@ export function sessionButtons(sessionId: number) {
 }
 
 export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promise<{ sessions: number; unmatched: number }> {
-  const cfg = await getSettings(env, ['pairing_channel_id', 'announce_channel_id', 'threads_channel_id', 'organizer_channel_id', 'question_bank_public']);
+  const cfg = await getSettings(env, [
+    'pairing_channel_id',
+    'announce_channel_id',
+    'threads_channel_id',
+    'organizer_channel_id',
+    'participant_role_id',
+    'question_bank_public',
+  ]);
 
   const { results: optins } = await env.DB.prepare(
     `SELECT o.participant_id, o.wants_double, o.standby, o.regular_opt_in, o.extra_interviewer,
@@ -246,6 +253,9 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
 
   const pairingChannelId = cfg.pairing_channel_id ?? cfg.announce_channel_id;
   if (pairingChannelId) {
+    const participantRoleMention = cfg.participant_role_id
+      ? `<@&${cfg.participant_role_id}> `
+      : '';
     let bankLines = '';
     if (cfg.question_bank_public === 'on') {
       const { results: bank } = await env.DB.prepare(
@@ -263,7 +273,13 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
     await enqueue(env, 'channel_msg', {
       channelId: pairingChannelId,
       message: {
-        content: `🤝 **Round ${week.idx} pairings are out!** Check your DMs and session threads.${bankLines}`,
+        content:
+          `${participantRoleMention}🤝 **Round ${week.idx} pairings are out!** ` +
+          `Check your DMs and session threads.${bankLines}`,
+        allowed_mentions: {
+          parse: [],
+          roles: cfg.participant_role_id ? [cfg.participant_role_id] : [],
+        },
       },
     });
   }
