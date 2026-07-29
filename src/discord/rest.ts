@@ -147,6 +147,14 @@ export class DiscordRest {
     return this.request('PUT', `/channels/${threadId}/thread-members/${userId}`);
   }
 
+  async removeThreadMember(threadId: string, userId: string) {
+    return this.request('DELETE', `/channels/${threadId}/thread-members/${userId}`);
+  }
+
+  async renameThread(threadId: string, name: string) {
+    return this.request('PATCH', `/channels/${threadId}`, { name: name.slice(0, 100) });
+  }
+
   async addRole(guildId: string, userId: string, roleId: string) {
     return this.request('PUT', `/guilds/${guildId}/members/${userId}/roles/${roleId}`);
   }

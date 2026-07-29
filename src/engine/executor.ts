@@ -60,6 +60,14 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       await needRest().addThreadMember(payload.threadId, payload.userId);
       return;
 
+    case 'thread_member_remove':
+      await needRest().removeThreadMember(payload.threadId, payload.userId);
+      return;
+
+    case 'thread_rename':
+      await needRest().renameThread(payload.threadId, payload.name);
+      return;
+
     case 'role_add':
       await needRest().addRole(payload.guildId, payload.userId, payload.roleId);
       return;

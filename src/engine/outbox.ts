@@ -11,6 +11,8 @@ export type OutboxKind =
   | 'thread_create' // { sessionId, channelId, name, starter }
   | 'thread_close' // { channelId, name, message } — post final context, then rename, lock, and archive
   | 'thread_member_add' // { threadId, userId } — add a participant or organizer to a private thread
+  | 'thread_member_remove' // { threadId, userId } — revoke access to a private thread
+  | 'thread_rename' // { threadId, name } — keep a session thread aligned with its participants
   | 'role_add' // { guildId, userId, roleId }
   | 'nickname' // { guildId, userId, nick }
   | 'discord_identity_sync' // { guildId, userId } — refresh username + server nickname

@@ -134,6 +134,42 @@ describe('support threads', () => {
     }]);
   });
 
+  it('can remove a member and rename an existing private thread through the bot', async () => {
+    const calls: Array<{ method: string; url: string; body?: unknown }> = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        method: init?.method ?? 'GET',
+        url: String(input instanceof Request ? input.url : input),
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
+      });
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    await executeOutbox(
+      { ...env, DISCORD_TOKEN: 'token' } as any,
+      'thread_member_remove',
+      { threadId: 'session-thread', userId: 'former-member' },
+    );
+    await executeOutbox(
+      { ...env, DISCORD_TOKEN: 'token' } as any,
+      'thread_rename',
+      { threadId: 'session-thread', name: 'r1 re-pair · Hunter → Cole' },
+    );
+
+    expect(calls).toEqual([
+      {
+        method: 'DELETE',
+        url: 'https://discord.com/api/v10/channels/session-thread/thread-members/former-member',
+        body: undefined,
+      },
+      {
+        method: 'PATCH',
+        url: 'https://discord.com/api/v10/channels/session-thread',
+        body: { name: 'r1 re-pair · Hunter → Cole' },
+      },
+    ]);
+  });
+
   it('keeps the fallback channel participant-only', () => {
     expect(supportOverwrites('guild', 'participant', 'organizer', 'bot')).toEqual([
       { id: 'guild', type: 0, deny: '1024' },
