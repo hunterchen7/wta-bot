@@ -143,6 +143,10 @@ export class DiscordRest {
     });
   }
 
+  async addThreadMember(threadId: string, userId: string) {
+    return this.request('PUT', `/channels/${threadId}/thread-members/${userId}`);
+  }
+
   async addRole(guildId: string, userId: string, roleId: string) {
     return this.request('PUT', `/guilds/${guildId}/members/${userId}/roles/${roleId}`);
   }

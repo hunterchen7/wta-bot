@@ -56,6 +56,10 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       return;
     }
 
+    case 'thread_member_add':
+      await needRest().addThreadMember(payload.threadId, payload.userId);
+      return;
+
     case 'role_add':
       await needRest().addRole(payload.guildId, payload.userId, payload.roleId);
       return;

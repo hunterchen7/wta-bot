@@ -112,6 +112,28 @@ describe('support threads', () => {
     });
   });
 
+  it('can add an organizer to an existing private thread through the outbox executor', async () => {
+    const calls: Array<{ method: string; url: string }> = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({
+        method: init?.method ?? 'GET',
+        url: String(input instanceof Request ? input.url : input),
+      });
+      return Promise.resolve(new Response(null, { status: 204 }));
+    });
+
+    await executeOutbox(
+      { ...env, DISCORD_TOKEN: 'token' } as any,
+      'thread_member_add',
+      { threadId: 'session-thread', userId: 'organizer-user' },
+    );
+
+    expect(calls).toEqual([{
+      method: 'PUT',
+      url: 'https://discord.com/api/v10/channels/session-thread/thread-members/organizer-user',
+    }]);
+  });
+
   it('keeps the fallback channel participant-only', () => {
     expect(supportOverwrites('guild', 'participant', 'organizer', 'bot')).toEqual([
       { id: 'guild', type: 0, deny: '1024' },
