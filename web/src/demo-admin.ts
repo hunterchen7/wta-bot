@@ -1,4 +1,4 @@
-import type { AdminMcpData, AdminSettingsData, AnalyticsData, OperationsData, OverviewData, ParticipantsData, ProblemsData, ReviewsData, RoundsData } from './admin-types';
+import type { AdminMcpData, AdminSettingsData, AnalyticsData, OperationsData, OverviewData, ParticipantsData, ProblemsData, ReviewsData, RoundReportsData, RoundsData } from './admin-types';
 
 const now = new Date('2026-08-13T14:00:00.000Z').toISOString();
 const cohort = { id: 1, name: 'Summer 2026', start_date: '2026-07-26', weeks_count: 3, status: 'active' };
@@ -39,11 +39,11 @@ const overview: OverviewData = {
 };
 
 const sessions = [
-  { id: 41, round: 2, interviewer_name: 'Alex Chen', interviewee_name: 'Jordan Lee', state: 'completed', scheduled_at: '2026-08-10T23:00:00.000Z', origin: 'match', reports_in: 2, review_state: 'none', problem_number: 56, problem_title: 'Merge Intervals', problem_difficulty: 'medium', packet_sent_at: '2026-08-09T17:00:00.000Z' },
-  { id: 42, round: 2, interviewer_name: 'Maya Singh', interviewee_name: 'Sam Wilson', state: 'scheduled', scheduled_at: '2026-08-15T18:30:00.000Z', origin: 'match', reports_in: 0, review_state: 'none', problem_number: 20, problem_title: 'Valid Parentheses', problem_difficulty: 'easy', packet_sent_at: '2026-08-13T14:00:00.000Z' },
-  { id: 43, round: 2, interviewer_name: 'Taylor Kim', interviewee_name: 'Priya Patel', state: 'pending_schedule', scheduled_at: null, origin: 'match', reports_in: 0, review_state: 'none', problem_number: null, problem_title: null, problem_difficulty: null, packet_sent_at: null },
-  { id: 44, round: 2, interviewer_name: 'Noah Martin', interviewee_name: 'Amara Okafor', state: 'broken', scheduled_at: null, origin: 'match', reports_in: 0, review_state: 'none', problem_number: 200, problem_title: 'Number of Islands', problem_difficulty: 'medium', packet_sent_at: null },
-  { id: 45, round: 2, interviewer_name: 'Leo Zhang', interviewee_name: 'Sofia Rodriguez', state: 'scheduled', scheduled_at: '2026-08-16T20:00:00.000Z', origin: 'repair', reports_in: 0, review_state: 'none', problem_number: 238, problem_title: 'Product of Array Except Self', problem_difficulty: 'medium', packet_sent_at: null },
+  { id: 41, round: 2, interviewer_id: 1, interviewee_id: 2, interviewer_name: 'Alex Chen', interviewee_name: 'Jordan Lee', state: 'completed', scheduled_at: '2026-08-10T23:00:00.000Z', origin: 'match', reports_in: 2, review_state: 'none', problem_number: 56, problem_title: 'Merge Intervals', problem_difficulty: 'medium', packet_sent_at: '2026-08-09T17:00:00.000Z' },
+  { id: 42, round: 2, interviewer_id: 3, interviewee_id: 4, interviewer_name: 'Maya Singh', interviewee_name: 'Sam Wilson', state: 'scheduled', scheduled_at: '2026-08-15T18:30:00.000Z', origin: 'match', reports_in: 0, review_state: 'none', problem_number: 20, problem_title: 'Valid Parentheses', problem_difficulty: 'easy', packet_sent_at: '2026-08-13T14:00:00.000Z' },
+  { id: 43, round: 2, interviewer_id: 5, interviewee_id: 6, interviewer_name: 'Taylor Kim', interviewee_name: 'Priya Patel', state: 'pending_schedule', scheduled_at: null, origin: 'match', reports_in: 0, review_state: 'none', problem_number: null, problem_title: null, problem_difficulty: null, packet_sent_at: null },
+  { id: 44, round: 2, interviewer_id: 7, interviewee_id: 8, interviewer_name: 'Noah Martin', interviewee_name: 'Amara Okafor', state: 'broken', scheduled_at: null, origin: 'match', reports_in: 0, review_state: 'none', problem_number: 200, problem_title: 'Number of Islands', problem_difficulty: 'medium', packet_sent_at: null },
+  { id: 45, round: 2, interviewer_id: 9, interviewee_id: 10, interviewer_name: 'Leo Zhang', interviewee_name: 'Sofia Rodriguez', state: 'scheduled', scheduled_at: '2026-08-16T20:00:00.000Z', origin: 'repair', reports_in: 0, review_state: 'none', problem_number: 238, problem_title: 'Product of Array Except Self', problem_difficulty: 'medium', packet_sent_at: null },
 ];
 
 const problems: ProblemsData['problems'] = [
@@ -90,6 +90,36 @@ export async function adminDemoRequest(path: string, init?: RequestInit): Promis
     const id = Number(path.split('/').at(-1)); const participant = participants.find((row) => row.id === id) ?? participants[0]!;
     return { participant: { ...participant, opportunities: '["internships","new_grad"]', topics: '["dsa","system_design"]', prior_wta: id % 2, experience_band: '3-4', blurb: 'Interested in infrastructure and developer tools, especially work that improves how engineering teams build and operate software.', interests: 'System design practice and communicating tradeoffs clearly.', prior_feedback: id % 2 ? 'More structured mock-interview feedback would be helpful.' : null, resume: participant.resume_filename ? { filename: participant.resume_filename, contentType: participant.resume_content_type, bytes: participant.resume_bytes, uploadedAt: participant.resume_uploaded_at } : null, updated_at: now }, sessions: sessions.slice(0, 3).map((session, index) => ({ ...session, forms: index === 2 ? [] : [{ id: 500 + index, kind: index === 0 ? 'interviewer_report' as const : 'interviewee_report' as const, session_id: session.id, deadline_at: weeks[1]!.reports_due_at, submitted_at: index === 0 ? now : null, url: `/f/demo-${500 + index}` }] })), incidents: participant.strikes ? [{ id: 1, kind: 'unresponsive', state: 'confirmed', created_at: now, reporter_name: 'Jordan Lee' }] : [], audit: overview.recentAudit };
   }
+  if (path.match(/^\/rounds\/\d+\/reports$/)) return {
+    week: weeks[1]!,
+    reports: [
+      {
+        id: 501, kind: 'interviewer_report', session_id: 41, assignee_id: 1,
+        assignee_name: 'Alex Chen', assignee_discord_username: 'alexchen',
+        submitted_at: now, interviewer_id: 1, interviewee_id: 2,
+        interviewer_name: 'Alex Chen', interviewee_name: 'Jordan Lee',
+        problem_id: 1, problem_number: 56, problem_title: 'Merge Intervals',
+        answers: [
+          { id: 'attendance_partner', label: 'Did your interviewee attend the scheduled interview?', type: 'radio', value: 'Yes' },
+          { id: 'rating_experience', label: 'Rate the quality of your experience', type: 'scale', value: '5' },
+          { id: 'strengths', label: 'What did your interviewee do well that they should keep doing?', type: 'textarea', value: 'They communicated tradeoffs clearly and tested edge cases without prompting.' },
+          { id: 'code', label: 'Submit the code that your interviewee wrote', type: 'textarea', value: 'function merge(intervals) {\\n  return intervals;\\n}' },
+        ],
+      },
+      {
+        id: 502, kind: 'interviewee_report', session_id: 41, assignee_id: 2,
+        assignee_name: 'Jordan Lee', assignee_discord_username: 'jordanlee',
+        submitted_at: now, interviewer_id: 1, interviewee_id: 2,
+        interviewer_name: 'Alex Chen', interviewee_name: 'Jordan Lee',
+        problem_id: 1, problem_number: 56, problem_title: 'Merge Intervals',
+        answers: [
+          { id: 'attendance_partner', label: 'Did your interviewer show up to your scheduled interview?', type: 'radio', value: 'Yes' },
+          { id: 'rating_experience', label: 'Rate the quality of your experience', type: 'scale', value: '4' },
+          { id: 'partner_feedback', label: 'Any feedback for your interviewer?', type: 'textarea', value: 'Helpful prompts and good pacing.' },
+        ],
+      },
+    ],
+  } satisfies RoundReportsData;
   if (path.startsWith('/rounds')) return { cohort, weeks, selectedWeek: weeks[1], sessions, participants: participants.filter((p) => p.status === 'active').map((p) => ({ id: p.id, name: p.name, discord_username: p.discord_username })), optins: participants.filter((p) => p.opted_in).map((p) => ({ participant_id: p.id, name: p.name, regular_opt_in: 1, extra_interviewer: p.id === 4 ? 1 : 0, standby: p.id === 7 ? 1 : 0, wants_double: p.id === 4 ? 1 : 0, status: p.status })), repairs: [{ id: 1, participant_id: 8, name: 'Amara Okafor', need: 'interviewer', state: 'open', created_at: now }] } satisfies RoundsData;
   if (path === '/reviews') return { reviews: [
     { id: 71, review_state: 'pending', state: 'completed', round: 3, interviewer_name: 'Jordan Lee', interviewee_name: 'Maya Singh', interviewee_id: 3, video_url: 'https://example.com/recording' },

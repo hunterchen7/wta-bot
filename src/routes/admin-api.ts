@@ -346,7 +346,7 @@ adminApi.get('/api/admin/rounds', async (c) => {
   if (!cohort) return c.json({ cohort: null, weeks: [], selectedWeek: null, sessions: [], optins: [], participants: [], repairs: [] });
   const weeks = await cohortWeeks(c.env, cohort.id);
   const requested = Number(c.req.query('week'));
-  const selectedWeek = weeks.find((week) => week.id === requested) ?? weeks.at(-1)!;
+  const selectedWeek = weeks.find((week) => week.id === requested) ?? currentProgramWeek(weeks) ?? weeks.at(-1)!;
   const [sessions, optins, participants, repairs] = await Promise.all([
     c.env.DB.prepare(
       `SELECT s.*, pi.name AS interviewer_name, pe.name AS interviewee_name,
@@ -370,6 +370,64 @@ adminApi.get('/api/admin/rounds', async (c) => {
     ).bind(selectedWeek.id).all<any>(),
   ]);
   return c.json({ cohort, weeks, selectedWeek, sessions: sessions.results, optins: optins.results, participants: participants.results, repairs: repairs.results });
+});
+
+adminApi.get('/api/admin/rounds/:weekId/reports', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const weekId = Number(c.req.param('weekId'));
+  if (!Number.isInteger(weekId)) return c.json({ error: 'invalid_week_id' }, 400);
+  const cohort = await activeCohort(c.env);
+  const week = cohort
+    ? (await cohortWeeks(c.env, cohort.id)).find((candidate) => candidate.id === weekId)
+    : null;
+  if (!week) return c.json({ error: 'not_found', message: 'That round is not part of the active cohort.' }, 404);
+
+  const { results } = await c.env.DB.prepare(
+    `SELECT f.id, f.kind, f.session_id, f.assignee_id, f.submitted_at, f.payload,
+            pa.name AS assignee_name, pa.discord_username AS assignee_discord_username,
+            s.interviewer_id, s.interviewee_id, s.problem_id,
+            pi.name AS interviewer_name, pe.name AS interviewee_name,
+            p.number AS problem_number, p.title AS problem_title
+     FROM form_instances f
+     JOIN sessions s ON s.id = f.session_id
+     JOIN participants pa ON pa.id = f.assignee_id
+     JOIN participants pi ON pi.id = s.interviewer_id
+     JOIN participants pe ON pe.id = s.interviewee_id
+     LEFT JOIN problems p ON p.id = s.problem_id
+     WHERE s.week_id = ?1 AND f.submitted_at IS NOT NULL
+     ORDER BY f.submitted_at DESC, f.id DESC`,
+  ).bind(weekId).all<any>();
+
+  const reports = results.map((row) => {
+    let payload: Record<string, string> = {};
+    try { payload = JSON.parse(row.payload ?? '{}'); } catch { payload = {}; }
+    const baseFields = fieldsFor(row.kind) ?? [];
+    const fields = row.kind === 'interviewer_report'
+      ? [
+          ...baseFields.slice(0, 4),
+          { id: 'problem_used', label: 'Which interview question did you choose?', type: 'select' as const },
+          ...baseFields.slice(4),
+        ]
+      : baseFields;
+    const known = new Set(fields.map((field) => field.id));
+    const answers = fields
+      .filter((field) => payload[field.id] != null && payload[field.id] !== '')
+      .map((field) => ({
+        id: field.id,
+        label: field.label,
+        type: field.type,
+        value: field.id === 'problem_used' && row.problem_title
+          ? `${row.problem_number ? `#${row.problem_number} · ` : ''}${row.problem_title}`
+          : field.options?.find((option) => option.value === payload[field.id])?.label ?? payload[field.id],
+      }));
+    for (const [id, value] of Object.entries(payload)) {
+      if (!known.has(id) && value) answers.push({ id, label: id.replaceAll('_', ' '), type: 'text', value });
+    }
+    const { payload: _payload, ...safeRow } = row;
+    return { ...safeRow, answers };
+  });
+  return c.json({ week, reports });
 });
 
 adminApi.post('/api/admin/rounds/:weekId/extra-interviewer', async (c) => {

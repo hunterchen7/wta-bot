@@ -185,6 +185,8 @@ describe('admin operational data', () => {
     const rounds = await (await request(`/api/admin/rounds?week=${weekId}`)).json<any>();
     expect(rounds.sessions[0]).toMatchObject({
       id: 9201,
+      interviewer_id: ADMIN_ID,
+      interviewee_id: STUDENT_ID,
       interviewer_name: 'Admin Person',
       problem_number: null,
       problem_title: 'Two Sum',
@@ -194,6 +196,23 @@ describe('admin operational data', () => {
     expect(rounds.selectedWeek.id).toBe(weekId);
     expect(rounds.participants).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: STUDENT_ID, name: 'Student Person', discord_username: 'student.account' }),
+    ]));
+    const defaultRounds = await (await request('/api/admin/rounds')).json<any>();
+    expect(defaultRounds.selectedWeek.id).toBe(weekId);
+
+    const reports = await (await request(`/api/admin/rounds/${weekId}/reports`)).json<any>();
+    expect(reports.week.id).toBe(weekId);
+    expect(reports.reports).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 9401,
+        assignee_id: STUDENT_ID,
+        assignee_name: 'Student Person',
+        kind: 'interviewee_report',
+        answers: expect.arrayContaining([
+          expect.objectContaining({ id: 'rating_experience', label: 'Rate the quality of your experience', value: '4' }),
+          expect.objectContaining({ id: 'video_url', value: 'https://example.com/video' }),
+        ]),
+      }),
     ]));
 
     await env.DB.prepare(

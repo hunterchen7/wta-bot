@@ -1,10 +1,11 @@
 import { useDeferredValue, useEffect, useMemo, useState, type DragEvent as ReactDragEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
-import type { ParticipantDetail, ParticipantRow, ParticipantsData } from '../../admin-types';
+import type { ParticipantRow, ParticipantsData } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { Badge, Button, Dialog, DialogClose, EmptyState, ErrorState, formatDate, inputClass, LoadingState, PageIntro, Panel, tableClass, tdClass, thClass } from '../../components/AdminUI';
 import { Icon } from '../../components/Icon';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { ResumePreviewDialog, type ResumePreviewTarget } from '../../components/ResumePreviewDialog';
+import { ParticipantProfileDialog } from '../../components/ParticipantProfileDialog';
 import { ScrollArea } from '../../components/ui/scroll-area';
 import { useAdminData } from '../../hooks/useAdminData';
 import { STANDARD_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
@@ -58,7 +59,7 @@ export function ParticipantsPage() {
   const [experience, setExperience] = useState('all'); const [opportunity, setOpportunity] = useState('all'); const [topic, setTopic] = useState('all');
   const [roundState, setRoundState] = useState('all'); const [attention, setAttention] = useState('all'); const [email, setEmail] = useState('all');
   const [selected, setSelected] = useState<Set<number>>(() => new Set());
-  const [detail, setDetail] = useState<ParticipantDetail | null>(null); const [detailLoading, setDetailLoading] = useState(false);
+  const [profileParticipantId, setProfileParticipantId] = useState<number | null>(null);
   const [resumePreview, setResumePreview] = useState<ResumePreviewTarget | null>(null);
   const [bulkOpen, setBulkOpen] = useState<'status' | 'message' | null>(null); const [busy, setBusy] = useState(false); const [syncing, setSyncing] = useState(false); const [notice, setNotice] = useState<string | null>(null);
   const [columnOrder, setColumnOrder] = useState<ColumnId[]>(readColumnOrder);
@@ -105,7 +106,7 @@ export function ParticipantsPage() {
 
   const allVisibleSelected = visibleParticipants.length > 0 && visibleParticipants.every((row) => selected.has(row.id));
   const toggleAll = () => setSelected((current) => { const next = new Set(current); if (allVisibleSelected) visibleParticipants.forEach((row) => next.delete(row.id)); else visibleParticipants.forEach((row) => next.add(row.id)); return next; });
-  const openDetail = async (participant: ParticipantRow) => { setDetailLoading(true); setDetail(null); try { setDetail(await adminRequest<ParticipantDetail>(`/participants/${participant.id}`)); } finally { setDetailLoading(false); } };
+  const openDetail = (participant: ParticipantRow) => setProfileParticipantId(participant.id);
   const runStatus = async (value: string, note: string) => { setBusy(true); try { const result = await adminRequest<{ updated: number }>('/participants/status', { method: 'POST', body: JSON.stringify({ ids: [...selected], status: value, note }) }); setNotice(`${result.updated} participant${result.updated === 1 ? '' : 's'} updated.`); setSelected(new Set()); setBulkOpen(null); await reload(); } finally { setBusy(false); } };
   const runMessage = async (channel: string, message: string) => { setBusy(true); try { const result = await adminRequest<{ queued: number; skipped: number }>('/participants/message', { method: 'POST', body: JSON.stringify({ ids: [...selected], channel, message }) }); setNotice(`${result.queued} message${result.queued === 1 ? '' : 's'} queued${result.skipped ? `; ${result.skipped} skipped` : ''}.`); setSelected(new Set()); setBulkOpen(null); } finally { setBusy(false); } };
   const syncDiscord = async () => { setSyncing(true); try { const result = await adminRequest<{ queued: number }>('/participants/sync-discord', { method: 'POST', body: '{}' }); setNotice(`${result.queued} Discord identit${result.queued === 1 ? 'y' : 'ies'} queued for refresh. Updated names will appear as the outbox drains.`); } finally { setSyncing(false); } };
@@ -170,7 +171,7 @@ export function ParticipantsPage() {
         </tr>)}</tbody>
       </table></div></ScrollArea> : <EmptyState title="No participants match" description="Try a broader search or a different status filter." />}
     </Panel>
-    {(detail || detailLoading) ? <ParticipantDrawer detail={detail} loading={detailLoading} onClose={() => { setDetail(null); setDetailLoading(false); }} onPreviewResume={setResumePreview} /> : null}
+    {profileParticipantId != null ? <ParticipantProfileDialog participantId={profileParticipantId} onClose={() => setProfileParticipantId(null)} /> : null}
     {resumePreview ? <ResumePreviewDialog target={resumePreview} onClose={() => setResumePreview(null)} /> : null}
     {bulkOpen === 'status' ? <StatusDialog count={selected.size} busy={busy} onClose={() => setBulkOpen(null)} onSubmit={runStatus} /> : null}
     {bulkOpen === 'message' ? <MessageDialog count={selected.size} busy={busy} onClose={() => setBulkOpen(null)} onSubmit={runMessage} /> : null}
@@ -216,10 +217,10 @@ function SortableColumnHeader({ column, sort, dragging, dropTarget, onSort, onDr
   </th>;
 }
 
-function ParticipantCell({ column, participant, currentWeek, onOpen, onPreviewResume }: { column: ColumnId; participant: ParticipantRow; currentWeek: ParticipantsData['currentWeek']; onOpen: (participant: ParticipantRow) => Promise<void>; onPreviewResume: (target: ResumePreviewTarget) => void }) {
+function ParticipantCell({ column, participant, currentWeek, onOpen, onPreviewResume }: { column: ColumnId; participant: ParticipantRow; currentWeek: ParticipantsData['currentWeek']; onOpen: (participant: ParticipantRow) => void; onPreviewResume: (target: ResumePreviewTarget) => void }) {
   let content: React.ReactNode;
   switch (column) {
-    case 'participant': content = <button className="cursor-pointer text-left" onClick={() => void onOpen(participant)}><span className="block font-bold text-foreground group-hover:text-western-700 dark:group-hover:text-western-300">{participant.name ?? '(unnamed)'}</span><span className="mt-1 block text-xs font-semibold text-muted-foreground">Nickname: {participant.discord_nickname ?? 'not synced'}</span><span className="block text-xs font-semibold text-indigo-600 dark:text-indigo-300">{participant.discord_username ? `@${participant.discord_username}` : 'Discord not synced'}</span><span className="block font-mono text-[0.65rem] text-muted-foreground">{participant.discord_id}</span></button>; break;
+    case 'participant': content = <button className="cursor-pointer text-left" onClick={() => onOpen(participant)}><span className="block font-bold text-foreground group-hover:text-western-700 dark:group-hover:text-western-300">{participant.name ?? '(unnamed)'}</span><span className="mt-1 block text-xs font-semibold text-muted-foreground">Nickname: {participant.discord_nickname ?? 'not synced'}</span><span className="block text-xs font-semibold text-indigo-600 dark:text-indigo-300">{participant.discord_username ? `@${participant.discord_username}` : 'Discord not synced'}</span><span className="block font-mono text-[0.65rem] text-muted-foreground">{participant.discord_id}</span></button>; break;
     case 'joined': content = <RosterDateTime value={participant.created_at} />; break;
     case 'updated': content = <RosterDateTime value={participant.updated_at} />; break;
     case 'contact': content = <><a className="block text-xs font-semibold text-western-700 hover:underline dark:text-western-300" href={participant.preferred_email ? `mailto:${participant.preferred_email}` : undefined}>{participant.preferred_email ?? '—'}</a><a className="mt-1 block text-xs text-muted-foreground hover:underline" href={participant.western_email ? `mailto:${participant.western_email}` : undefined}>{participant.western_email ?? '—'}</a></>; break;
@@ -297,63 +298,6 @@ function asColumnId(value: unknown): ColumnId | null { return typeof value === '
 function timestampDate(value: string | null | undefined) { if (!value) return null; const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value) ? `${value.replace(' ', 'T')}Z` : value; const date = new Date(normalized); return Number.isNaN(date.getTime()) ? null : date; }
 function dateValue(value: string | null | undefined) { return timestampDate(value)?.getTime() ?? null; }
 
-function ParticipantDrawer({ detail, loading, onClose, onPreviewResume }: { detail: ParticipantDetail | null; loading: boolean; onClose: () => void; onPreviewResume: (target: ResumePreviewTarget) => void }) {
-  return <Dialog wide title={detail?.participant.name ?? 'Participant'} description={detail ? `Server nickname: ${detail.participant.discord_nickname ?? 'not synced'} · Discord: ${detail.participant.discord_username ? `@${detail.participant.discord_username}` : 'not synced'} · ID ${detail.participant.discord_id}` : 'Loading participant history…'} onClose={onClose}>
-    {loading || !detail ? <LoadingState /> : <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Fact label="Status"><Badge value={detail.participant.status} /></Fact><Fact label="Program" value={`${detail.participant.year ?? '—'} · ${detail.participant.program ?? '—'}`} /><Fact label="Experience" value={detail.participant.experience_band ?? '—'} /><Fact label="Joined" value={formatDate(detail.participant.created_at, false)} /></div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DetailSection title="Contact"><DetailRow label="Preferred email" value={detail.participant.preferred_email} link="email" /><DetailRow label="UWO email" value={detail.participant.western_email} link="email" /><DetailRow label="Email reminders" value={detail.participant.email_ok ? 'Enabled' : 'Discord only'} /><DetailRow label="Profile updated" value={formatDate(detail.participant.updated_at)} /></DetailSection>
-        <DetailSection title="Enrollment profile"><DetailRow label="Targeting" value={formatChoices(detail.participant.opportunities)} /><DetailRow label="Practice topics" value={formatChoices(detail.participant.topics)} /><DetailRow label="Prior WTA" value={detail.participant.prior_wta ? 'Yes' : 'No'} />{detail.participant.removed_reason ? <DetailRow label="Removal reason" value={detail.participant.removed_reason} /> : null}</DetailSection>
-        <DetailSection title="Application materials" className="lg:col-span-2"><DetailRow label="LinkedIn profile" value={detail.participant.linkedin_url} link="url" /><DetailRow label="Other profile link" value={detail.participant.other_url} link="url" /><DetailRow label="Resume" value={detail.participant.resume?.filename} onAction={detail.participant.resume ? () => onPreviewResume({ participantId: detail.participant.id, participantName: detail.participant.name ?? 'Unnamed participant', filename: detail.participant.resume.filename, contentType: detail.participant.resume.contentType, bytes: detail.participant.resume.bytes, uploadedAt: detail.participant.resume.uploadedAt }) : undefined} /><DetailRow label="Resume size" value={detail.participant.resume ? formatBytes(detail.participant.resume.bytes) : null} /><DetailRow label="Resume uploaded" value={detail.participant.resume?.uploadedAt ? formatDate(detail.participant.resume.uploadedAt) : null} /></DetailSection>
-      </div>
-      {detail.participant.blurb || detail.participant.interests || detail.participant.prior_feedback ? <div><SectionTitle>Enrollment context</SectionTitle><div className="grid gap-3 lg:grid-cols-2">{detail.participant.blurb ? <ProfileNote className="lg:col-span-2" label="Ideal role and motivation" value={detail.participant.blurb} /> : null}{detail.participant.interests ? <ProfileNote label="Other learning interests" value={detail.participant.interests} /> : null}{detail.participant.prior_feedback ? <ProfileNote label="Prior-program feedback" value={detail.participant.prior_feedback} /> : null}</div></div> : null}
-      <div><SectionTitle>Sessions & survey links</SectionTitle><div className="overflow-hidden rounded-xl border border-slate-200 dark:border-border">{detail.sessions.length ? detail.sessions.map((session) => <div key={session.id} className="border-b border-slate-100 px-4 py-3 last:border-0 dark:border-border"><div className="flex flex-wrap items-center gap-x-4 gap-y-1"><span className="font-bold text-slate-900 dark:text-foreground">R{session.round} · #{session.id}</span><span className="text-sm text-slate-600 dark:text-muted-foreground">{session.interviewer_name} → {session.interviewee_name}</span><Badge value={session.state} /><span className="ml-auto text-xs text-slate-500 dark:text-muted-foreground">{session.reports_in}/2 reports</span></div><ParticipantSurveyLinks session={session} /></div>) : <div className="p-4 text-sm text-slate-500">No sessions yet.</div>}</div></div>
-      <div className="grid gap-5 lg:grid-cols-2"><div><SectionTitle>Incidents</SectionTitle>{detail.incidents.length ? detail.incidents.map((incident) => <div key={incident.id} className="mb-2 rounded-xl border border-slate-200 p-3 text-sm"><Badge value={incident.kind} /> <span className="ml-2 text-slate-600">{incident.state} · {formatDate(incident.created_at)}</span></div>) : <p className="text-sm text-slate-500">No incidents.</p>}</div><div><SectionTitle>Audit history</SectionTitle>{detail.audit.length ? detail.audit.map((row) => <div key={row.id} className="mb-2 text-sm"><span className="font-semibold text-slate-800">{row.action.replaceAll('.', ' ')}</span><span className="ml-2 text-xs text-slate-500">{formatDate(row.created_at)}</span></div>) : <p className="text-sm text-slate-500">No organizer actions recorded.</p>}</div></div>
-    </div>}
-  </Dialog>;
-}
-function ParticipantSurveyLinks({ session }: { session: ParticipantDetail['sessions'][number] }) {
-  const [copyState, setCopyState] = useState<{ id: number; status: 'copied' | 'failed' } | null>(null);
-  useEffect(() => {
-    if (!copyState) return;
-    const timer = window.setTimeout(() => setCopyState(null), 1800);
-    return () => window.clearTimeout(timer);
-  }, [copyState]);
-  const copyLink = async (id: number, url: string) => {
-    try {
-      await copyText(new URL(url, window.location.origin).href);
-      setCopyState({ id, status: 'copied' });
-    } catch {
-      setCopyState({ id, status: 'failed' });
-    }
-  };
-  if (!session.forms.length) return <p className="mt-2 text-xs text-slate-500 dark:text-muted-foreground">This participant’s survey link will appear within 30 minutes of the scheduled session.</p>;
-  return <div className="mt-2 flex flex-wrap gap-2">{session.forms.map((form) => {
-    const label = form.kind === 'interviewer_report' ? 'Interviewer survey' : 'Interviewee survey';
-    if (!form.url) return <span key={form.id} className="rounded-lg bg-slate-100 px-2.5 py-1.5 text-xs font-bold text-slate-500 dark:bg-muted dark:text-muted-foreground">{label} · link expired</span>;
-    const state = copyState?.id === form.id ? copyState.status : null;
-    return <div key={form.id} className="flex items-center gap-1.5"><div className="inline-flex overflow-hidden rounded-lg border border-western-200 bg-western-50 dark:border-western-800/70 dark:bg-western-950/40"><button type="button" onClick={() => void copyLink(form.id, form.url!)} className="cursor-pointer px-2.5 py-1.5 text-xs font-bold text-western-800 transition hover:bg-western-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-western-500 focus-visible:ring-inset dark:text-western-200 dark:hover:bg-western-900/50">{state === 'copied' ? 'Copied!' : state === 'failed' ? 'Copy failed' : `Copy ${label.toLowerCase()} link`}</button><a aria-label={`Open ${label.toLowerCase()}`} href={form.url} target="_blank" rel="noreferrer" title="Open survey" className="inline-flex items-center border-l border-western-200 px-2 py-1.5 text-xs font-black text-western-700 transition hover:bg-western-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-western-500 focus-visible:ring-inset dark:border-western-800/70 dark:text-western-300 dark:hover:bg-western-900/50">↗</a></div>{form.submitted_at ? <span className="text-[0.68rem] font-bold text-emerald-700 dark:text-emerald-400">Submitted</span> : null}</div>;
-  })}</div>;
-}
-async function copyText(value: string) {
-  if (navigator.clipboard?.writeText) {
-    try { await navigator.clipboard.writeText(value); return; } catch { /* fall through */ }
-  }
-  const field = document.createElement('textarea');
-  field.value = value;
-  field.setAttribute('readonly', '');
-  field.style.cssText = 'position:fixed;inset:0 auto auto 0;opacity:0;pointer-events:none';
-  document.body.appendChild(field);
-  field.select();
-  const copied = document.execCommand('copy');
-  field.remove();
-  if (!copied) throw new Error('Clipboard access was denied.');
-}
-function Fact({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) { return <div className="rounded-xl bg-slate-50 p-3"><div className="text-[0.65rem] font-black uppercase tracking-wider text-slate-400">{label}</div><div className="mt-1 text-sm font-bold text-slate-800">{children ?? value}</div></div>; }
-function DetailSection({ title, children, className = '' }: { title: string; children: React.ReactNode; className?: string }) { return <section className={`rounded-xl border border-slate-200 p-4 ${className}`}><SectionTitle>{title}</SectionTitle><dl className="divide-y divide-slate-100">{children}</dl></section>; }
-function DetailRow({ label, value, link, onAction }: { label: string; value?: string | null; link?: 'email' | 'url'; onAction?: () => void }) { const destination = link === 'email' && value ? `mailto:${value}` : link === 'url' && value ? value : null; const content = value || 'Not provided'; return <div className="grid grid-cols-[8rem_minmax(0,1fr)] gap-3 py-2.5 text-sm first:pt-0 last:pb-0"><dt className="text-slate-500">{label}</dt><dd className="min-w-0 break-words font-semibold text-slate-800">{onAction ? <button type="button" className="cursor-pointer text-left text-indigo-600 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-indigo-300" onClick={onAction}>{content} · Preview</button> : destination ? <a className="text-indigo-600 hover:underline dark:text-indigo-300" href={destination} target={link === 'email' ? undefined : '_blank'} rel={link === 'email' ? undefined : 'noreferrer'}>{content}</a> : content}</dd></div>; }
-function ProfileNote({ label, value, className = '' }: { label: string; value: string; className?: string }) { return <div className={`rounded-xl border border-slate-200 bg-slate-50/60 p-4 dark:bg-muted/50 ${className}`}><div className="text-[0.65rem] font-black uppercase tracking-wider text-slate-400">{label}</div><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{value}</p></div>; }
-function SectionTitle({ children }: { children: React.ReactNode }) { return <h3 className="mb-2 text-xs font-black uppercase tracking-wider text-slate-500">{children}</h3>; }
 function parseChoices(value: unknown): string[] { if (!value) return []; try { const choices = Array.isArray(value) ? value : JSON.parse(String(value)); return Array.isArray(choices) ? choices.map(String) : []; } catch { return [String(value)]; } }
 function formatChoices(value: unknown) { const choices = parseChoices(value); return choices.length ? choices.map(formatChoice).join(', ') : 'Not provided'; }
 function formatChoice(value: string) { return value.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()); }
