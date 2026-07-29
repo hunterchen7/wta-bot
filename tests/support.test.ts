@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setSetting } from '../src/config';
+import { supportPanelMessage } from '../src/discord/support';
 import { executeOutbox } from '../src/engine/executor';
 import { supportOverwrites } from '../src/engine/support';
 import { asUser, makeSigner, sendInteraction } from './helpers';
@@ -8,6 +9,14 @@ import { asUser, makeSigner, sendInteraction } from './helpers';
 afterEach(() => vi.unstubAllGlobals());
 
 describe('support threads', () => {
+  it('explains privacy without exposing fallback implementation details', () => {
+    expect(supportPanelMessage().content).toContain(
+      'Support threads are private and visible only to you and WTA organizers.',
+    );
+    expect(supportPanelMessage().content).not.toContain('whenever Discord permits');
+    expect(supportPanelMessage().content).not.toContain('participant-only');
+  });
+
   it('queues one private support thread per requester', async () => {
     const signer = await makeSigner();
     await env.DB.prepare(

@@ -20,9 +20,12 @@ export async function ensureSupportChannel(env: Env, requestedGuildId?: string):
 
   const configuredChannel = await getSetting(env, 'support_channel_id');
   const configuredMessage = await getSetting(env, 'support_message_id');
-  if (configuredChannel && configuredMessage) return configuredChannel;
-
   const rest = new DiscordRest(env.DISCORD_TOKEN);
+  if (configuredChannel && configuredMessage) {
+    await rest.editMessage(configuredChannel, configuredMessage, supportPanelMessage());
+    return configuredChannel;
+  }
+
   const cfg = await getSettings(env, ['participant_role_id', 'organizer_role_id', 'category_id']);
   if (!cfg.participant_role_id || !cfg.organizer_role_id) {
     throw new Error('support setup requires Participant and Organizer roles');

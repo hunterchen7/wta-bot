@@ -7,7 +7,7 @@ export function supportPanelMessage(): MessagePayload {
     content:
       '## WTA support\n' +
       'Need help with the program, your dashboard, scheduling, or a pairing? Open a support thread and an organizer will respond.\n\n' +
-      'Your thread will be private to you and the WTA organizers whenever Discord permits it. If private threads are unavailable, the bot will clearly tell you before using a participant-only thread.',
+      'Support threads are private and visible only to you and WTA organizers.',
     components: [{
       type: 1,
       components: [{
