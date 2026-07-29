@@ -54,9 +54,9 @@ describe('annual bootstrap', () => {
     const roles = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/guilds/G1/roles'));
     expect(roles.map((r) => r.body.name).sort()).toEqual(['Organizer', 'Participant']);
 
-    // category + four program channels, all private-first
+    // category + five program channels, all private-first
     const channels = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/guilds/G1/channels'));
-    expect(channels).toHaveLength(5);
+    expect(channels).toHaveLength(6);
     expect(channels[0]!.body).toMatchObject({ name: 'WTA 2026', type: 4 });
     for (const ch of channels.slice(1)) {
       const everyone = ch.body.permission_overwrites.find((o: any) => o.id === 'G1');
@@ -66,9 +66,9 @@ describe('annual bootstrap', () => {
     // settings point at the new ids
     const { results } = await env.DB.prepare(
       `SELECT key, value FROM settings WHERE key IN
-       ('announce_channel_id','pairing_channel_id','threads_channel_id','organizer_channel_id','participant_role_id','organizer_role_id','category_id')`,
+       ('announce_channel_id','pairing_channel_id','threads_channel_id','support_channel_id','support_message_id','organizer_channel_id','participant_role_id','organizer_role_id','category_id')`,
     ).all<any>();
-    expect(results).toHaveLength(7);
+    expect(results).toHaveLength(9);
     for (const r of results) expect(String(r.value)).toMatch(/^id-/);
     expect(calls.some((call) => JSON.stringify(call.body).includes('verify:start'))).toBe(false);
 
@@ -95,7 +95,7 @@ describe('publish', () => {
       { guildId: 'G1', interactionToken: 'ptok' },
     );
     const patches = calls.filter((c) => c.method === 'PATCH' && !c.url.includes('/webhooks/'));
-    expect(patches).toHaveLength(4);
+    expect(patches).toHaveLength(5);
 
     const announcementsId = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'announce_channel_id'").first<any>())!.value;
     const announcements = patches.find((patch) => patch.url.endsWith(`/channels/${announcementsId}`))!;
@@ -109,6 +109,16 @@ describe('publish', () => {
     const pairingParticipant = pairing.body.permission_overwrites.find((overwrite: any) => overwrite.id === participantId);
     expect(pairingEveryone.deny).toBe('1024');
     expect(pairingParticipant).toMatchObject({ allow: String(1024 + 65536), deny: String(2048) });
+
+    const supportId = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'support_channel_id'").first<any>())!.value;
+    const support = patches.find((patch) => patch.url.endsWith(`/channels/${supportId}`))!;
+    const supportEveryone = support.body.permission_overwrites.find((overwrite: any) => overwrite.id === 'G1');
+    const supportParticipant = support.body.permission_overwrites.find((overwrite: any) => overwrite.id === participantId);
+    expect(supportEveryone.deny).toBe('1024');
+    expect(supportParticipant).toMatchObject({
+      allow: '274877973504',
+      deny: '103079217152',
+    });
 
     expect(followupOf(calls).join('')).toContain('Live!');
   });

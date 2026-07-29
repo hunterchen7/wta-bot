@@ -96,8 +96,43 @@ export class DiscordRest {
         auto_archive_duration: 10080,
       });
     }
+    if (!thread) throw new Error('Discord did not create a support thread');
     await this.send(thread.id, starter);
     return thread;
+  }
+
+  /** Create a private organizer-visible support thread and explicitly add the
+   * requester. Some guilds cannot create private threads; in that case the
+   * parent channel's participant-only permissions contain a public fallback. */
+  async createSupportThread(
+    channelId: string,
+    name: string,
+    requesterId: string,
+    starter: MessagePayload,
+  ): Promise<{ id: string; private: boolean }> {
+    let thread: { id: string } | null = null;
+    let isPrivate = true;
+    try {
+      thread = await this.request<{ id: string }>('POST', `/channels/${channelId}/threads`, {
+        name: name.slice(0, 100),
+        type: 12,
+        invitable: false,
+        auto_archive_duration: 10080,
+      });
+      await this.request('PUT', `/channels/${thread.id}/thread-members/${requesterId}`);
+    } catch {
+      if (thread) {
+        await this.request('DELETE', `/channels/${thread.id}`).catch(() => {});
+      }
+      isPrivate = false;
+      thread = await this.request<{ id: string }>('POST', `/channels/${channelId}/threads`, {
+        name: name.slice(0, 100),
+        type: 11,
+        auto_archive_duration: 10080,
+      });
+    }
+    await this.send(thread.id, starter);
+    return { id: thread.id, private: isPrivate };
   }
 
   async closeThread(threadId: string, name: string) {

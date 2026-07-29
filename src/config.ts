@@ -8,6 +8,8 @@ export type SettingKey =
   | 'pairing_channel_id' // participant-only opt-ins + pairing announcements
   | 'organizer_channel_id' // digests, case files, enrollment feed
   | 'threads_channel_id' // parent channel for session threads
+  | 'support_channel_id' // participant support panel + ticket thread parent
+  | 'support_message_id' // bot-owned persistent support ticket panel
   | 'participant_role_id' // granted on completed enrollment
   | 'organizer_role_id' // dashboard organizer check + admin surfaces
   | 'rules_channel_id' // public rules channel used by Discord's welcome screen

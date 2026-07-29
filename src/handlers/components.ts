@@ -17,6 +17,7 @@ import {
   ResponseType,
 } from '../discord/types';
 import { ENROLLMENT_BUTTON_ID } from '../discord/enrollment';
+import { SUPPORT_BUTTON_ID } from '../discord/support';
 import { enrollmentLinkResponse } from './enrollment';
 import { isOrganizer } from './shared';
 
@@ -29,6 +30,8 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
 
   // ---- persistent program enrollment ---------------------------------------
   if (id === ENROLLMENT_BUTTON_ID) return enrollmentLinkResponse(c, interaction, 'join_button');
+
+  if (id === SUPPORT_BUTTON_ID) return handleSupportButton(c, interaction);
 
   // ---- weekly opt-in ------------------------------------------------------
   const optin = /^optin:(\d+):(in|double|standby|out|out-confirm|out-cancel)$/.exec(id);
@@ -114,6 +117,41 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
   }
 
   return c.json(ephemeral('🚧 Not implemented yet.'));
+}
+
+async function handleSupportButton(c: Ctx, interaction: Interaction) {
+  const user = interactionUser(interaction)!;
+  const participant = await getParticipant(c.env, user.id);
+  if ((!participant || participant.status !== 'active') && !(await isOrganizer(c.env, interaction))) {
+    return c.json(ephemeral('Complete WTA enrolment before opening a support thread.'));
+  }
+  const channelId = await getSetting(c.env, 'support_channel_id');
+  if (!channelId) return c.json(ephemeral('Support is still being set up. Please try again shortly.'));
+
+  const current = await c.env.DB.prepare(
+    `SELECT id, thread_id, status FROM support_threads
+     WHERE discord_id = ?1 AND status IN ('pending', 'open')
+     ORDER BY id DESC LIMIT 1`,
+  ).bind(user.id).first<{ id: number; thread_id: string | null; status: string }>();
+  if (current?.thread_id) {
+    return c.json(ephemeral(`You already have an open support thread: <#${current.thread_id}>`));
+  }
+  if (current) return c.json(ephemeral('Your support thread is already being created. Please wait a moment.'));
+
+  const inserted = await c.env.DB.prepare(
+    "INSERT INTO support_threads (discord_id, status) VALUES (?1, 'pending')",
+  ).bind(user.id).run();
+  await enqueue(c.env, 'support_thread_create', {
+    ticketId: Number(inserted.meta.last_row_id),
+    channelId,
+    userId: user.id,
+    displayName: participant?.name ?? interaction.member?.nick ?? user.global_name ?? user.username,
+    interactionToken: interaction.token,
+  });
+  return c.json({
+    type: ResponseType.DEFERRED_CHANNEL_MESSAGE,
+    data: { flags: 64 },
+  });
 }
 
 export async function handleModal(c: Ctx, interaction: Interaction) {

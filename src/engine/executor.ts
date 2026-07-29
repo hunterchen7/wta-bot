@@ -90,6 +90,18 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       return;
     }
 
+    case 'support_setup': {
+      const { ensureSupportChannel } = await import('./support');
+      await ensureSupportChannel(env, payload.guildId);
+      return;
+    }
+
+    case 'support_thread_create': {
+      const { createSupportThread } = await import('./support');
+      await createSupportThread(env, payload);
+      return;
+    }
+
     case 'email':
       await sendEmail(env, payload.to, payload.subject, payload.text);
       return;

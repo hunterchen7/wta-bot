@@ -14,6 +14,8 @@ export type OutboxKind =
   | 'nickname' // { guildId, userId, nick }
   | 'discord_identity_sync' // { guildId, userId } — refresh username + server nickname
   | 'welcome_refresh' // {} — edit the bot-owned Start Here enrollment panel in place
+  | 'support_setup' // { guildId? } — create the support channel and persistent ticket panel
+  | 'support_thread_create' // { ticketId, channelId, userId, displayName, interactionToken }
   | 'email' // { to, subject, text }
   | 'followup' // { interactionToken, message } — edits a deferred response
   | 'guild_setup' // { guildId, year, interactionToken } — annual bootstrap (private-first)

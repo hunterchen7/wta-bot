@@ -1,6 +1,7 @@
 import { getSetting, getSettings, setSetting } from '../config';
 import { DiscordRest } from '../discord/rest';
 import type { Env } from '../env';
+import { ensureSupportChannel, supportOverwrites } from './support';
 
 /** Edits the deferred "thinking…" response immediately (no cron round-trip). */
 async function editOriginal(env: Env, interactionToken: string, content: string): Promise<void> {
@@ -55,6 +56,8 @@ function publicOverwrites(kind: string, r: Roles): unknown[] {
         { id: r.organizerRole, type: 0, allow: ORGANIZER_INTERVIEWS },
         ...botAllow,
       ];
+    case 'support':
+      return supportOverwrites(r.everyone, r.participantRole, r.organizerRole, r.botUser);
     default: // organizers channel — same in both profiles
       return [
         { id: r.everyone, type: 0, deny: String(1024) },
@@ -78,6 +81,7 @@ const CHANNEL_KINDS: Array<{ kind: string; name: string; settingKey: any }> = [
   { kind: 'announce', name: 'announcements', settingKey: 'announce_channel_id' },
   { kind: 'pairing', name: 'pairing', settingKey: 'pairing_channel_id' },
   { kind: 'interviews', name: 'interviews', settingKey: 'threads_channel_id' },
+  { kind: 'support', name: 'support', settingKey: 'support_channel_id' },
   { kind: 'organizers', name: 'wta-organizers', settingKey: 'organizer_channel_id' },
 ];
 
@@ -153,6 +157,7 @@ export async function bootstrapGuild(
       await setSetting(env, ch.settingKey, channel.id);
       created.push(`<#${channel.id}>`);
     }
+    await ensureSupportChannel(env, guildId);
 
     await report(
       `🏗️ **WTA ${year} bootstrapped — in private/testing mode.**\n` +
