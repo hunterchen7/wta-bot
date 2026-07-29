@@ -121,33 +121,55 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
   // 2) Standby volunteers for whoever is left
   for (const a of open) {
     if (used.has(a.id)) continue;
-    const volunteer = await env.DB.prepare(
+    const candidates = await env.DB.prepare(
       `SELECT o.participant_id FROM optins o
        JOIN participants p ON p.id = o.participant_id AND p.status = 'active' AND p.pairing_excluded = 0
-       WHERE o.week_id = ?1 AND o.standby = 1 AND o.participant_id != ?2
+       WHERE o.week_id = ?1 AND o.standby = 1 AND o.extra_interviewer = 0
+         AND o.participant_id != ?2
+         AND NOT EXISTS (
+           SELECT 1 FROM standby_assignments sa
+           WHERE sa.week_id = o.week_id AND sa.participant_id = o.participant_id
+         )
        ORDER BY RANDOM() LIMIT 5`,
     )
       .bind(a.week_id, a.participant_id)
-      .all<{ participant_id: number }>()
-      .then((r) => {
-        return (async () => {
-          const fallback = r.results[0]?.participant_id ?? null;
-          for (const cand of r.results) {
-            const interviewerId = a.need === 'interviewer' ? cand.participant_id : a.participant_id;
-            const intervieweeId = a.need === 'interviewer' ? a.participant_id : cand.participant_id;
-            if (!(await pairedBefore(env, a.week_id, interviewerId, intervieweeId))) {
-              return cand.participant_id;
-            }
-          }
-          return fallback;
-        })();
-      });
+      .all<{ participant_id: number }>();
+    const ordered = [];
+    for (const candidate of candidates.results) {
+      const interviewerId = a.need === 'interviewer' ? candidate.participant_id : a.participant_id;
+      const intervieweeId = a.need === 'interviewer' ? a.participant_id : candidate.participant_id;
+      if (!(await pairedBefore(env, a.week_id, interviewerId, intervieweeId))) ordered.unshift(candidate);
+      else ordered.push(candidate);
+    }
+    let volunteer: number | null = null;
+    for (const candidate of ordered) {
+      const claim = await env.DB.prepare(
+        `INSERT OR IGNORE INTO standby_assignments (week_id, participant_id)
+         VALUES (?1, ?2)`,
+      ).bind(a.week_id, candidate.participant_id).run();
+      if (Number(claim.meta.changes ?? 0) > 0) {
+        volunteer = candidate.participant_id;
+        break;
+      }
+    }
     if (!volunteer) continue;
     const interviewerId = a.need === 'interviewer' ? volunteer : a.participant_id;
     const intervieweeId = a.need === 'interviewer' ? a.participant_id : volunteer;
     used.add(a.id);
-    await createRepairSession(env, a.week_id, interviewerId, intervieweeId, [a.id]);
-    created++;
+    try {
+      const sessionId = await createRepairSession(env, a.week_id, interviewerId, intervieweeId, [a.id]);
+      await env.DB.prepare(
+        `UPDATE standby_assignments SET session_id = ?3
+         WHERE week_id = ?1 AND participant_id = ?2`,
+      ).bind(a.week_id, volunteer, sessionId).run();
+      created++;
+    } catch (error) {
+      await env.DB.prepare(
+        `DELETE FROM standby_assignments
+         WHERE week_id = ?1 AND participant_id = ?2 AND session_id IS NULL`,
+      ).bind(a.week_id, volunteer).run();
+      throw error;
+    }
   }
   return created;
 }
@@ -172,11 +194,12 @@ async function createRepairSession(
   interviewerId: number,
   intervieweeId: number,
   queueIds: number[],
-): Promise<void> {
-  await spawnSession(env, weekId, interviewerId, intervieweeId, 'repair');
+): Promise<number> {
+  const sessionId = await spawnSession(env, weekId, interviewerId, intervieweeId, 'repair');
   for (const qid of queueIds) {
     await env.DB.prepare("UPDATE repair_queue SET state = 'matched' WHERE id = ?1").bind(qid).run();
   }
+  return sessionId;
 }
 
 /** Create a session with its thread + partner DMs — repairs and /pair share it. */

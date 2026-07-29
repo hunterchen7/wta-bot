@@ -242,12 +242,25 @@ async function handleOptin(
   await c.env.DB.prepare(
     `INSERT INTO optins (week_id, participant_id, standby, wants_double, regular_opt_in)
      VALUES (?1, ?2, ?3, ?4, 1)
-     ON CONFLICT(week_id, participant_id) DO UPDATE SET standby = ?3, wants_double = ?4, regular_opt_in = 1`,
+     ON CONFLICT(week_id, participant_id) DO UPDATE SET
+       standby = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?3 END,
+       wants_double = ?4,
+       regular_opt_in = 1`,
   )
     .bind(weekId, participant.id, choice === 'standby' ? 1 : 0, choice === 'double' ? 1 : 0)
     .run();
+  const savedOptin = await c.env.DB.prepare(
+    `SELECT standby, extra_interviewer FROM optins
+     WHERE week_id = ?1 AND participant_id = ?2`,
+  ).bind(weekId, participant.id).first<{ standby: number; extra_interviewer: number }>();
   const label =
-    choice === 'in' ? "You're in" : choice === 'double' ? "You're in with a catch-up double (if you're behind)" : "You're in, plus standby for extra sessions";
+    choice === 'in'
+      ? "You're in"
+      : choice === 'double'
+        ? "You're in with a catch-up double (if you're behind)"
+        : savedOptin?.extra_interviewer === 1
+          ? "You're in, with one extra interviewer session already requested"
+          : "You're in, plus standby for one extra session";
   if (now >= new Date(week.match_at)) {
     await queueLateOptinDemand(c.env, weekId, participant.id, choice === 'double');
     return c.json(ephemeral(

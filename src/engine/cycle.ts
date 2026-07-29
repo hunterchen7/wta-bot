@@ -28,7 +28,7 @@ export function optinButtons(weekId: number) {
   return buttonRow([
     { id: `optin:${weekId}:in`, label: "I'm in this round", style: 3 },
     { id: `optin:${weekId}:double`, label: 'In + catch-up double', style: 1 },
-    { id: `optin:${weekId}:standby`, label: 'In + standby for extras', style: 2 },
+    { id: `optin:${weekId}:standby`, label: 'In + standby for one extra', style: 2 },
     { id: `optin:${weekId}:out`, label: 'Sitting out', style: 4 },
   ]);
 }
@@ -41,7 +41,7 @@ export async function openOptin(env: Env, week: Week): Promise<void> {
     `\n` +
     `**I'm in this round** — one interview as interviewer and one as interviewee.\n` +
     `**Catch-up double** — extra interviews to make up a missed role.\n` +
-    `**Standby for extras** — available if another participant needs a partner.\n` +
+    `**Standby for one extra** — available for one additional session if another participant needs a partner.\n` +
     `**Sitting out** — no pairing this round and no penalty.\n` +
     `\n` +
     `🗓️ Initial pairings publish ${discordTime(week.match_at)}. Opt in before then to join the first batch.\n` +
