@@ -8,6 +8,7 @@ import {
   EmptyState,
   ErrorState,
   formatDate,
+  inputClass,
   LoadingState,
   Metric,
   PageIntro,
@@ -114,10 +115,106 @@ function Timeline({ label, value, format = true }: { label: string; value: strin
 }
 
 function SessionsPanel({ data, onOpenParticipant }: { data: RoundsData; onOpenParticipant: OpenParticipant }) {
+  const [query, setQuery] = useState('');
+  const [state, setState] = useState('all');
+  const [attention, setAttention] = useState('all');
+  const [origin, setOrigin] = useState('all');
+  const stateOptions = useMemo(() => [...new Set(data.sessions.map((row) => row.state))].sort(), [data.sessions]);
+  const filteredSessions = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase();
+    return data.sessions.filter((row) => {
+      if (state !== 'all' && row.state !== state) return false;
+      if (origin === 'initial' && row.origin === 'repair') return false;
+      if (origin === 'repair' && row.origin !== 'repair') return false;
+      if (attention === 'unscheduled' && row.state !== 'pending_schedule') return false;
+      if (attention === 'broken' && !['broken', 'cancelled'].includes(row.state)) return false;
+      if (attention === 'reports' && row.reports_in >= 2) return false;
+      if (attention === 'unassigned' && row.problem_title) return false;
+      if (attention === 'clear' && (
+        row.state === 'pending_schedule'
+        || ['broken', 'cancelled'].includes(row.state)
+        || !row.problem_title
+      )) return false;
+      if (!needle) return true;
+      return [
+        String(row.id),
+        `#${row.id}`,
+        row.interviewer_name,
+        row.interviewee_name,
+        row.problem_number == null ? '' : String(row.problem_number),
+        row.problem_number == null ? '' : `#${row.problem_number}`,
+        row.problem_title ?? '',
+      ].some((value) => value.toLocaleLowerCase().includes(needle));
+    });
+  }, [attention, data.sessions, origin, query, state]);
+  const activeFilters = Number(Boolean(query.trim())) + Number(state !== 'all') + Number(attention !== 'all') + Number(origin !== 'all');
+  const clearFilters = () => {
+    setQuery('');
+    setState('all');
+    setAttention('all');
+    setOrigin('all');
+  };
+
   return <Panel title="Session board" description="Assignments are private to organizers here; participants only receive them through the interviewer packet.">
-    {data.sessions.length ? <div className={tableWrapClass}><table className={tableClass}>
+    {data.sessions.length ? <>
+      <div className="space-y-3 border-b border-border bg-muted/15 p-4">
+        <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+          <input
+            type="search"
+            className={`${inputClass} h-10 lg:max-w-sm`}
+            aria-label="Search sessions"
+            placeholder="Search participant, problem, or session…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <div className="grid gap-2 sm:grid-cols-3 lg:flex lg:flex-1">
+            <SelectControl
+              label="Session state"
+              className="h-10 lg:w-44"
+              value={state}
+              onChange={setState}
+              options={[
+                { value: 'all', label: 'All states' },
+                ...stateOptions.map((value) => ({ value, label: value.replaceAll('_', ' ') })),
+              ]}
+            />
+            <SelectControl
+              label="Needs attention"
+              className="h-10 lg:w-48"
+              value={attention}
+              onChange={setAttention}
+              options={[
+                { value: 'all', label: 'Any attention state' },
+                { value: 'unscheduled', label: 'Not scheduled' },
+                { value: 'broken', label: 'Broken or cancelled' },
+                { value: 'reports', label: 'Fewer than 2 reports' },
+                { value: 'unassigned', label: 'Problem unassigned' },
+                { value: 'clear', label: 'No issues' },
+              ]}
+            />
+            <SelectControl
+              label="Pairing source"
+              className="h-10 lg:w-40"
+              value={origin}
+              onChange={setOrigin}
+              options={[
+                { value: 'all', label: 'All pairings' },
+                { value: 'initial', label: 'Initial pairings' },
+                { value: 'repair', label: 'Re-pairs' },
+              ]}
+            />
+          </div>
+        </div>
+        <div className="flex min-h-5 items-center justify-between gap-3">
+          <div aria-live="polite" className="text-xs font-semibold tabular-nums text-muted-foreground">
+            {filteredSessions.length} of {data.sessions.length} session{data.sessions.length === 1 ? '' : 's'}
+          </div>
+          {activeFilters ? <button type="button" className="cursor-pointer text-xs font-bold text-western-700 transition-colors hover:text-western-900 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-western-300 dark:hover:text-western-100" onClick={clearFilters}>Clear filters</button> : null}
+        </div>
+      </div>
+      {filteredSessions.length ? <div className={tableWrapClass}><table className={tableClass}>
       <thead><tr><th className={thClass}>Session</th><th className={thClass}>Participants</th><th className={thClass}>Scheduled</th><th className={thClass}>Interviewer assignment</th><th className={thClass}>Reports</th><th className={thClass}>State</th></tr></thead>
-      <tbody>{data.sessions.map((row) => <tr key={row.id} className={row.state === 'pending_schedule' || row.state === 'broken' ? 'bg-amber-50/35 dark:bg-amber-950/10' : ''}>
+      <tbody>{filteredSessions.map((row) => <tr key={row.id} className={row.state === 'pending_schedule' || row.state === 'broken' ? 'bg-amber-50/35 dark:bg-amber-950/10' : ''}>
         <td className={`${tdClass} font-mono text-xs`}>#{row.id}{row.origin === 'repair' ? <span className="ml-1 text-amber-700 dark:text-amber-400">re-pair</span> : null}</td>
         <td className={tdClass}>
           <div className="space-y-1">
@@ -130,7 +227,8 @@ function SessionsPanel({ data, onOpenParticipant }: { data: RoundsData; onOpenPa
         <td className={tdClass}><span className={`font-black tabular-nums ${row.reports_in < 2 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>{row.reports_in}/2</span></td>
         <td className={tdClass}><Badge value={row.state} /></td>
       </tr>)}</tbody>
-    </table></div> : <EmptyState title="No sessions yet" description="Sessions appear after matching runs for this round." />}
+      </table></div> : <EmptyState title="No sessions match" description="Try a broader search or clear one of the filters." />}
+    </> : <EmptyState title="No sessions yet" description="Sessions appear after matching runs for this round." />}
   </Panel>;
 }
 
