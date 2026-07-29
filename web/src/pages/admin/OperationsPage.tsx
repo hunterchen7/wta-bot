@@ -99,6 +99,7 @@ function deliveryTask(row: OutboxRow) {
     case 'dm': return { label: 'Discord direct message', target: user };
     case 'channel_msg': return { label: 'Discord channel message', target: channel };
     case 'thread_create': return { label: 'Create session thread', target: joinContext(stringValue(payload.name) ?? channel, channel) };
+    case 'thread_close': return { label: 'Close session thread', target: joinContext(stringValue(payload.name) ?? channel, channel) };
     case 'role_add': return { label: 'Assign participant role', target: user };
     case 'nickname': return { label: 'Update Discord nickname', target: joinContext(user, stringValue(payload.nick) ? `New name: ${stringValue(payload.nick)}` : null) };
     case 'discord_identity_sync': return { label: 'Refresh Discord profile', target: user };

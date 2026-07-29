@@ -287,7 +287,7 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
     await enqueue(env, 'channel_msg', {
       channelId: cfg.organizer_channel_id,
       message: {
-        content: `🧮 Round ${week.idx} matched: ${result.edges.length} sessions, ${result.unmatched.length} residual slot(s) → repair queue.`,
+        content: `🧮 Round ${week.idx} matched: ${result.edges.length} sessions, ${result.unmatched.length} residual slot(s) → re-pair queue.`,
       },
     });
   }

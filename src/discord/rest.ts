@@ -100,6 +100,14 @@ export class DiscordRest {
     return thread;
   }
 
+  async closeThread(threadId: string, name: string) {
+    return this.request('PATCH', `/channels/${threadId}`, {
+      name: name.slice(0, 100),
+      locked: true,
+      archived: true,
+    });
+  }
+
   async addRole(guildId: string, userId: string, roleId: string) {
     return this.request('PUT', `/guilds/${guildId}/members/${userId}/roles/${roleId}`);
   }

@@ -7,6 +7,7 @@ import { packetScan } from './engine/problems';
 import { cleanupOrphanedRecordings } from './engine/recording-cleanup';
 import { inboxScan } from './engine/inbox';
 import { repairScan } from './engine/repair';
+import { closeStaleSessionThreads } from './engine/session-thread';
 import { ensurePairingChannel } from './engine/bootstrap';
 import { activeCohort, cohortStartTuple, cohortWeeks, weekAnchors } from './engine/weeks';
 import type { Env } from './env';
@@ -53,6 +54,7 @@ export async function tick(env: Env, now: Date): Promise<void> {
     await formDropScan(env, origin, now).catch((err) => console.error('formDropScan failed:', err));
     await deadlineSweep(env, origin, now).catch((err) => console.error('deadlineSweep failed:', err));
     await repairScan(env, now).catch((err) => console.error('repairScan failed:', err));
+    await closeStaleSessionThreads(env).catch((err) => console.error('thread close scan failed:', err));
     // Backstop any packet that the scheduling request did not enqueue.
     const { getSetting } = await import('./config');
     if ((await getSetting(env, 'packet_mode')) === 'on') {

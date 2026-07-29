@@ -215,13 +215,13 @@ export async function spawnSession(
   const interviewee = people.results.find((p) => p.id === intervieweeId)!;
   const deadline = week?.grace_until ?? week?.reports_due_at ?? new Date().toISOString();
 
-  const label = origin === 'repair' ? 'Repair pairing' : 'Catch-up pairing (organizer-arranged)';
+  const label = origin === 'repair' ? 'Re-pairing' : 'Catch-up pairing (organizer-arranged)';
   const cfg = await getSettings(env, ['threads_channel_id']);
   if (cfg.threads_channel_id) {
     await enqueue(env, 'thread_create', {
       sessionId,
       channelId: cfg.threads_channel_id,
-      name: `r${week?.idx ?? '?'} ${origin} · ${interviewer.name ?? 'interviewer'} → ${interviewee.name ?? 'interviewee'}`,
+      name: `r${week?.idx ?? '?'} ${origin === 'repair' ? 're-pair' : origin} · ${interviewer.name ?? 'interviewer'} → ${interviewee.name ?? 'interviewee'}`,
       starter: {
         content:
           `🛠️ **${label}** — <@${interviewer.discord_id}> interviews <@${interviewee.discord_id}>.\n` +

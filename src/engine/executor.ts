@@ -49,6 +49,13 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       return;
     }
 
+    case 'thread_close': {
+      const rest = needRest();
+      if (payload.message) await rest.send(payload.channelId, payload.message);
+      await rest.closeThread(payload.channelId, payload.name);
+      return;
+    }
+
     case 'role_add':
       await needRest().addRole(payload.guildId, payload.userId, payload.roleId);
       return;

@@ -280,10 +280,10 @@ async function handleSessionButton(
     const unresponsive = action === 'unresponsive';
     return c.json(ephemeral(
       cancelling
-        ? '**Confirm that you cannot make this session.** This closes the session, records that you cancelled, and puts your partner into the priority repair queue.'
+        ? '**Confirm that you cannot make this session.** This closes the session, records that you cancelled, and puts your partner into priority re-pairing.'
         : unresponsive
           ? '**Confirm that your partner is not responding to scheduling.** This closes the unscheduled session, records the issue against your partner, and puts you into the priority re-pair queue.'
-        : '**Confirm this no-show report.** This closes the session, records a no-show against your partner, and puts you into the priority repair queue. Only continue if they missed the agreed session.',
+        : '**Confirm this no-show report.** This closes the session, records a no-show against your partner, and puts you into priority re-pairing. Only continue if they missed the agreed session.',
       [buttonRow([
         {
           id: `sess:${sessionId}:${cancelling ? 'cancel-confirm' : unresponsive ? 'unresponsive-confirm' : 'noshow-confirm'}`,
@@ -408,6 +408,7 @@ function schedulingDateOptions(week: any, session: { origin?: string; scheduled_
  *  partners, clear future opt-ins, note to organizers. History stays. */
 async function withdrawParticipant(env: Env, participantId: number, discordId: string): Promise<string> {
   const { enqueueRepair } = await import('../engine/repair');
+  const { closeSessionThread } = await import('../engine/session-thread');
   const nowIso = new Date().toISOString();
 
   const { results: open } = await env.DB.prepare(
@@ -423,10 +424,23 @@ async function withdrawParticipant(env: Env, participantId: number, discordId: s
     // The partner needs a replacement for the role the withdrawer played.
     const need = s.interviewer_id === participantId ? 'interviewer' : 'interviewee';
     await enqueueRepair(env, s.week_id, partnerId, need);
-    if (s.thread_id) {
-      await enqueue(env, 'channel_msg', {
-        channelId: s.thread_id,
-        message: { content: '📕 This session was cancelled — one participant left the program. The other has been queued for a repair pairing.' },
+    await closeSessionThread(
+      env,
+      s,
+      '📕 This session was cancelled because one participant left the program. Their partner has been added to priority re-pairing.',
+    );
+    const partner = await env.DB.prepare(
+      'SELECT discord_id FROM participants WHERE id = ?1',
+    ).bind(partnerId).first<{ discord_id: string }>();
+    if (partner?.discord_id) {
+      await enqueue(env, 'dm', {
+        userId: partner.discord_id,
+        fallbackKind: 'repair_pairing',
+        message: {
+          content:
+            '📕 **Your WTA partner left the program.** Your session was cancelled, and you’ve been added to priority re-pairing. ' +
+            'I’ll message you again when a new partner is available.',
+        },
       });
     }
   }

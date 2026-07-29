@@ -9,6 +9,7 @@ export type OutboxKind =
   | 'dm' // { userId, message }
   | 'channel_msg' // { channelId, message }
   | 'thread_create' // { sessionId, channelId, name, starter }
+  | 'thread_close' // { channelId, name, message } — post final context, then rename, lock, and archive
   | 'role_add' // { guildId, userId, roleId }
   | 'nickname' // { guildId, userId, nick }
   | 'discord_identity_sync' // { guildId, userId } — refresh username + server nickname

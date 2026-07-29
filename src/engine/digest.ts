@@ -65,7 +65,7 @@ export async function weeklyDigest(env: Env, week: Week): Promise<void> {
     incidents.length
       ? `No-shows/incidents confirmed: ${incidents.map((i) => `${i.kind}${i.discord_id ? ` <@${i.discord_id}>` : ''}`).join(', ')}`
       : 'No confirmed incidents 🎉',
-    repairs[0]?.n ? `Repair queue still open: ${repairs[0].n}` : null,
+    repairs[0]?.n ? `Re-pair queue still open: ${repairs[0].n}` : null,
     behind.length ? `**Behind pace (${behind.length}):** ${behind.slice(0, 15).join(', ')}${behind.length > 15 ? '…' : ''}` : 'Everyone on pace 🎉',
     dead.length ? `⚠️ ${dead.length} undeliverable outbox item(s) — check OPERATIONS.md` : null,
   ].filter(Boolean);

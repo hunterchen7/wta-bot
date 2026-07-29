@@ -4,6 +4,7 @@ import type { Env } from '../env';
 import { enqueue } from './outbox';
 import { strikesOf } from './progress';
 import { enqueueRepair } from './repair';
+import { closeSessionThread } from './session-thread';
 
 // No-show machinery (DESIGN §4): detection → ledger → strikes → case files.
 // Reports are confirmed on arrival (dispute flips them back to open); the
@@ -82,14 +83,35 @@ export async function reportIncident(
   const accusedDiscord = await discordIdOf(env, accusedId);
 
   if (kind === 'late_cancel') {
-    if (session.thread_id) {
-      await enqueue(env, 'channel_msg', {
-        channelId: session.thread_id,
-        message: { content: `📅 Session cancelled by <@${reporter.discord_id}> (with notice). The partner has been re-queued for a repair pairing.` },
+    await closeSessionThread(
+      env,
+      session,
+      `📅 Session cancelled by <@${reporter.discord_id}> (with notice). Their partner has been added to priority re-pairing.`,
+    );
+    const victimDiscord = await discordIdOf(env, victimId);
+    if (victimDiscord) {
+      const victimRole = victimId === session.interviewer_id ? 'interviewer' : 'interviewee';
+      await enqueue(env, 'dm', {
+        userId: victimDiscord,
+        fallbackKind: 'repair_pairing',
+        message: {
+          content:
+            `📅 **${reporter.name ?? 'Your partner'} can’t make your WTA session.** ` +
+            `You were the ${victimRole}. You’ve been added to priority re-pairing, and I’ll message you again when a new partner is available.`,
+        },
       });
     }
     return { ok: true, message: "Cancelled — your partner is being re-paired. Cancelling with notice is recorded, but it's softer than a no-show." };
   }
+
+  await closeSessionThread(
+    env,
+    session,
+    kind === 'ghost'
+      ? '⚠️ This session was closed after a reported no-show. The affected participant has been added to priority re-pairing.'
+      : '⚠️ This session was closed after scheduling was reported as unresponsive. The affected participant has been added to priority re-pairing.',
+    'closed',
+  );
 
   // Notify the accused + dispute path
   if (accusedDiscord) {
@@ -99,7 +121,7 @@ export async function reportIncident(
       message: {
         content:
           `⚠️ You were reported as **${kind === 'ghost' ? 'a no-show' : 'unresponsive'}** for a WTA session. ` +
-          `Your partner has been re-paired. If this is wrong, hit dispute — organizers review everything.`,
+          `Your partner has entered priority re-pairing. If this is wrong, hit dispute — organizers review everything.`,
         components: [buttonRow([{ id: `dispute:${incidentId}`, label: 'Dispute this', style: 2 }])],
       },
     });
@@ -108,7 +130,7 @@ export async function reportIncident(
   await applyStrikeLadder(env, accusedId, incidentId);
   return {
     ok: true,
-    message: 'Reported — sorry that happened. You get priority for a same-week repair pairing; watch for a new thread.',
+    message: 'Reported — sorry that happened. You get priority for a same-week re-pairing; watch for a new thread.',
   };
 }
 

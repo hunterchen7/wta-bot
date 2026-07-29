@@ -43,7 +43,7 @@ export function RoundsPage() {
   if (error || !data) return <ErrorState message={error ?? 'No round data returned.'} onRetry={() => void reload()} />;
   if (!data.cohort) {
     return <div className="space-y-7">
-      <PageIntro title="Rounds" description="Opt-ins, session execution, report completion, and repair work." />
+      <PageIntro title="Rounds" description="Opt-ins, session execution, report completion, and re-pairing." />
       <Panel><EmptyState title="No active cohort" description="Create a cohort in Program settings to generate its round calendar." /></Panel>
     </div>;
   }
@@ -53,7 +53,7 @@ export function RoundsPage() {
   return <div className="space-y-7">
     <PageIntro
       title="Rounds"
-      description="One operational board for opt-ins, matching results, session exceptions, reports, and repairs."
+      description="One operational board for opt-ins, matching results, session exceptions, reports, and re-pairing."
       actions={<SelectControl
         label="Select round"
         className="min-w-40"
@@ -89,7 +89,7 @@ export function RoundsPage() {
           { value: 'sessions', label: 'Sessions', count: data.sessions.length },
           { value: 'reports', label: 'Reports', count: counts.reports },
           { value: 'optins', label: 'Opt-ins', count: data.optins.length },
-          { value: 'repairs', label: 'Repairs', count: data.repairs.filter((row) => row.state === 'open').length },
+          { value: 'repairs', label: 'Re-pairs', count: data.repairs.filter((row) => row.state === 'open').length },
         ]}
       />
     </div>
@@ -118,7 +118,7 @@ function SessionsPanel({ data, onOpenParticipant }: { data: RoundsData; onOpenPa
     {data.sessions.length ? <div className={tableWrapClass}><table className={tableClass}>
       <thead><tr><th className={thClass}>Session</th><th className={thClass}>Participants</th><th className={thClass}>Scheduled</th><th className={thClass}>Interviewer assignment</th><th className={thClass}>Reports</th><th className={thClass}>State</th></tr></thead>
       <tbody>{data.sessions.map((row) => <tr key={row.id} className={row.state === 'pending_schedule' || row.state === 'broken' ? 'bg-amber-50/35 dark:bg-amber-950/10' : ''}>
-        <td className={`${tdClass} font-mono text-xs`}>#{row.id}{row.origin === 'repair' ? <span className="ml-1 text-amber-700 dark:text-amber-400">repair</span> : null}</td>
+        <td className={`${tdClass} font-mono text-xs`}>#{row.id}{row.origin === 'repair' ? <span className="ml-1 text-amber-700 dark:text-amber-400">re-pair</span> : null}</td>
         <td className={tdClass}>
           <div className="space-y-1">
             <div><span className="mr-2 text-[0.65rem] font-black uppercase tracking-wide text-slate-400">Interviewer</span><ParticipantNameButton participantId={row.interviewer_id} name={row.interviewer_name} onOpen={onOpenParticipant} /></div>
@@ -287,7 +287,7 @@ function OptinsPanel({ data, reload, onOpenParticipant }: { data: RoundsData; re
 }
 
 function RepairsPanel({ data, onOpenParticipant }: { data: RoundsData; onOpenParticipant: OpenParticipant }) {
-  return <Panel title="Repair queue" description="Unmatched needs remain visible until paired or expired.">
+  return <Panel title="Re-pair queue" description="Unmatched needs remain visible until paired or expired.">
     {data.repairs.length ? <div className={tableWrapClass}><table className={tableClass}>
       <thead><tr><th className={thClass}>Participant</th><th className={thClass}>Needs</th><th className={thClass}>State</th><th className={thClass}>Entered</th></tr></thead>
       <tbody>{data.repairs.map((row) => <tr key={row.id}>
@@ -296,7 +296,7 @@ function RepairsPanel({ data, onOpenParticipant }: { data: RoundsData; onOpenPar
         <td className={tdClass}><Badge value={row.state} /></td>
         <td className={tdClass}>{formatDate(row.created_at)}</td>
       </tr>)}</tbody>
-    </table></div> : <EmptyState title="Repair queue is clear" description="Broken sessions and unmatched demand will appear here automatically." />}
+    </table></div> : <EmptyState title="Re-pair queue is clear" description="Broken sessions and unmatched demand will appear here automatically." />}
   </Panel>;
 }
 

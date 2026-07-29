@@ -7,7 +7,7 @@ import { LIVE_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
 
 const queueLinks: Array<[keyof OverviewData['queues'], string, string]> = [
   ['openForms', 'Reports outstanding', '/app/admin/rounds'], ['incidents', 'Open incidents', '/app/admin/participants'],
-  ['repairs', 'Repair queue', '/app/admin/rounds'], ['reviews', 'Final-round reviews', '/app/admin/reviews'],
+  ['repairs', 'Re-pair queue', '/app/admin/rounds'], ['reviews', 'Final-round reviews', '/app/admin/reviews'],
   ['failedOutbox', 'Delivery failures', '/app/admin/operations'],
 ];
 

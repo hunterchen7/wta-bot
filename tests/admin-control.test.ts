@@ -79,7 +79,7 @@ describe('admin automation controls', () => {
     expect(await env.DB.prepare(
       "SELECT need, state FROM repair_queue WHERE participant_id = ?1 AND week_id = ?2",
     ).bind(PARTNER_ID, ROUND_THREE_ID).first()).toEqual({ need: 'interviewer', state: 'open' });
-    expect(await count("SELECT count(*) AS count FROM outbox WHERE kind IN ('dm', 'channel_msg')")).toBeGreaterThanOrEqual(3);
+    expect(await count("SELECT count(*) AS count FROM outbox WHERE kind IN ('dm', 'channel_msg', 'thread_close')")).toBeGreaterThanOrEqual(3);
   });
 });
 

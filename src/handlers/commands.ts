@@ -48,7 +48,7 @@ export async function handleCommand(c: Ctx, interaction: Interaction) {
           '**Organizer toolkit — everything lives under `/admin`:**',
           '`/admin setup channels|roles|cohort|welcome` — configure + launch',
           '`/admin roster` · `/admin export` · `/admin standing @user` — who\'s where',
-          '`/admin pair` · `/admin repair` — manual pairings and repair queueing',
+          '`/admin pair` · `/admin repair` — manual pairings and re-pair queueing',
           '`/admin excuse @user` · `/admin participant hold|release|remove @user`',
           '`/admin problems add|list|setweek` · `/admin digest` · `/admin eligible`',
           'Dashboard organizer pages: Roster, Round board, Reviews, Problems (`/dashboard` for a sign-in link).',
@@ -531,14 +531,14 @@ async function repairCommand(c: Ctx, interaction: Interaction, opts: Opt[] | und
     .first<any>();
   if (!p) return c.json(ephemeral('Not on the roster.'));
   if (p.status !== 'active') return c.json(ephemeral('That participant is not active.'));
-  if (p.pairing_excluded === 1) return c.json(ephemeral('Organizers cannot be added to the repair queue.'));
+  if (p.pairing_excluded === 1) return c.json(ephemeral('Organizers cannot be added to the re-pair queue.'));
   const week = await currentWeek(c);
   if (!week) return c.json(ephemeral('No active cohort.'));
   const { enqueueRepair } = await import('../engine/repair');
   await enqueueRepair(c.env, week.id, p.id, need);
   return c.json(
     ephemeral(
-      `🛠️ **${p.name}** queued: needs ${need === 'interviewer' ? 'someone to interview them' : 'someone to interview'}. The repair scan pairs them with a complementary victim or standby volunteer within ~15 minutes of one existing.`,
+      `🛠️ **${p.name}** queued: needs ${need === 'interviewer' ? 'someone to interview them' : 'someone to interview'}. The re-pair scan matches them with a compatible participant or standby volunteer within about 15 minutes of one becoming available.`,
     ),
   );
 }

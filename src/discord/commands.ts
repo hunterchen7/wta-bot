@@ -74,7 +74,7 @@ export const COMMANDS: Command[] = [
       {
         type: SUB_COMMAND,
         name: 'repair',
-        description: 'Queue someone for an automatic repair pairing',
+        description: 'Queue someone for automatic re-pairing',
         options: [
           { type: USER, name: 'user', description: 'Who needs a session', required: true },
           {

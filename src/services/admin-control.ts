@@ -1,6 +1,7 @@
 import type { Env } from '../env';
 import { enqueue } from '../engine/outbox';
 import { enqueueRepair } from '../engine/repair';
+import { closeSessionThread } from '../engine/session-thread';
 import { activeCohort, cohortWeeks } from '../engine/weeks';
 import { normalizeProblemInput } from '../problem-authoring';
 import { problemBankWorkspace } from './problem-sets';
@@ -179,9 +180,7 @@ export async function removeAutomationParticipant(
       'SELECT discord_id FROM participants WHERE id = ?1',
     ).bind(partnerId).first<{ discord_id: string }>();
     const message = `Your WTA session with ${participant.name ?? 'your partner'} was cancelled by an organizer. You have been queued for re-pairing.`;
-    if (session.thread_id) {
-      await enqueue(env, 'channel_msg', { channelId: session.thread_id, message: { content: `📕 ${message}` } });
-    }
+    await closeSessionThread(env, session, `📕 ${message}`);
     if (partner?.discord_id) {
       await enqueue(env, 'dm', { userId: partner.discord_id, fallbackKind: 'repair_pairing', message: { content: message } });
     }
