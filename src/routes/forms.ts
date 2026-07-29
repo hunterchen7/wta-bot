@@ -75,7 +75,7 @@ async function dynamicFields(env: Env, instance: LoadedInstance): Promise<Field[
     options: results.map((problem) => ({ value: String(problem.id), label: `${problem.number ? `#${problem.number} ` : ''}${problem.title}` })),
     help: assigned
       ? 'Pre-filled with the problem assigned to this session. Change it only if you used a different problem.'
-      : 'Choose the problem you actually used. Your interviewee receives its solution notes after submitting.',
+      : 'Choose the problem you actually used. If the interview took place, your interviewee receives its solution notes after submitting.',
   };
   return [...base.slice(0, 4), picker, ...base.slice(4)];
 }

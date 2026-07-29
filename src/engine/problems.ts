@@ -218,12 +218,33 @@ async function deliverProblemPacket(
  *  Idempotent — the interviewee exposure row marks it done. */
 export async function releaseSolution(env: Env, sessionId: number, origin: string): Promise<void> {
   const s = await env.DB.prepare(
-    `SELECT s.problem_id, s.interviewee_id, p.discord_id FROM sessions s
-     JOIN participants p ON p.id = s.interviewee_id WHERE s.id = ?1`,
+    `SELECT s.problem_id, s.interviewee_id, s.state, p.discord_id,
+            f.payload AS interviewee_report, f.submitted_at AS interviewee_submitted_at
+     FROM sessions s
+     JOIN participants p ON p.id = s.interviewee_id
+     LEFT JOIN form_instances f
+       ON f.session_id = s.id AND f.kind = 'interviewee_report'
+     WHERE s.id = ?1`,
   )
     .bind(sessionId)
-    .first<{ problem_id: number | null; interviewee_id: number; discord_id: string }>();
+    .first<{
+      problem_id: number | null;
+      interviewee_id: number;
+      state: string;
+      discord_id: string;
+      interviewee_report: string | null;
+      interviewee_submitted_at: string | null;
+    }>();
   if (!s?.problem_id) return;
+  if (s.state === 'broken' || s.state === 'cancelled' || !s.interviewee_submitted_at || !s.interviewee_report) return;
+  let attendance: Record<string, string>;
+  try {
+    attendance = JSON.parse(s.interviewee_report) as Record<string, string>;
+  } catch {
+    return;
+  }
+  const attended = (value: string | undefined) => value === 'yes' || value === 'late';
+  if (!attended(attendance.attendance_self) || !attended(attendance.attendance_partner)) return;
   const already = await env.DB.prepare(
     `SELECT 1 AS x FROM exposures WHERE session_id = ?1 AND role = 'interviewee' LIMIT 1`,
   )
