@@ -131,7 +131,12 @@ export class DiscordRest {
         auto_archive_duration: 10080,
       });
     }
-    await this.send(thread.id, starter);
+    try {
+      await this.send(thread.id, starter);
+    } catch (error) {
+      await this.request('DELETE', `/channels/${thread.id}`).catch(() => {});
+      throw error;
+    }
     return { id: thread.id, private: isPrivate };
   }
 

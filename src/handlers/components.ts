@@ -189,10 +189,7 @@ async function handleSupportSubmit(
     issue,
     interactionToken: interaction.token,
   });
-  return c.json({
-    type: ResponseType.DEFERRED_CHANNEL_MESSAGE,
-    data: { flags: 64 },
-  });
+  return c.json(ephemeral('Creating your support thread…'));
 }
 
 async function activeSupportTicketResponse(c: Ctx, interaction: Interaction) {
@@ -237,12 +234,17 @@ async function activeSupportTicketResponse(c: Ctx, interaction: Interaction) {
 async function handleSupportClose(c: Ctx, interaction: Interaction, ticketId: number) {
   const user = interactionUser(interaction)!;
   const ticket = await c.env.DB.prepare(
-    'SELECT discord_id, thread_id, title, status FROM support_threads WHERE id = ?1',
+    `SELECT st.discord_id, st.thread_id, st.title, st.status,
+            COALESCE(p.name, p.discord_username, st.discord_id) AS display_name
+     FROM support_threads st
+     LEFT JOIN participants p ON p.discord_id = st.discord_id
+     WHERE st.id = ?1`,
   ).bind(ticketId).first<{
     discord_id: string;
     thread_id: string | null;
     title: string | null;
     status: string;
+    display_name: string;
   }>();
   if (!ticket || ticket.thread_id !== interaction.channel_id) {
     return c.json(ephemeral('This support ticket could not be found.'));
@@ -257,7 +259,7 @@ async function handleSupportClose(c: Ctx, interaction: Interaction, ticketId: nu
   await markSupportTicketClosed(c.env, ticketId, user.id);
   await enqueue(c.env, 'thread_close', {
     channelId: ticket.thread_id,
-    name: supportThreadName(ticket.title ?? 'support ticket', 'closed'),
+    name: supportThreadName(ticket.display_name, ticket.title ?? 'support ticket', true),
     message: {
       content: '✅ **Support ticket closed.** You can open a new ticket from the support channel whenever you need help again.',
       allowed_mentions: { parse: [] },

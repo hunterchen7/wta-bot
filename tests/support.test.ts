@@ -78,7 +78,10 @@ describe('support threads', () => {
       DISCORD_TOKEN: undefined,
       ALLOWED_GUILD_IDS: 'guild',
     });
-    expect(await submitted.json()).toEqual({ type: 5, data: { flags: 64 } });
+    expect(await submitted.json()).toEqual({
+      type: 4,
+      data: { content: 'Creating your support thread…', flags: 64 },
+    });
 
     const ticket = await env.DB.prepare(
       "SELECT discord_id, title, issue, status FROM support_threads WHERE discord_id = 'support-user'",
@@ -157,7 +160,7 @@ describe('support threads', () => {
       { method: 'PATCH', url: 'https://discord.com/api/v10/webhooks/app/interaction-token/messages/@original' },
     ]);
     expect(calls[0]!.body).toMatchObject({
-      name: 'support · Dashboard login · Executor User',
+      name: 'Executor User · Dashboard login',
       type: 12,
     });
     expect(calls[2]!.body).toMatchObject({
@@ -192,6 +195,56 @@ describe('support threads', () => {
     });
   });
 
+  it('deletes an empty thread when Discord rejects its opening message', async () => {
+    const inserted = await env.DB.prepare(
+      `INSERT INTO support_threads (discord_id, title, issue, status)
+       VALUES ('failed-user', 'Failed starter', 'Discord rejects the opening message.', 'pending')`,
+    ).run();
+    const ticketId = Number(inserted.meta.last_row_id);
+    const calls: Array<{ method: string; url: string }> = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      const url = String(input instanceof Request ? input.url : input);
+      calls.push({ method, url });
+      if (method === 'PUT' || method === 'DELETE') {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (url.endsWith('/threads')) {
+        return Promise.resolve(Response.json({ id: 'empty-support-thread' }));
+      }
+      if (url.endsWith('/messages')) {
+        return Promise.resolve(Response.json(
+          { message: 'Invalid Form Body' },
+          { status: 400 },
+        ));
+      }
+      throw new Error(`Unexpected request: ${method} ${url}`);
+    });
+
+    await expect(executeOutbox(
+      { ...env, DISCORD_TOKEN: 'token', DISCORD_APP_ID: 'app' } as any,
+      'support_thread_create',
+      {
+        ticketId,
+        channelId: 'support-channel',
+        guildId: 'guild',
+        userId: 'failed-user',
+        displayName: 'Failed User',
+        title: 'Failed starter',
+        issue: 'Discord rejects the opening message.',
+        interactionToken: 'interaction-token',
+      },
+    )).rejects.toThrow('Invalid Form Body');
+
+    expect(calls).toContainEqual({
+      method: 'DELETE',
+      url: 'https://discord.com/api/v10/channels/empty-support-thread',
+    });
+    expect(await env.DB.prepare(
+      'SELECT thread_id, status FROM support_threads WHERE id = ?1',
+    ).bind(ticketId).first()).toEqual({ thread_id: null, status: 'pending' });
+  });
+
   it('lets the requester close a ticket and immediately open another', async () => {
     const signer = await makeSigner();
     await env.DB.prepare(
@@ -224,7 +277,7 @@ describe('support threads', () => {
     ).first<{ payload: string }>();
     expect(JSON.parse(closeJob!.payload)).toMatchObject({
       channelId: 'support-thread',
-      name: 'support · Old issue · closed',
+      name: 'Ticket Owner · Old issue · closed',
     });
 
     const reopened = await sendInteraction(signer, {

@@ -85,7 +85,7 @@ export async function createSupportThread(
   if (!threadId) {
     const created = await new DiscordRest(env.DISCORD_TOKEN).createSupportThread(
       payload.channelId,
-      supportThreadName(payload.title, payload.displayName),
+      supportThreadName(payload.displayName, payload.title),
       payload.userId,
       {
         content:
@@ -96,7 +96,6 @@ export async function createSupportThread(
           id: `support:${payload.ticketId}:close`,
           label: 'Close ticket',
           style: 2,
-          emoji: '✓',
         }])],
         allowed_mentions: { users: [payload.userId], parse: [] },
       },
@@ -139,9 +138,9 @@ export async function createSupportThread(
   if (!response.ok) throw new Error(`support followup -> ${response.status}: ${await response.text()}`);
 }
 
-export function supportThreadName(title: string, displayName: string): string {
+export function supportThreadName(displayName: string, title: string, closed = false): string {
   const clean = (value: string) => value.replace(/\s+/g, ' ').trim();
-  return `support · ${clean(title)} · ${clean(displayName)}`.slice(0, 100);
+  return `${clean(displayName)} · ${clean(title)}${closed ? ' · closed' : ''}`.slice(0, 100);
 }
 
 export function supportOverwrites(
