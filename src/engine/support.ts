@@ -90,8 +90,7 @@ export async function createSupportThread(
       {
         content:
           `Hi <@${payload.userId}> — an organizer will respond here.\n\n` +
-          `## ${payload.title}\n${payload.issue}\n\n` +
-          'Please avoid sharing passwords, login codes, or other highly sensitive information.',
+          `## ${payload.title}\n${payload.issue}`,
         components: [buttonRow([{
           id: `support:${payload.ticketId}:close`,
           label: 'Close ticket',
