@@ -2,6 +2,7 @@ import { getSetting, getSettings, setSetting } from '../config';
 import { DiscordRest } from '../discord/rest';
 import { supportPanelMessage } from '../discord/support';
 import type { Env } from '../env';
+import { enqueue } from './outbox';
 
 const VIEW_HISTORY = 1024n | 65536n;
 const SEND = 2048n;
@@ -64,6 +65,7 @@ export async function createSupportThread(
   payload: {
     ticketId: number;
     channelId: string;
+    guildId?: string;
     userId: string;
     displayName: string;
     interactionToken: string;
@@ -94,6 +96,23 @@ export async function createSupportThread(
     await env.DB.prepare(
       "UPDATE support_threads SET thread_id = ?2, visibility = ?3, status = 'open', updated_at = datetime('now') WHERE id = ?1",
     ).bind(payload.ticketId, threadId, visibility).run();
+
+    const organizerChannelId = await getSetting(env, 'organizer_channel_id');
+    if (organizerChannelId) {
+      const threadLink = payload.guildId
+        ? `https://discord.com/channels/${payload.guildId}/${threadId}`
+        : `<#${threadId}>`;
+      await enqueue(env, 'channel_msg', {
+        channelId: organizerChannelId,
+        message: {
+          content:
+            `🛟 **New support thread** · Ticket #${payload.ticketId}\n` +
+            `**${payload.displayName}** (<@${payload.userId}>)\n` +
+            threadLink,
+          allowed_mentions: { parse: [] },
+        },
+      });
+    }
   }
 
   const privacy = visibility === 'private'

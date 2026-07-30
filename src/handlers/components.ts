@@ -144,6 +144,7 @@ async function handleSupportButton(c: Ctx, interaction: Interaction) {
   await enqueue(c.env, 'support_thread_create', {
     ticketId: Number(inserted.meta.last_row_id),
     channelId,
+    guildId: interaction.guild_id,
     userId: user.id,
     displayName: participant?.name ?? interaction.member?.nick ?? user.global_name ?? user.username,
     interactionToken: interaction.token,

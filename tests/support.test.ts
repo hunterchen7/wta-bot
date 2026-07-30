@@ -49,6 +49,7 @@ describe('support threads', () => {
     ).first<{ payload: string }>();
     expect(JSON.parse(row!.payload)).toMatchObject({
       channelId: 'support-channel',
+      guildId: 'guild',
       userId: 'support-user',
       displayName: 'Support User',
       interactionToken: 'support-token',
@@ -71,6 +72,7 @@ describe('support threads', () => {
       "INSERT INTO support_threads (discord_id, status) VALUES ('executor-user', 'pending')",
     ).run();
     const ticketId = Number(inserted.meta.last_row_id);
+    await setSetting(env, 'organizer_channel_id', 'organizer-logs');
     const calls: Array<{ method: string; url: string; body: unknown }> = [];
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
@@ -91,6 +93,7 @@ describe('support threads', () => {
       {
         ticketId,
         channelId: 'support-channel',
+        guildId: 'guild',
         userId: 'executor-user',
         displayName: 'Executor User',
         interactionToken: 'interaction-token',
@@ -109,6 +112,19 @@ describe('support threads', () => {
       thread_id: 'private-support-thread',
       visibility: 'private',
       status: 'open',
+    });
+    const organizerNotice = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'channel_msg' ORDER BY id DESC LIMIT 1",
+    ).first<{ payload: string }>();
+    expect(JSON.parse(organizerNotice!.payload)).toEqual({
+      channelId: 'organizer-logs',
+      message: {
+        content:
+          `🛟 **New support thread** · Ticket #${ticketId}\n` +
+          '**Executor User** (<@executor-user>)\n' +
+          'https://discord.com/channels/guild/private-support-thread',
+        allowed_mentions: { parse: [] },
+      },
     });
   });
 
