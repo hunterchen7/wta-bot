@@ -6,14 +6,14 @@ export function supportPanelMessage(): MessagePayload {
   return {
     content:
       '## WTA support\n' +
-      'Need help with the program, your dashboard, scheduling, or a pairing? Open a support thread and an organizer will respond.\n\n' +
+      'Need help with the program, your dashboard, scheduling, or a pairing? Tell us what is going on and an organizer will respond in a support thread.\n\n' +
       'Support threads are private and visible only to you and WTA organizers.',
     components: [{
       type: 1,
       components: [{
         type: 2,
         custom_id: SUPPORT_BUTTON_ID,
-        label: 'Open support thread',
+        label: 'Open support ticket',
         style: 1,
         emoji: { name: '🛟' },
       }],

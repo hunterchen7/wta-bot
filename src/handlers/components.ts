@@ -3,9 +3,11 @@
 
 import type { Context } from 'hono';
 import { getSetting, getSettings } from '../config';
-import { buttonRow, ephemeral, modal, stringSelect, textInput } from '../discord/components';
+import { buttonRow, ephemeral, modal, stringSelect, textInput, TextStyle } from '../discord/components';
+import { DiscordRest } from '../discord/rest';
 import { disputeIncident, getSession, reportIncident, resolveCase } from '../engine/incidents';
 import { enqueue } from '../engine/outbox';
+import { supportThreadName } from '../engine/support';
 import { queueLateOptinDemand } from '../engine/repair';
 import type { Env } from '../env';
 import { getParticipant } from '../participants';
@@ -32,6 +34,8 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
   if (id === ENROLLMENT_BUTTON_ID) return enrollmentLinkResponse(c, interaction, 'join_button');
 
   if (id === SUPPORT_BUTTON_ID) return handleSupportButton(c, interaction);
+  const supportClose = /^support:(\d+):close$/.exec(id);
+  if (supportClose) return handleSupportClose(c, interaction, Number(supportClose[1]));
 
   // ---- weekly opt-in ------------------------------------------------------
   const optin = /^optin:(\d+):(in|double|standby|out|out-confirm|out-cancel)$/.exec(id);
@@ -120,6 +124,78 @@ export async function handleComponent(c: Ctx, interaction: Interaction) {
 }
 
 async function handleSupportButton(c: Ctx, interaction: Interaction) {
+  const blocked = await activeSupportTicketResponse(c, interaction);
+  if (blocked) return blocked;
+  return c.json(modal('support:create:submit', 'Open a support ticket', [
+    textInput({
+      id: 'support-topic',
+      label: 'Short topic',
+      description: 'Used as the thread title so organizers can scan requests.',
+      placeholder: 'Scheduling with my partner',
+      minLength: 3,
+      maxLength: 60,
+    }),
+    textInput({
+      id: 'support-issue',
+      label: 'What do you need help with?',
+      description: 'Include the relevant context an organizer will need.',
+      placeholder: 'Describe what happened and what you need from us.',
+      style: TextStyle.PARAGRAPH,
+      minLength: 10,
+      maxLength: 1400,
+    }),
+  ]));
+}
+
+async function handleSupportSubmit(
+  c: Ctx,
+  interaction: Interaction,
+  values: Map<string, string | string[]>,
+) {
+  const blocked = await activeSupportTicketResponse(c, interaction);
+  if (blocked) return blocked;
+
+  const user = interactionUser(interaction)!;
+  const participant = await getParticipant(c.env, user.id);
+  const channelId = await getSetting(c.env, 'support_channel_id');
+  if (!channelId) return c.json(ephemeral('Support is still being set up. Please try again shortly.'));
+
+  const titleValue = values.get('support-topic');
+  const issueValue = values.get('support-issue');
+  const title = (Array.isArray(titleValue) ? titleValue[0] ?? '' : titleValue ?? '').replace(/\s+/g, ' ').trim();
+  const issue = (Array.isArray(issueValue) ? issueValue[0] ?? '' : issueValue ?? '').trim();
+  if (title.length < 3 || title.length > 60) {
+    return c.json(ephemeral('Use a short topic between 3 and 60 characters.'));
+  }
+  if (issue.length < 10 || issue.length > 1400) {
+    return c.json(ephemeral('Describe the issue in 10–1,400 characters.'));
+  }
+
+  let inserted;
+  try {
+    inserted = await c.env.DB.prepare(
+      "INSERT INTO support_threads (discord_id, title, issue, status) VALUES (?1, ?2, ?3, 'pending')",
+    ).bind(user.id, title, issue).run();
+  } catch {
+    return c.json(ephemeral('You already have a support thread being created or still open.'));
+  }
+  await enqueue(c.env, 'support_thread_create', {
+    ticketId: Number(inserted.meta.last_row_id),
+    channelId,
+    guildId: interaction.guild_id,
+    userId: user.id,
+    displayName: participant?.name ?? interaction.member?.nick ?? user.global_name ?? user.username,
+    title,
+    issue,
+    interactionToken: interaction.token,
+  });
+  return c.json({
+    type: ResponseType.DEFERRED_CHANNEL_MESSAGE,
+    data: { flags: 64 },
+  });
+}
+
+async function activeSupportTicketResponse(c: Ctx, interaction: Interaction) {
   const user = interactionUser(interaction)!;
   const participant = await getParticipant(c.env, user.id);
   if ((!participant || participant.status !== 'active') && !(await isOrganizer(c.env, interaction))) {
@@ -133,26 +209,80 @@ async function handleSupportButton(c: Ctx, interaction: Interaction) {
      WHERE discord_id = ?1 AND status IN ('pending', 'open')
      ORDER BY id DESC LIMIT 1`,
   ).bind(user.id).first<{ id: number; thread_id: string | null; status: string }>();
-  if (current?.thread_id) {
-    return c.json(ephemeral(`You already have an open support thread: <#${current.thread_id}>`));
+  if (!current) return null;
+  if (!current.thread_id) {
+    return c.json(ephemeral('Your support thread is already being created. Please wait a moment.'));
   }
-  if (current) return c.json(ephemeral('Your support thread is already being created. Please wait a moment.'));
 
-  const inserted = await c.env.DB.prepare(
-    "INSERT INTO support_threads (discord_id, status) VALUES (?1, 'pending')",
-  ).bind(user.id).run();
-  await enqueue(c.env, 'support_thread_create', {
-    ticketId: Number(inserted.meta.last_row_id),
-    channelId,
-    guildId: interaction.guild_id,
-    userId: user.id,
-    displayName: participant?.name ?? interaction.member?.nick ?? user.global_name ?? user.username,
-    interactionToken: interaction.token,
+  if (c.env.DISCORD_TOKEN) {
+    try {
+      const thread = await new DiscordRest(c.env.DISCORD_TOKEN).request<{
+        thread_metadata?: { archived?: boolean };
+      }>('GET', `/channels/${current.thread_id}`);
+      if (thread.thread_metadata?.archived) {
+        await markSupportTicketClosed(c.env, current.id);
+        return null;
+      }
+    } catch (error) {
+      if (String(error).includes('-> 404:')) {
+        await markSupportTicketClosed(c.env, current.id);
+        return null;
+      }
+    }
+  }
+
+  return c.json(ephemeral(`You already have an open support thread: <#${current.thread_id}>`));
+}
+
+async function handleSupportClose(c: Ctx, interaction: Interaction, ticketId: number) {
+  const user = interactionUser(interaction)!;
+  const ticket = await c.env.DB.prepare(
+    'SELECT discord_id, thread_id, title, status FROM support_threads WHERE id = ?1',
+  ).bind(ticketId).first<{
+    discord_id: string;
+    thread_id: string | null;
+    title: string | null;
+    status: string;
+  }>();
+  if (!ticket || ticket.thread_id !== interaction.channel_id) {
+    return c.json(ephemeral('This support ticket could not be found.'));
+  }
+  if (ticket.discord_id !== user.id && !(await isOrganizer(c.env, interaction))) {
+    return c.json(ephemeral('Only the requester or a WTA organizer can close this ticket.'));
+  }
+  if (ticket.status === 'closed') {
+    return c.json(ephemeral('This ticket is already closed. You can open a new one from the support channel.'));
+  }
+
+  await markSupportTicketClosed(c.env, ticketId, user.id);
+  await enqueue(c.env, 'thread_close', {
+    channelId: ticket.thread_id,
+    name: supportThreadName(ticket.title ?? 'support ticket', 'closed'),
+    message: {
+      content: '✅ **Support ticket closed.** You can open a new ticket from the support channel whenever you need help again.',
+      allowed_mentions: { parse: [] },
+    },
   });
-  return c.json({
-    type: ResponseType.DEFERRED_CHANNEL_MESSAGE,
-    data: { flags: 64 },
-  });
+  return c.json(ephemeral('Ticket closed. You can open a new one from the support channel.'));
+}
+
+async function markSupportTicketClosed(env: Env, ticketId: number, closedBy?: string) {
+  await env.DB.prepare(
+    `UPDATE support_threads
+     SET status = 'closed', closed_at = datetime('now'), updated_at = datetime('now')
+     WHERE id = ?1 AND status != 'closed'`,
+  ).bind(ticketId).run();
+
+  const organizerChannelId = await getSetting(env, 'organizer_channel_id');
+  if (organizerChannelId && closedBy) {
+    await enqueue(env, 'channel_msg', {
+      channelId: organizerChannelId,
+      message: {
+        content: `✅ Support ticket #${ticketId} closed by <@${closedBy}>.`,
+        allowed_mentions: { parse: [] },
+      },
+    });
+  }
 }
 
 export async function handleModal(c: Ctx, interaction: Interaction) {
@@ -160,6 +290,8 @@ export async function handleModal(c: Ctx, interaction: Interaction) {
   if (!user) return c.json(ephemeral('Could not identify you — try again.'));
   const id = interaction.data?.custom_id ?? '';
   const values = collectModalValues(interaction.data?.components);
+
+  if (id === 'support:create:submit') return handleSupportSubmit(c, interaction, values);
 
   // ---- session scheduling --------------------------------------------------
   const sched = /^sess:(\d+):schedmodal$/.exec(id);

@@ -1,4 +1,5 @@
 import { getSetting, getSettings, setSetting } from '../config';
+import { buttonRow } from '../discord/components';
 import { DiscordRest } from '../discord/rest';
 import { supportPanelMessage } from '../discord/support';
 import type { Env } from '../env';
@@ -68,6 +69,8 @@ export async function createSupportThread(
     guildId?: string;
     userId: string;
     displayName: string;
+    title: string;
+    issue: string;
     interactionToken: string;
   },
 ): Promise<void> {
@@ -82,12 +85,19 @@ export async function createSupportThread(
   if (!threadId) {
     const created = await new DiscordRest(env.DISCORD_TOKEN).createSupportThread(
       payload.channelId,
-      `support · ${payload.displayName}`,
+      supportThreadName(payload.title, payload.displayName),
       payload.userId,
       {
         content:
-          `Hi <@${payload.userId}> — describe what you need help with and an organizer will respond here.\n\n` +
+          `Hi <@${payload.userId}> — an organizer will respond here.\n\n` +
+          `## ${payload.title}\n${payload.issue}\n\n` +
           'Please avoid sharing passwords, login codes, or other highly sensitive information.',
+        components: [buttonRow([{
+          id: `support:${payload.ticketId}:close`,
+          label: 'Close ticket',
+          style: 2,
+          emoji: '✓',
+        }])],
         allowed_mentions: { users: [payload.userId], parse: [] },
       },
     );
@@ -106,7 +116,7 @@ export async function createSupportThread(
         channelId: organizerChannelId,
         message: {
           content:
-            `🛟 **New support thread** · Ticket #${payload.ticketId}\n` +
+            `🛟 **New support thread** · Ticket #${payload.ticketId} · ${payload.title}\n` +
             `**${payload.displayName}** (<@${payload.userId}>)\n` +
             threadLink,
           allowed_mentions: { parse: [] },
@@ -127,6 +137,11 @@ export async function createSupportThread(
     },
   );
   if (!response.ok) throw new Error(`support followup -> ${response.status}: ${await response.text()}`);
+}
+
+export function supportThreadName(title: string, displayName: string): string {
+  const clean = (value: string) => value.replace(/\s+/g, ' ').trim();
+  return `support · ${clean(title)} · ${clean(displayName)}`.slice(0, 100);
 }
 
 export function supportOverwrites(
