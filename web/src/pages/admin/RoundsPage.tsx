@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import type { RoundReport, RoundReportsData, RoundsData } from '../../admin-types';
+import { useEffect, useMemo, useState } from 'react';
+import type { RoundReport, RoundReportsData, RoundsData, RoundSession } from '../../admin-types';
 import { adminRequest } from '../../api';
 import {
   Badge,
@@ -20,11 +20,37 @@ import {
   Tabs,
 } from '../../components/AdminUI';
 import { ParticipantProfileDialog } from '../../components/ParticipantProfileDialog';
+import { Icon } from '../../components/Icon';
 import { SelectControl } from '../../components/SelectControl';
+import { Checkbox } from '../../components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { useAdminData } from '../../hooks/useAdminData';
 import { LIVE_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
 
 type OpenParticipant = (participantId: number) => void;
+
+const SESSION_COLUMN_STORAGE_KEY = 'wta:round-session-columns:v1';
+const SESSION_SORT_STORAGE_KEY = 'wta:round-session-sort:v1';
+const SESSION_COLUMNS = ['session', 'participants', 'scheduled', 'assignment', 'reports', 'state'] as const;
+type SessionColumn = typeof SESSION_COLUMNS[number];
+type SessionSortDirection = 'asc' | 'desc';
+type SessionSort = { column: SessionColumn; direction: SessionSortDirection };
+type SessionSortValue = string | number | null;
+type SessionColumnDefinition = {
+  label: string;
+  defaultDirection?: SessionSortDirection;
+  value: (session: RoundSession) => SessionSortValue;
+};
+
+const SESSION_COLUMN_DEFINITIONS: Record<SessionColumn, SessionColumnDefinition> = {
+  session: { label: 'Session', defaultDirection: 'desc', value: (session) => session.id },
+  participants: { label: 'Participants', value: (session) => `${session.interviewer_name}\u0000${session.interviewee_name}` },
+  scheduled: { label: 'Scheduled', value: (session) => session.scheduled_at ? Date.parse(session.scheduled_at) : null },
+  assignment: { label: 'Interviewer assignment', value: (session) => session.problem_number ?? session.problem_title },
+  reports: { label: 'Reports', value: (session) => session.reports_in },
+  state: { label: 'State', value: (session) => session.state },
+};
+const sessionSortCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 export function RoundsPage() {
   const [weekId, setWeekId] = useState<number | null>(null);
@@ -119,6 +145,8 @@ function SessionsPanel({ data, onOpenParticipant }: { data: RoundsData; onOpenPa
   const [state, setState] = useState('all');
   const [attention, setAttention] = useState('all');
   const [origin, setOrigin] = useState('all');
+  const [visibleColumns, setVisibleColumns] = useState<SessionColumn[]>(readSessionColumns);
+  const [sort, setSort] = useState<SessionSort>(readSessionSort);
   const stateOptions = useMemo(() => [...new Set(data.sessions.map((row) => row.state))].sort(), [data.sessions]);
   const filteredSessions = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase();
@@ -147,7 +175,32 @@ function SessionsPanel({ data, onOpenParticipant }: { data: RoundsData; onOpenPa
       ].some((value) => value.toLocaleLowerCase().includes(needle));
     });
   }, [attention, data.sessions, origin, query, state]);
+  const sortedSessions = useMemo(() => {
+    const rows = filteredSessions.slice();
+    rows.sort((left, right) => compareSessions(left, right, sort));
+    return rows;
+  }, [filteredSessions, sort]);
+  useEffect(() => {
+    try { localStorage.setItem(SESSION_COLUMN_STORAGE_KEY, JSON.stringify(visibleColumns)); } catch { /* storage unavailable */ }
+  }, [visibleColumns]);
+  useEffect(() => {
+    try { localStorage.setItem(SESSION_SORT_STORAGE_KEY, JSON.stringify(sort)); } catch { /* storage unavailable */ }
+  }, [sort]);
+  useEffect(() => {
+    if (visibleColumns.includes(sort.column)) return;
+    const column = visibleColumns[0] ?? 'session';
+    setSort({ column, direction: SESSION_COLUMN_DEFINITIONS[column].defaultDirection ?? 'asc' });
+  }, [sort.column, visibleColumns]);
   const activeFilters = Number(Boolean(query.trim())) + Number(state !== 'all') + Number(attention !== 'all') + Number(origin !== 'all');
+  const sortBy = (column: SessionColumn) => setSort((current) => current.column === column
+    ? { column, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+    : { column, direction: SESSION_COLUMN_DEFINITIONS[column].defaultDirection ?? 'asc' });
+  const toggleColumn = (column: SessionColumn) => setVisibleColumns((current) => {
+    if (current.includes(column)) {
+      return current.length === 1 ? current : current.filter((candidate) => candidate !== column);
+    }
+    return SESSION_COLUMNS.filter((candidate) => candidate === column || current.includes(candidate));
+  });
   const clearFilters = () => {
     setQuery('');
     setState('all');
@@ -205,31 +258,165 @@ function SessionsPanel({ data, onOpenParticipant }: { data: RoundsData; onOpenPa
             />
           </div>
         </div>
-        <div className="flex min-h-5 items-center justify-between gap-3">
+        <div className="flex min-h-8 flex-wrap items-center justify-between gap-3">
           <div aria-live="polite" className="text-xs font-semibold tabular-nums text-muted-foreground">
             {filteredSessions.length} of {data.sessions.length} session{data.sessions.length === 1 ? '' : 's'}
+            <span className="ml-1.5 text-muted-foreground/75">· Sorted by {SESSION_COLUMN_DEFINITIONS[sort.column].label} {sort.direction === 'asc' ? '↑' : '↓'}</span>
           </div>
-          {activeFilters ? <button type="button" className="cursor-pointer text-xs font-bold text-western-700 transition-colors hover:text-western-900 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-western-300 dark:hover:text-western-100" onClick={clearFilters}>Clear filters</button> : null}
+          <div className="flex items-center gap-2">
+            <SessionColumnsMenu visibleColumns={visibleColumns} onToggle={toggleColumn} onShowAll={() => setVisibleColumns([...SESSION_COLUMNS])} />
+            {activeFilters ? <button type="button" className="cursor-pointer px-2 py-1.5 text-xs font-bold text-western-700 transition-colors hover:text-western-900 focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-western-300 dark:hover:text-western-100" onClick={clearFilters}>Clear filters</button> : null}
+          </div>
         </div>
       </div>
-      {filteredSessions.length ? <div className={tableWrapClass}><table className={tableClass}>
-      <thead><tr><th className={thClass}>Session</th><th className={thClass}>Participants</th><th className={thClass}>Scheduled</th><th className={thClass}>Interviewer assignment</th><th className={thClass}>Reports</th><th className={thClass}>State</th></tr></thead>
-      <tbody>{filteredSessions.map((row) => <tr key={row.id} className={row.state === 'pending_schedule' || row.state === 'broken' ? 'bg-amber-50/35 dark:bg-amber-950/10' : ''}>
-        <td className={`${tdClass} font-mono text-xs`}>#{row.id}{row.origin === 'repair' ? <span className="ml-1 text-amber-700 dark:text-amber-400">re-pair</span> : null}</td>
-        <td className={tdClass}>
-          <div className="space-y-1">
-            <div><span className="mr-2 text-[0.65rem] font-black uppercase tracking-wide text-slate-400">Interviewer</span><ParticipantNameButton participantId={row.interviewer_id} name={row.interviewer_name} onOpen={onOpenParticipant} /></div>
-            <div><span className="mr-2 text-[0.65rem] font-black uppercase tracking-wide text-slate-400">Interviewee</span><ParticipantNameButton participantId={row.interviewee_id} name={row.interviewee_name} onOpen={onOpenParticipant} /></div>
-          </div>
-        </td>
-        <td className={tdClass}>{formatDate(row.scheduled_at)}</td>
-        <td className={tdClass}><ProblemAssignment row={row} /></td>
-        <td className={tdClass}><span className={`font-black tabular-nums ${row.reports_in < 2 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>{row.reports_in}/2</span></td>
-        <td className={tdClass}><Badge value={row.state} /></td>
+      {filteredSessions.length ? <div className={tableWrapClass}><table className={`${tableClass} ${visibleColumns.length <= 3 ? '!min-w-full' : ''}`}>
+      <thead><tr>{visibleColumns.map((column) => <SessionColumnHeader key={column} column={column} sort={sort} onSort={sortBy} />)}</tr></thead>
+      <tbody>{sortedSessions.map((row) => <tr key={row.id} className={row.state === 'pending_schedule' || row.state === 'broken' ? 'bg-amber-50/35 dark:bg-amber-950/10' : ''}>
+        {visibleColumns.map((column) => <SessionCell key={column} column={column} row={row} onOpenParticipant={onOpenParticipant} />)}
       </tr>)}</tbody>
       </table></div> : <EmptyState title="No sessions match" description="Try a broader search or clear one of the filters." />}
     </> : <EmptyState title="No sessions yet" description="Sessions appear after matching runs for this round." />}
   </Panel>;
+}
+
+function SessionColumnsMenu({ visibleColumns, onToggle, onShowAll }: {
+  visibleColumns: SessionColumn[];
+  onToggle: (column: SessionColumn) => void;
+  onShowAll: () => void;
+}) {
+  const allVisible = visibleColumns.length === SESSION_COLUMNS.length;
+  return <Popover>
+    <PopoverTrigger asChild>
+      <Button variant="secondary" className="h-8 rounded-lg px-3 text-xs">
+        <Icon name="menu" className="size-3.5" />
+        Columns
+        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[0.65rem] font-black tabular-nums text-muted-foreground">
+          {visibleColumns.length}/{SESSION_COLUMNS.length}
+        </span>
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent align="end" className="w-64 overflow-hidden p-0">
+      <div className="border-b border-border px-4 py-3">
+        <div className="text-sm font-black text-foreground">Visible columns</div>
+        <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Choose what appears on the session board.</p>
+      </div>
+      <div className="p-2">
+        {SESSION_COLUMNS.map((column) => {
+          const checked = visibleColumns.includes(column);
+          const disabled = checked && visibleColumns.length === 1;
+          return <label
+            key={column}
+            className={`flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors motion-reduce:transition-none ${disabled ? 'cursor-not-allowed opacity-55' : 'cursor-pointer hover:bg-muted'}`}
+          >
+            <Checkbox checked={checked} disabled={disabled} onCheckedChange={() => onToggle(column)} />
+            <span>{SESSION_COLUMN_DEFINITIONS[column].label}</span>
+          </label>;
+        })}
+      </div>
+      {!allVisible ? <div className="border-t border-border px-3 py-2">
+        <button
+          type="button"
+          className="w-full cursor-pointer rounded-lg px-2 py-1.5 text-left text-xs font-bold text-western-700 transition-colors hover:bg-muted hover:text-western-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none dark:text-western-300 dark:hover:text-western-100"
+          onClick={onShowAll}
+        >
+          Show all columns
+        </button>
+      </div> : null}
+    </PopoverContent>
+  </Popover>;
+}
+
+function SessionColumnHeader({ column, sort, onSort }: {
+  column: SessionColumn;
+  sort: SessionSort;
+  onSort: (column: SessionColumn) => void;
+}) {
+  const definition = SESSION_COLUMN_DEFINITIONS[column];
+  const active = sort.column === column;
+  return <th
+    aria-sort={active ? sort.direction === 'asc' ? 'ascending' : 'descending' : 'none'}
+    className={thClass}
+  >
+    <button
+      type="button"
+      aria-label={`Sort by ${definition.label}`}
+      className="group/sort inline-flex cursor-pointer items-center gap-1 rounded-md px-1 py-1 text-left transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+      onClick={() => onSort(column)}
+    >
+      {definition.label}
+      <Icon
+        name={active ? sort.direction === 'asc' ? 'sortAsc' : 'sortDesc' : 'sort'}
+        className={`size-3.5 transition-opacity motion-reduce:transition-none ${active ? 'text-western-700 opacity-100 dark:text-western-300' : 'opacity-35 group-hover/sort:opacity-70'}`}
+      />
+    </button>
+  </th>;
+}
+
+function SessionCell({ column, row, onOpenParticipant }: {
+  column: SessionColumn;
+  row: RoundSession;
+  onOpenParticipant: OpenParticipant;
+}) {
+  switch (column) {
+    case 'session':
+      return <td className={`${tdClass} font-mono text-xs`}>#{row.id}{row.origin === 'repair' ? <span className="ml-1 text-amber-700 dark:text-amber-400">re-pair</span> : null}</td>;
+    case 'participants':
+      return <td className={`${tdClass} min-w-64`}>
+        <div className="space-y-1">
+          <div><span className="mr-2 text-[0.65rem] font-black uppercase tracking-wide text-slate-400">Interviewer</span><ParticipantNameButton participantId={row.interviewer_id} name={row.interviewer_name} onOpen={onOpenParticipant} /></div>
+          <div><span className="mr-2 text-[0.65rem] font-black uppercase tracking-wide text-slate-400">Interviewee</span><ParticipantNameButton participantId={row.interviewee_id} name={row.interviewee_name} onOpen={onOpenParticipant} /></div>
+        </div>
+      </td>;
+    case 'scheduled':
+      return <td className={`${tdClass} whitespace-nowrap`}>{formatDate(row.scheduled_at)}</td>;
+    case 'assignment':
+      return <td className={tdClass}><ProblemAssignment row={row} /></td>;
+    case 'reports':
+      return <td className={tdClass}><span className={`font-black tabular-nums ${row.reports_in < 2 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>{row.reports_in}/2</span></td>;
+    case 'state':
+      return <td className={tdClass}><Badge value={row.state} /></td>;
+  }
+}
+
+function compareSessions(left: RoundSession, right: RoundSession, sort: SessionSort) {
+  const definition = SESSION_COLUMN_DEFINITIONS[sort.column];
+  const leftValue = definition.value(left);
+  const rightValue = definition.value(right);
+  const leftMissing = leftValue == null || leftValue === '' || (typeof leftValue === 'number' && Number.isNaN(leftValue));
+  const rightMissing = rightValue == null || rightValue === '' || (typeof rightValue === 'number' && Number.isNaN(rightValue));
+  if (leftMissing || rightMissing) {
+    if (leftMissing && rightMissing) return right.id - left.id;
+    return leftMissing ? 1 : -1;
+  }
+  const compared = typeof leftValue === 'number' && typeof rightValue === 'number'
+    ? leftValue - rightValue
+    : sessionSortCollator.compare(String(leftValue), String(rightValue));
+  return (sort.direction === 'asc' ? compared : -compared) || right.id - left.id;
+}
+
+function readSessionColumns(): SessionColumn[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SESSION_COLUMN_STORAGE_KEY) ?? '[]');
+    if (!Array.isArray(saved)) return [...SESSION_COLUMNS];
+    const known = saved.map(String).filter((value): value is SessionColumn => asSessionColumn(value) != null);
+    return known.length ? SESSION_COLUMNS.filter((column) => known.includes(column)) : [...SESSION_COLUMNS];
+  } catch {
+    return [...SESSION_COLUMNS];
+  }
+}
+
+function readSessionSort(): SessionSort {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SESSION_SORT_STORAGE_KEY) ?? 'null');
+    const column = asSessionColumn(saved?.column);
+    const direction = saved?.direction;
+    if (column && (direction === 'asc' || direction === 'desc')) return { column, direction };
+  } catch { /* use default */ }
+  return { column: 'session', direction: 'desc' };
+}
+
+function asSessionColumn(value: unknown): SessionColumn | null {
+  return typeof value === 'string' && (SESSION_COLUMNS as readonly string[]).includes(value) ? value as SessionColumn : null;
 }
 
 function ReportsPanel({ weekId, onOpenParticipant }: { weekId: number; onOpenParticipant: OpenParticipant }) {
