@@ -102,8 +102,63 @@ export async function onReportSubmitted(
     }
   }
 
+  await logReportSubmission(env, session.id, instance.assignee_id, side);
+
   await maybeMarkEligible(env, session.interviewer_id);
   await maybeMarkEligible(env, session.interviewee_id);
+}
+
+async function logReportSubmission(
+  env: Env,
+  sessionId: number,
+  submitterId: number,
+  side: 'interviewer' | 'interviewee',
+): Promise<void> {
+  const { organizer_channel_id } = await getSettings(env, ['organizer_channel_id']);
+  if (!organizer_channel_id) return;
+
+  const submission = await env.DB.prepare(
+    `SELECT w.idx AS week_idx, s.state,
+            submitter.discord_id AS submitter_discord_id,
+            submitter.name AS submitter_name,
+            partner.name AS partner_name,
+            (SELECT count(*) FROM form_instances f
+             WHERE f.session_id = s.id AND f.submitted_at IS NOT NULL) AS reports_in
+     FROM sessions s
+     JOIN weeks w ON w.id = s.week_id
+     JOIN participants submitter ON submitter.id = ?2
+     JOIN participants partner ON partner.id = CASE
+       WHEN s.interviewer_id = ?2 THEN s.interviewee_id
+       ELSE s.interviewer_id
+     END
+     WHERE s.id = ?1`,
+  )
+    .bind(sessionId, submitterId)
+    .first<{
+      week_idx: number;
+      state: string;
+      submitter_discord_id: string;
+      submitter_name: string | null;
+      partner_name: string | null;
+      reports_in: number;
+    }>();
+  if (!submission) return;
+
+  const submitterName = submission.submitter_name?.trim() || submission.submitter_discord_id;
+  const partnerName = submission.partner_name?.trim() || 'their partner';
+  const reportsIn = Math.min(2, Number(submission.reports_in) || 0);
+  const status = submission.state === 'completed'
+    ? '**session complete** (2/2 reports)'
+    : `${reportsIn}/2 reports received`;
+
+  await enqueue(env, 'channel_msg', {
+    channelId: organizer_channel_id,
+    message: {
+      content:
+        `📝 **${submitterName}** (<@${submission.submitter_discord_id}>) submitted the **${side} report** ` +
+        `for **Round ${submission.week_idx} · session #${sessionId}** with **${partnerName}** — ${status}.`,
+    },
+  });
 }
 
 async function relayShared(

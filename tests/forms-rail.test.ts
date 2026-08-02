@@ -66,6 +66,10 @@ const INTERVIEWER_OK: Record<string, string> = {
 };
 
 beforeAll(async () => {
+  await env.DB.prepare(
+    `INSERT INTO settings (key, value) VALUES ('organizer_channel_id', 'organizer-report-log')
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+  ).run();
   // Roster + final-week session (idx 3 of 3 -> organizer review queue)
   await env.DB.prepare(
     `INSERT INTO participants (discord_id, discord_username, discord_nickname, name, preferred_email, topics, status)
@@ -179,6 +183,18 @@ describe('form rail', () => {
       .first<any>();
     expect(s.interviewee_credited).toBe(1);
     expect(s.state).toBe('scheduled'); // not completed until both reports in
+
+    const log = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%submitted the **interviewee report**%'",
+    ).first<{ payload: string }>();
+    expect(JSON.parse(log!.payload)).toMatchObject({
+      channelId: 'organizer-report-log',
+      message: {
+        content: expect.stringMatching(
+          /Eve Interviewee.*<@202>.*interviewee report.*Round 3 · session #[0-9]+.*Ivy Interviewer.*1\/2 reports received/s,
+        ),
+      },
+    });
   });
 
   it('accepts the interviewer report: completes the session, relays feedback, queues W3 review', async () => {
@@ -204,6 +220,18 @@ describe('form rail', () => {
     expect(targets).toEqual(['201', '202']);
     const toInterviewer = dms.map((d: any) => JSON.parse(d.payload)).find((p: any) => p.userId === '201');
     expect(toInterviewer.message.content).toContain('Great hints');
+
+    const log = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%submitted the **interviewer report**%'",
+    ).first<{ payload: string }>();
+    expect(JSON.parse(log!.payload)).toMatchObject({
+      channelId: 'organizer-report-log',
+      message: {
+        content: expect.stringMatching(
+          /Ivy Interviewer.*<@201>.*interviewer report.*Round 3 · session #[0-9]+.*Eve Interviewee.*session complete.*2\/2 reports/s,
+        ),
+      },
+    });
   });
 
   it('supports revision until the deadline (last write wins, no double side effects)', async () => {
@@ -213,6 +241,10 @@ describe('form rail', () => {
       "SELECT payload FROM form_instances WHERE kind = 'interviewee_report'",
     ).first<any>();
     expect(JSON.parse(row.payload).rating_experience).toBe('3');
+    const logs = await env.DB.prepare(
+      "SELECT count(*) AS n FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%submitted the **% report**%'",
+    ).first<{ n: number }>();
+    expect(logs?.n).toBe(2);
   });
 
   it('404s tokens pointing at deleted/missing instances', async () => {
