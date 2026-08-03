@@ -68,7 +68,11 @@ export async function onReportSubmitted(
       if (organizer_channel_id) {
         await enqueue(env, 'channel_msg', {
           channelId: organizer_channel_id,
-          message: { content: `⚖️ Attendance answers disagree on session #${session.id} — worth a look (\`/standing\` both sides).` },
+          message: {
+            content:
+              `⚖️ Attendance answers disagree on session #${session.id} — worth a look (\`/standing\` both sides).` +
+              sessionThreadLink(session.thread_id),
+          },
         });
       }
     }
@@ -96,7 +100,11 @@ export async function onReportSubmitted(
       if (organizer_channel_id) {
         await enqueue(env, 'channel_msg', {
           channelId: organizer_channel_id,
-          message: { content: `🎬 Final-round session #${session.id} is ready for organizer review (dashboard → Reviews).` },
+          message: {
+            content:
+              `🎬 Final-round session #${session.id} is ready for organizer review (dashboard → Reviews).` +
+              sessionThreadLink(session.thread_id),
+          },
         });
       }
     }
@@ -118,7 +126,7 @@ async function logReportSubmission(
   if (!organizer_channel_id) return;
 
   const submission = await env.DB.prepare(
-    `SELECT w.idx AS week_idx, s.state,
+    `SELECT w.idx AS week_idx, s.state, s.thread_id,
             submitter.discord_id AS submitter_discord_id,
             submitter.name AS submitter_name,
             partner.name AS partner_name,
@@ -137,6 +145,7 @@ async function logReportSubmission(
     .first<{
       week_idx: number;
       state: string;
+      thread_id: string | null;
       submitter_discord_id: string;
       submitter_name: string | null;
       partner_name: string | null;
@@ -156,9 +165,14 @@ async function logReportSubmission(
     message: {
       content:
         `📝 **${submitterName}** (<@${submission.submitter_discord_id}>) submitted the **${side} report** ` +
-        `for **Round ${submission.week_idx} · session #${sessionId}** with **${partnerName}** — ${status}.`,
+        `for **Round ${submission.week_idx} · session #${sessionId}** with **${partnerName}** — ${status}.` +
+        sessionThreadLink(submission.thread_id),
     },
   });
+}
+
+function sessionThreadLink(threadId: string | null): string {
+  return threadId ? `\n↗️ **Session thread:** <#${threadId}>` : '';
 }
 
 async function relayShared(

@@ -79,8 +79,8 @@ beforeAll(async () => {
   const { weeks } = await createCohort(env, 'Rail Test', [2026, 9, 14]);
   const week3 = weeks[2]!;
   const ins = await env.DB.prepare(
-    `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, scheduled_at)
-     VALUES (?1, 1, 2, 'scheduled', '2026-09-30T23:00:00.000Z')`,
+    `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, thread_id, state, scheduled_at)
+     VALUES (?1, 1, 2, 'rail-session-thread', 'scheduled', '2026-09-30T23:00:00.000Z')`,
   )
     .bind(week3.id)
     .run();
@@ -191,7 +191,7 @@ describe('form rail', () => {
       channelId: 'organizer-report-log',
       message: {
         content: expect.stringMatching(
-          /Eve Interviewee.*<@202>.*interviewee report.*Round 3 · session #[0-9]+.*Ivy Interviewer.*1\/2 reports received/s,
+          /Eve Interviewee.*<@202>.*interviewee report.*Round 3 · session #[0-9]+.*Ivy Interviewer.*1\/2 reports received.*Session thread.*<#rail-session-thread>/s,
         ),
       },
     });
@@ -221,6 +221,13 @@ describe('form rail', () => {
     const toInterviewer = dms.map((d: any) => JSON.parse(d.payload)).find((p: any) => p.userId === '201');
     expect(toInterviewer.message.content).toContain('Great hints');
 
+    const reviewLog = await env.DB.prepare(
+      "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%ready for organizer review%'",
+    ).first<{ payload: string }>();
+    expect(JSON.parse(reviewLog!.payload).message.content).toContain(
+      'Session thread:** <#rail-session-thread>',
+    );
+
     const log = await env.DB.prepare(
       "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%submitted the **interviewer report**%'",
     ).first<{ payload: string }>();
@@ -228,7 +235,7 @@ describe('form rail', () => {
       channelId: 'organizer-report-log',
       message: {
         content: expect.stringMatching(
-          /Ivy Interviewer.*<@201>.*interviewer report.*Round 3 · session #[0-9]+.*Eve Interviewee.*session complete.*2\/2 reports/s,
+          /Ivy Interviewer.*<@201>.*interviewer report.*Round 3 · session #[0-9]+.*Eve Interviewee.*session complete.*2\/2 reports.*Session thread.*<#rail-session-thread>/s,
         ),
       },
     });
