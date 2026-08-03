@@ -191,7 +191,7 @@ describe('form rail', () => {
       channelId: 'organizer-report-log',
       message: {
         content: expect.stringMatching(
-          /Eve Interviewee.*<@202>.*interviewee report.*Round 3 · session #[0-9]+.*Ivy Interviewer.*1\/2 reports received.*Session thread.*<#rail-session-thread>/s,
+          /Eve Interviewee.*<@202>.*interviewee report.*Round 3 · session #[0-9]+.*Ivy Interviewer.*1\/2 reports received.*Thread.*<#rail-session-thread>/s,
         ),
       },
     });
@@ -225,7 +225,7 @@ describe('form rail', () => {
       "SELECT payload FROM outbox WHERE kind = 'channel_msg' AND payload LIKE '%ready for organizer review%'",
     ).first<{ payload: string }>();
     expect(JSON.parse(reviewLog!.payload).message.content).toContain(
-      'Session thread:** <#rail-session-thread>',
+      'Thread:** <#rail-session-thread>',
     );
 
     const log = await env.DB.prepare(
@@ -235,7 +235,7 @@ describe('form rail', () => {
       channelId: 'organizer-report-log',
       message: {
         content: expect.stringMatching(
-          /Ivy Interviewer.*<@201>.*interviewer report.*Round 3 · session #[0-9]+.*Eve Interviewee.*session complete.*2\/2 reports.*Session thread.*<#rail-session-thread>/s,
+          /Ivy Interviewer.*<@201>.*interviewer report.*Round 3 · session #[0-9]+.*Eve Interviewee.*session complete.*2\/2 reports.*Thread.*<#rail-session-thread>/s,
         ),
       },
     });

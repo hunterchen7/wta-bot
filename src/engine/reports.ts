@@ -172,7 +172,7 @@ async function logReportSubmission(
 }
 
 function sessionThreadLink(threadId: string | null): string {
-  return threadId ? `\n↗️ **Session thread:** <#${threadId}>` : '';
+  return threadId ? ` · **Thread:** <#${threadId}>` : '';
 }
 
 async function relayShared(
