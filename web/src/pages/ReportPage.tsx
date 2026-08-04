@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useBlocker, useParams, useSearchParams } from 'react-router-dom';
 import { adminRequest, publicRequest, SettingsSaveError } from '../api';
 import { PublicShell } from '../components/PublicShell';
@@ -21,8 +21,13 @@ const NO_SHOW_GATE_VALUE = 'no';
 const NO_SHOW_NOTE_ID = 'no_show_note';
 const isNoShow = (values: Record<string, string>) => values[NO_SHOW_GATE_ID] === NO_SHOW_GATE_VALUE;
 const activeFields = (fields: ReportField[], values: Record<string, string>): ReportField[] => {
+  const gateValue = values[NO_SHOW_GATE_ID]?.trim();
   const noShow = isNoShow(values);
-  return fields.filter((field) => (field.id === NO_SHOW_GATE_ID ? true : field.noShowOnly ? noShow : !noShow));
+  return fields.filter((field) => {
+    if (field.id === NO_SHOW_GATE_ID) return true;
+    if (!gateValue) return false;
+    return field.noShowOnly ? noShow : !noShow;
+  });
 };
 
 export function ReportPage({ previewKind }: { previewKind?: string }) {
@@ -76,6 +81,8 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
 
   if (error && !data) return <ReportShell embedded={embedded}><StateCard title="This form can’t be opened" text={error} /></ReportShell>;
   if (!data) return <ReportShell embedded={embedded}><div className="animate-pulse space-y-5"><div className="h-28 rounded-3xl bg-slate-200" /><div className="h-96 rounded-3xl bg-slate-200" /></div></ReportShell>;
+  const visibleFields = activeFields(data.fields, values);
+  const noShow = isNoShow(values);
 
   return <ReportShell embedded={embedded}>
     <ReportIntro data={data} preview={Boolean(previewKind)} />
@@ -84,7 +91,7 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     {data.overdue ? <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">This report is overdue. Submit it as soon as possible—credit remains on hold until it arrives.</div> : null}
     {previewKind ? <div className="mb-6 rounded-2xl border border-western-200 bg-western-50 p-4 text-sm font-semibold text-western-900">Preview mode: interact with the fields to inspect the experience; nothing can be submitted.</div> : null}
     {error ? <div role="alert" className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-900">{error}</div> : null}
-    <form onSubmit={submit} className="space-y-4">{activeFields(data.fields, values).map((field, index) => <ReportFieldInput key={field.id} field={field} value={values[field.id] ?? ''} error={fieldErrors[field.id]} index={index + 1} token={token} preview={Boolean(previewKind)} onChange={(value) => set(field.id, value)} />)}
+    <form onSubmit={submit} className="space-y-4">{visibleFields.map((field, index) => <Fragment key={field.id}><ReportFieldInput field={field} value={values[field.id] ?? ''} error={fieldErrors[field.id]} index={index + 1} token={token} preview={Boolean(previewKind)} onChange={(value) => set(field.id, value)} />{noShow && field.id === NO_SHOW_GATE_ID ? <div role="status" className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-950 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-100">Thanks for letting us know. You don’t need to complete the interview questions. Add any helpful context below, then submit the report.</div> : null}</Fragment>)}
       <div className={`${previewKind ? '' : 'sticky bottom-4 z-20 shadow-xl backdrop-blur'} rounded-2xl border border-slate-200 bg-white/95 p-3`}><Button size="lg" disabled={Boolean(previewKind) || busy || (!dirty && Boolean(data.submittedAt))} className="h-12 w-full cursor-pointer rounded-xl font-black disabled:cursor-not-allowed">{previewKind ? 'Submission disabled in preview' : busy ? 'Saving report…' : data.submittedAt ? 'Save revised report' : 'Submit report'}</Button></div>
     </form>
     <SubmissionDialog state={submissionComplete} onClose={() => setSubmissionComplete(null)} />
@@ -151,7 +158,7 @@ function ReportShell({ embedded, children }: { embedded: boolean; children: Reac
 }
 
 function ReportFieldInput({ field, value, error, index, token, preview, onChange }: { field: ReportField; value: string; error?: string; index: number; token?: string; preview: boolean; onChange: (value: string) => void }) {
-  const shell = `rounded-2xl border bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.025)] ${error ? 'border-rose-300 ring-2 ring-rose-100' : 'border-slate-200'}`;
+  const shell = `rounded-2xl border bg-white p-5 shadow-[0_1px_2px_rgba(15,23,42,.025)] motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-1 ${error ? 'border-rose-300 ring-2 ring-rose-100' : 'border-slate-200'}`;
   const head = <><div className="flex items-start gap-3"><span className="mt-0.5 grid size-6 shrink-0 place-items-center rounded-full bg-slate-100 text-[0.68rem] font-black text-slate-500">{index}</span><div><div className="text-sm font-extrabold leading-6 text-slate-900">{field.label}{field.required ? <span className="ml-1 text-rose-600">*</span> : null}</div>{field.help ? <p className="mt-1 text-xs leading-5 text-slate-500">{field.help}</p> : null}</div></div></>;
   const alert = error ? <p role="alert" className="mt-3 text-sm font-bold text-rose-700">{error}</p> : null;
   if (field.type === 'radio' || field.type === 'scale') {

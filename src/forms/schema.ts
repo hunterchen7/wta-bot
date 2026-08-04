@@ -66,9 +66,11 @@ export function isNoShow(values: Record<string, unknown>): boolean {
 // The fields actually shown/collected for the current answers: on the no-show
 // path only the gate + optional note; otherwise the full report (never the note).
 export function activeFields(fields: Field[], values: Record<string, unknown>): Field[] {
+  const gateValue = String(values[NO_SHOW_GATE_ID] ?? '').trim();
   const noShow = isNoShow(values);
   return fields.filter((f) => {
     if (f.id === NO_SHOW_GATE_ID) return true;
+    if (!gateValue) return false;
     return f.noShowOnly ? noShow : !noShow;
   });
 }

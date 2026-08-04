@@ -15,6 +15,7 @@ describe('no-show gate (pure schema logic)', () => {
 
   it('puts the partner-attendance gate first and hides the note by default', () => {
     expect(fields[0]!.id).toBe('attendance_partner');
+    expect(activeFields(fields, {}).map((f) => f.id)).toEqual(['attendance_partner']);
     const normal = activeFields(fields, { attendance_partner: 'yes' }).map((f) => f.id);
     expect(normal).toContain('rating_experience');
     expect(normal).not.toContain('no_show_note');
@@ -50,24 +51,35 @@ const post = (token: string, fields: Record<string, string>) =>
 
 let intervieweeToken: string;
 let sessionId: number;
+let interviewerId: number;
+let intervieweeId: number;
 
 beforeAll(async () => {
-  await env.DB.prepare(
+  const interviewer = await env.DB.prepare(
     `INSERT INTO participants (discord_id, discord_username, discord_nickname, name, preferred_email, topics, status)
-     VALUES ('901', 'noshow.iv', 'Iv', 'Iv Interviewer', 'iv901@example.com', '["dsa"]', 'active'),
-            ('902', 'noshow.ee', 'Ee', 'Ee Interviewee', 'ee902@example.com', '["dsa"]', 'active')`,
+     VALUES ('901', 'noshow.iv', 'Iv', 'Iv Interviewer', 'iv901@example.com', '["dsa"]', 'active')`,
   ).run();
+  interviewerId = Number(interviewer.meta.last_row_id);
+  const interviewee = await env.DB.prepare(
+    `INSERT INTO participants (discord_id, discord_username, discord_nickname, name, preferred_email, topics, status)
+     VALUES ('902', 'noshow.ee', 'Ee', 'Ee Interviewee', 'ee902@example.com', '["dsa"]', 'active')`,
+  ).run();
+  intervieweeId = Number(interviewee.meta.last_row_id);
   const { weeks } = await createCohort(env, 'No-Show Test', [2026, 9, 14]);
   const week = weeks[0]!;
+  const problem = await env.DB.prepare(
+    `INSERT INTO problems (title, difficulty, statement_md, solution_md)
+     VALUES ('Private no-show problem', 'easy', 'Statement', 'Solution')`,
+  ).run();
   const ins = await env.DB.prepare(
-    `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, thread_id, state, scheduled_at)
-     VALUES (?1, 1, 2, 'noshow-thread', 'scheduled', '2026-09-30T23:00:00.000Z')`,
-  ).bind(week.id).run();
+    `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, problem_id, thread_id, state, scheduled_at)
+     VALUES (?1, ?2, ?3, ?4, 'noshow-thread', 'scheduled', '2026-09-30T23:00:00.000Z')`,
+  ).bind(week.id, interviewerId, intervieweeId, Number(problem.meta.last_row_id)).run();
   sessionId = Number(ins.meta.last_row_id);
   const r = await env.DB.prepare(
     `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at)
-     VALUES ('interviewee_report', ?1, 2, ?2, ?3)`,
-  ).bind(sessionId, crypto.randomUUID(), week.grace_until).run();
+     VALUES ('interviewee_report', ?1, ?2, ?3, ?4)`,
+  ).bind(sessionId, intervieweeId, crypto.randomUUID(), week.grace_until).run();
   intervieweeToken = await signFormToken(env.FORM_SIGNING_SECRET!, Number(r.meta.last_row_id), new Date(Date.now() + 86400_000));
 });
 
@@ -96,5 +108,22 @@ describe('no-show submission (form rail)', () => {
     // The existing attendance cross-check still flags the session downstream.
     const s = await env.DB.prepare('SELECT state FROM sessions WHERE id = ?1').bind(sessionId).first<any>();
     expect(s.state).toBe('broken');
+    expect(await env.DB.prepare(
+      'SELECT accused_id, reporter_id, kind, state FROM incidents WHERE session_id = ?1',
+    ).bind(sessionId).first()).toEqual({
+      accused_id: interviewerId,
+      reporter_id: intervieweeId,
+      kind: 'ghost',
+      state: 'confirmed',
+    });
+    expect(await env.DB.prepare(
+      'SELECT participant_id, need, state FROM repair_queue WHERE week_id = (SELECT week_id FROM sessions WHERE id = ?1)',
+    ).bind(sessionId).first()).toEqual({ participant_id: intervieweeId, need: 'interviewer', state: 'open' });
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM exposures WHERE session_id = ?1 AND role = 'interviewee'",
+    ).bind(sessionId).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare(
+      "SELECT count(*) AS n FROM outbox WHERE kind = 'dm' AND json_extract(payload, '$.fallbackKind') = 'solution'",
+    ).first()).toEqual({ n: 0 });
   });
 });
