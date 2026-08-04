@@ -14,6 +14,8 @@ export type Field = {
   minWords?: number; // enforced server-side on submit
   low?: string; // scale: label under the 1 end
   high?: string; // scale: label under the 5 end
+  placeholder?: string; // text/textarea placeholder
+  noShowOnly?: boolean; // only shown/collected when the partner did not show up
 };
 
 const yesNo = [
@@ -40,9 +42,40 @@ const scale = (
   help?: string,
 ): Field => ({ id, label, type: 'scale', required: true, low, high, help });
 
+// No-show gate: when the partner-attendance answer is "no", the interview
+// never happened, so the rest of the report is collapsed to a single optional
+// note (see `activeFields`). This field drives the incident cross-check in
+// engine/reports.ts, so a "no" answer already flags the submission downstream.
+export const NO_SHOW_GATE_ID = 'attendance_partner';
+export const NO_SHOW_GATE_VALUE = 'no';
+
+// Optional free-text shown only on the no-show path.
+const NO_SHOW_NOTE: Field = {
+  id: 'no_show_note',
+  label: 'Anything we should know?',
+  type: 'textarea',
+  noShowOnly: true,
+  placeholder: 'e.g. waited 15 minutes, no response',
+  help: 'Optional. A quick note helps organizers follow up — leave it blank if there is nothing to add.',
+};
+
+export function isNoShow(values: Record<string, unknown>): boolean {
+  return String(values[NO_SHOW_GATE_ID] ?? '').trim() === NO_SHOW_GATE_VALUE;
+}
+
+// The fields actually shown/collected for the current answers: on the no-show
+// path only the gate + optional note; otherwise the full report (never the note).
+export function activeFields(fields: Field[], values: Record<string, unknown>): Field[] {
+  const noShow = isNoShow(values);
+  return fields.filter((f) => {
+    if (f.id === NO_SHOW_GATE_ID) return true;
+    return f.noShowOnly ? noShow : !noShow;
+  });
+}
+
 export const INTERVIEWEE_FIELDS: Field[] = [
-  { id: 'attendance_self', label: 'Did you show up to your scheduled interview?', type: 'radio', options: attendance, required: true },
   { id: 'attendance_partner', label: 'Did your interviewer show up to your scheduled interview?', type: 'radio', options: attendance, required: true },
+  { id: 'attendance_self', label: 'Did you show up to your scheduled interview?', type: 'radio', options: attendance, required: true },
   { id: 'camera_self', label: 'Did you have your camera on?', type: 'radio', options: yesNo, required: true },
   { id: 'camera_partner', label: 'Did your interviewer have their camera on?', type: 'radio', options: yesNo, required: true },
   scale('rating_experience', 'Rate the quality of your experience', 'Terrible', 'Excellent'),
@@ -93,11 +126,12 @@ export const INTERVIEWEE_FIELDS: Field[] = [
     options: yesNo,
     required: true,
   },
+  NO_SHOW_NOTE,
 ];
 
 export const INTERVIEWER_FIELDS: Field[] = [
-  { id: 'attendance_self', label: 'Did you attend your scheduled interview?', type: 'radio', options: attendance, required: true },
   { id: 'attendance_partner', label: 'Did your interviewee attend the scheduled interview?', type: 'radio', options: attendance, required: true },
+  { id: 'attendance_self', label: 'Did you attend your scheduled interview?', type: 'radio', options: attendance, required: true },
   { id: 'camera_self', label: 'Did you have your camera on?', type: 'radio', options: yesNo, required: true },
   { id: 'camera_partner', label: 'Did your interviewee have their camera on?', type: 'radio', options: yesNo, required: true },
   scale('rating_experience', 'Rate the quality of your experience', 'Terrible', 'Excellent'),
@@ -203,6 +237,7 @@ export const INTERVIEWER_FIELDS: Field[] = [
     label: 'I have re-read this form and confirmed that everything I entered is correct.',
     type: 'radio', options: yesNo, required: true,
   },
+  NO_SHOW_NOTE,
 ];
 
 export function fieldsFor(kind: string): Field[] | null {

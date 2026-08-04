@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { onReportSubmitted } from '../engine/reports';
 import type { Env } from '../env';
-import { fieldsFor, validate, type Field } from '../forms/schema';
+import { activeFields, fieldsFor, validate, type Field } from '../forms/schema';
 import { verifyFormToken, verifyToken } from '../forms/token';
 import { sessionFrom } from './web';
 import { isCurrentOrganizer } from '../organizers';
@@ -97,7 +97,9 @@ forms.post('/api/forms/:token', async (c) => {
   if (!fields) return c.json({ error: 'unknown_form', message: 'This report type is not supported.' }, 400);
   const body = await c.req.json<Record<string, unknown>>().catch(() => null);
   if (!body) return c.json({ error: 'invalid_json', message: 'The report could not be read.' }, 400);
-  const result = validate(fields, body);
+  // On the no-show path only the gate + optional note are required or stored;
+  // hidden feedback fields are dropped so they never reach the payload or stats.
+  const result = validate(activeFields(fields, body), body);
   if (!result.ok) {
     return c.json({ error: 'invalid_report', message: 'Check the highlighted fields.', fieldErrors: result.fieldErrors, errors: result.errors }, 400);
   }

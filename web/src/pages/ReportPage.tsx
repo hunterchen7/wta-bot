@@ -11,8 +11,19 @@ import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
 import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 
-export type ReportField = { id: string; label: string; type: 'radio' | 'select' | 'scale' | 'text' | 'textarea' | 'url'; options?: Array<{ value: string; label: string }>; required?: boolean; shared?: boolean; help?: string; mono?: boolean; low?: string; high?: string };
+export type ReportField = { id: string; label: string; type: 'radio' | 'select' | 'scale' | 'text' | 'textarea' | 'url'; options?: Array<{ value: string; label: string }>; required?: boolean; shared?: boolean; help?: string; mono?: boolean; low?: string; high?: string; placeholder?: string; noShowOnly?: boolean };
 export type ReportData = { preview?: boolean; id: number; kind: string; round: number; role: string; assigneeName: string | null; assigneeDiscordId: string; assigneeDiscordUsername: string | null; assigneeDiscordNickname: string | null; partnerName: string | null; scheduledAt: string | null; deadlineAt: string; submittedAt: string | null; overdue: boolean; fields: ReportField[]; values: Record<string, string> };
+
+// Mirror of engine/forms schema.ts: when the partner did not show up, collapse
+// the report to the gate + optional note and drop the abandoned feedback path.
+const NO_SHOW_GATE_ID = 'attendance_partner';
+const NO_SHOW_GATE_VALUE = 'no';
+const NO_SHOW_NOTE_ID = 'no_show_note';
+const isNoShow = (values: Record<string, string>) => values[NO_SHOW_GATE_ID] === NO_SHOW_GATE_VALUE;
+const activeFields = (fields: ReportField[], values: Record<string, string>): ReportField[] => {
+  const noShow = isNoShow(values);
+  return fields.filter((field) => (field.id === NO_SHOW_GATE_ID ? true : field.noShowOnly ? noShow : !noShow));
+};
 
 export function ReportPage({ previewKind }: { previewKind?: string }) {
   const { token } = useParams();
@@ -40,14 +51,17 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn);
   }, [dirty, saved]);
 
-  const set = (id: string, value: string) => { setSaved(false); setFieldErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id))); setValues((current) => ({ ...current, [id]: value })); };
+  const set = (id: string, value: string) => { setSaved(false); setFieldErrors((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== id))); setValues((current) => { const next = { ...current, [id]: value }; if (id === NO_SHOW_GATE_ID && value !== NO_SHOW_GATE_VALUE) next[NO_SHOW_NOTE_ID] = ''; return next; }); };
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     if (previewKind) return;
     setBusy(true); setError(''); setFieldErrors({});
     try {
       const wasRevision = Boolean(data?.submittedAt);
-      await publicRequest(`/forms/${token}`, { method: 'POST', body: JSON.stringify(values) });
+      // Submit only the fields on the active path — never the hidden feedback
+      // values from an abandoned no-show/normal toggle.
+      const submitValues = Object.fromEntries(activeFields(data?.fields ?? [], values).map((field) => [field.id, values[field.id] ?? '']));
+      await publicRequest(`/forms/${token}`, { method: 'POST', body: JSON.stringify(submitValues) });
       setBaseline(JSON.stringify(values)); setSaved(true);
       setData((current) => current ? { ...current, submittedAt: new Date().toISOString() } : current);
       setSubmissionComplete(wasRevision ? 'updated' : 'submitted');
@@ -70,7 +84,7 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
     {data.overdue ? <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold text-amber-900">This report is overdue. Submit it as soon as possible—credit remains on hold until it arrives.</div> : null}
     {previewKind ? <div className="mb-6 rounded-2xl border border-western-200 bg-western-50 p-4 text-sm font-semibold text-western-900">Preview mode: interact with the fields to inspect the experience; nothing can be submitted.</div> : null}
     {error ? <div role="alert" className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-900">{error}</div> : null}
-    <form onSubmit={submit} className="space-y-4">{data.fields.map((field, index) => <ReportFieldInput key={field.id} field={field} value={values[field.id] ?? ''} error={fieldErrors[field.id]} index={index + 1} token={token} preview={Boolean(previewKind)} onChange={(value) => set(field.id, value)} />)}
+    <form onSubmit={submit} className="space-y-4">{activeFields(data.fields, values).map((field, index) => <ReportFieldInput key={field.id} field={field} value={values[field.id] ?? ''} error={fieldErrors[field.id]} index={index + 1} token={token} preview={Boolean(previewKind)} onChange={(value) => set(field.id, value)} />)}
       <div className={`${previewKind ? '' : 'sticky bottom-4 z-20 shadow-xl backdrop-blur'} rounded-2xl border border-slate-200 bg-white/95 p-3`}><Button size="lg" disabled={Boolean(previewKind) || busy || (!dirty && Boolean(data.submittedAt))} className="h-12 w-full cursor-pointer rounded-xl font-black disabled:cursor-not-allowed">{previewKind ? 'Submission disabled in preview' : busy ? 'Saving report…' : data.submittedAt ? 'Save revised report' : 'Submit report'}</Button></div>
     </form>
     <SubmissionDialog state={submissionComplete} onClose={() => setSubmissionComplete(null)} />
@@ -144,7 +158,7 @@ function ReportFieldInput({ field, value, error, index, token, preview, onChange
     const options = field.type === 'scale' ? [1, 2, 3, 4, 5].map((number) => ({ value: String(number), label: String(number) })) : field.options ?? [];
     return <fieldset data-report-field={field.id} className={shell}>{head}<RadioGroup required={field.required} value={value} onValueChange={onChange} className={`mt-4 ${field.type === 'scale' ? 'grid-cols-5' : 'sm:grid-cols-2'}`}>{options.map((option) => <label key={option.value} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-3 text-sm font-bold transition ${field.type === 'scale' ? 'justify-center' : ''} ${value === option.value ? 'border-primary bg-primary/5 text-foreground shadow-sm' : 'border-input text-muted-foreground hover:border-primary/40 hover:bg-accent/50'}`}><RadioGroupItem value={option.value} aria-label={option.label} />{option.label}</label>)}</RadioGroup>{field.type === 'scale' ? <div className="mt-2 flex justify-between text-xs font-semibold text-slate-400"><span>{field.low}</span><span>{field.high}</span></div> : null}{alert}</fieldset>;
   }
-  return <div data-report-field={field.id} className={`${shell} block`}>{head}<div className="mt-4">{field.id === 'video_url' ? <VideoUploadField token={token} value={value} preview={preview} invalid={Boolean(error)} onChange={onChange} /> : field.type === 'select' ? <SelectControl label={field.label} required={field.required} value={value} onChange={onChange} options={field.options ?? []} placeholder="Choose an option…" invalid={Boolean(error)} className="h-11" /> : field.type === 'textarea' && field.mono ? <CodeEditor value={value} invalid={Boolean(error)} onChange={onChange} /> : field.type === 'textarea' ? <Textarea aria-invalid={Boolean(error)} required={field.required} rows={5} value={value} onChange={(event) => onChange(event.target.value)} className="min-h-32 resize-y rounded-xl bg-background" /> : <Input aria-invalid={Boolean(error)} required={field.required} type={field.type === 'url' ? 'url' : 'text'} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl bg-background" />}</div>{alert}</div>;
+  return <div data-report-field={field.id} className={`${shell} block`}>{head}<div className="mt-4">{field.id === 'video_url' ? <VideoUploadField token={token} value={value} preview={preview} invalid={Boolean(error)} onChange={onChange} /> : field.type === 'select' ? <SelectControl label={field.label} required={field.required} value={value} onChange={onChange} options={field.options ?? []} placeholder="Choose an option…" invalid={Boolean(error)} className="h-11" /> : field.type === 'textarea' && field.mono ? <CodeEditor value={value} invalid={Boolean(error)} onChange={onChange} /> : field.type === 'textarea' ? <Textarea aria-invalid={Boolean(error)} required={field.required} rows={5} value={value} placeholder={field.placeholder} onChange={(event) => onChange(event.target.value)} className="min-h-32 resize-y rounded-xl bg-background" /> : <Input aria-invalid={Boolean(error)} required={field.required} type={field.type === 'url' ? 'url' : 'text'} value={value} onChange={(event) => onChange(event.target.value)} className="h-11 rounded-xl bg-background" />}</div>{alert}</div>;
 }
 
 function LeaveDialog({ onStay, onLeave }: { onStay: () => void; onLeave: () => void }) { return <div className="fixed inset-0 z-50 grid place-items-center bg-slate-950/50 p-4 backdrop-blur-sm"><div role="dialog" aria-modal="true" aria-labelledby="leave-title" className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl"><h2 id="leave-title" className="text-xl font-black text-slate-950">Leave with unsaved answers?</h2><p className="mt-2 text-sm leading-6 text-slate-600">Changes on this report have not been submitted.</p><div className="mt-6 flex justify-end gap-2"><Button variant="outline" className="cursor-pointer" onClick={onStay}>Stay here</Button><Button variant="destructive" className="cursor-pointer" onClick={onLeave}>Discard changes</Button></div></div></div>; }
