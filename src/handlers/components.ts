@@ -331,6 +331,15 @@ async function handleOptin(
   }
   const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(weekId).first<any>();
   if (!week) return c.json(ephemeral('This opt-in has expired.'));
+  const roundExclusion = await c.env.DB.prepare(
+    'SELECT reason FROM round_exclusions WHERE week_id = ?1 AND participant_id = ?2',
+  ).bind(weekId, participant.id).first<{ reason: string }>();
+  if (roundExclusion) {
+    return c.json(ephemeral(
+      `You were removed from Round ${week.idx} after an unscheduled pairing went unanswered. ` +
+      'Contact an organizer if you think this was a mistake.',
+    ));
+  }
   const now = new Date();
   const roundEnd = new Date(week.grace_until ?? week.reports_due_at);
   if (now > roundEnd) {

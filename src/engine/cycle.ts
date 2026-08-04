@@ -427,7 +427,8 @@ export async function scheduleNudge(env: Env, week: Week): Promise<void> {
      FROM sessions s
      JOIN participants pi ON pi.id = s.interviewer_id
      JOIN participants pe ON pe.id = s.interviewee_id
-     WHERE s.week_id = ?1 AND s.state = 'pending_schedule'`,
+     WHERE s.week_id = ?1 AND s.state = 'pending_schedule'
+       AND s.activity_nudged_at IS NULL`,
   )
     .bind(week.id)
     .all<any>();

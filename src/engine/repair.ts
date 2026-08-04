@@ -79,6 +79,10 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
      JOIN participants p ON p.id = r.participant_id
      WHERE r.state = 'open' AND ?1 <= COALESCE(w.grace_until, w.reports_due_at)
        AND p.status = 'active' AND p.pairing_excluded = 0
+       AND NOT EXISTS (
+         SELECT 1 FROM round_exclusions e
+         WHERE e.week_id = r.week_id AND e.participant_id = r.participant_id
+       )
      ORDER BY r.id`,
   )
     .bind(now.toISOString())
@@ -126,6 +130,10 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
        JOIN participants p ON p.id = o.participant_id AND p.status = 'active' AND p.pairing_excluded = 0
        WHERE o.week_id = ?1 AND o.standby = 1 AND o.extra_interviewer = 0
          AND o.participant_id != ?2
+         AND NOT EXISTS (
+           SELECT 1 FROM round_exclusions e
+           WHERE e.week_id = o.week_id AND e.participant_id = o.participant_id
+         )
          AND NOT EXISTS (
            SELECT 1 FROM standby_assignments sa
            WHERE sa.week_id = o.week_id AND sa.participant_id = o.participant_id

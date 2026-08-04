@@ -7,6 +7,7 @@ import { packetScan } from './engine/problems';
 import { cleanupOrphanedRecordings } from './engine/recording-cleanup';
 import { inboxScan } from './engine/inbox';
 import { repairScan } from './engine/repair';
+import { schedulingInactivityScan } from './engine/scheduling-inactivity';
 import { closeStaleSessionThreads } from './engine/session-thread';
 import { ensureSupportChannel } from './engine/support';
 import { ensurePairingChannel } from './engine/bootstrap';
@@ -55,6 +56,7 @@ export async function tick(env: Env, now: Date): Promise<void> {
     await preInterviewReminderScan(env, origin, now).catch((err) => console.error('preInterviewReminderScan failed:', err));
     await formDropScan(env, origin, now).catch((err) => console.error('formDropScan failed:', err));
     await deadlineSweep(env, origin, now).catch((err) => console.error('deadlineSweep failed:', err));
+    await schedulingInactivityScan(env, now).catch((err) => console.error('schedulingInactivityScan failed:', err));
     await repairScan(env, now).catch((err) => console.error('repairScan failed:', err));
     await closeStaleSessionThreads(env).catch((err) => console.error('thread close scan failed:', err));
     // Backstop any packet that the scheduling request did not enqueue.

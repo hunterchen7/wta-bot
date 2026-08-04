@@ -31,6 +31,13 @@ All times America/Toronto, anchored to the round's start day D (any weekday — 
 
 Week 3 gets a **repair-only grace window** (default: +4 days for repairs and late reports; no new regular matching). **[OPEN]**
 
+Every unscheduled session also has an activity clock from its creation time. At
+48 hours, the bot checks the thread and warns the silent participant, or both
+participants when nobody has spoken. At 72 hours, exactly one active participant
+means the silent participant is removed from new pairings for that round and
+affected partners enter priority re-pairing. If both participants are silent (or
+both participated), the bot takes no automatic re-pairing action.
+
 ## 3. Matching
 
 - **Pool:** everyone opted in, minus holds/paused/removed.
