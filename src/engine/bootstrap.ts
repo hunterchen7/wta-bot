@@ -1,7 +1,7 @@
 import { getSetting, getSettings, setSetting } from '../config';
 import { DiscordRest } from '../discord/rest';
 import type { Env } from '../env';
-import { ensureSupportChannel, supportOverwrites } from './support';
+import { ensureSupportChannel, supportInboxOverwrites, supportOverwrites } from './support';
 
 /** Edits the deferred "thinking…" response immediately (no cron round-trip). */
 async function editOriginal(env: Env, interactionToken: string, content: string): Promise<void> {
@@ -58,6 +58,8 @@ function publicOverwrites(kind: string, r: Roles): unknown[] {
       ];
     case 'support':
       return supportOverwrites(r.everyone, r.participantRole, r.organizerRole, r.botUser);
+    case 'support-inbox':
+      return supportInboxOverwrites(r.everyone, r.organizerRole, r.botUser);
     default: // organizers channel — same in both profiles
       return [
         { id: r.everyone, type: 0, deny: String(1024) },
@@ -82,6 +84,7 @@ const CHANNEL_KINDS: Array<{ kind: string; name: string; settingKey: any }> = [
   { kind: 'pairing', name: 'pairing', settingKey: 'pairing_channel_id' },
   { kind: 'interviews', name: 'interviews', settingKey: 'threads_channel_id' },
   { kind: 'support', name: 'support', settingKey: 'support_channel_id' },
+  { kind: 'support-inbox', name: 'support-inbox', settingKey: 'support_inbox_channel_id' },
   { kind: 'organizers', name: 'wta-organizers', settingKey: 'organizer_channel_id' },
 ];
 

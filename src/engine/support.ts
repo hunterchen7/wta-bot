@@ -15,6 +15,42 @@ const bits = (...values: bigint[]) => String(values.reduce((total, value) => tot
 
 type GuildChannel = { id: string; name: string; type: number; parent_id?: string | null };
 
+export async function ensureSupportInboxChannel(env: Env, requestedGuildId?: string): Promise<string | null> {
+  if (!env.DISCORD_TOKEN) return null;
+  const guildId = requestedGuildId ?? env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
+  if (!guildId) return null;
+
+  const configured = await getSetting(env, 'support_inbox_channel_id');
+  if (configured) return configured;
+
+  const cfg = await getSettings(env, ['organizer_role_id', 'category_id']);
+  if (!cfg.organizer_role_id) throw new Error('support inbox setup requires the Organizer role');
+
+  const rest = new DiscordRest(env.DISCORD_TOKEN);
+  const channels = await rest.request<GuildChannel[]>('GET', `/guilds/${guildId}/channels`);
+  const existing = channels.find((channel) =>
+    channel.type === 0
+    && channel.name === 'support-inbox'
+    && (!cfg.category_id || channel.parent_id === cfg.category_id)
+  );
+  const privateProfile = {
+    topic: 'Private organizer inbox for newly created WTA support threads.',
+    permission_overwrites: supportInboxOverwrites(guildId, cfg.organizer_role_id, env.DISCORD_APP_ID),
+  };
+  const channel = existing ?? await rest.request<GuildChannel>('POST', `/guilds/${guildId}/channels`, {
+    name: 'support-inbox',
+    type: 0,
+    ...privateProfile,
+    ...(cfg.category_id ? { parent_id: cfg.category_id } : {}),
+  });
+  if (existing) {
+    // Never adopt a same-named channel without enforcing the private profile.
+    await rest.request('PATCH', `/channels/${existing.id}`, privateProfile);
+  }
+  await setSetting(env, 'support_inbox_channel_id', channel.id);
+  return channel.id;
+}
+
 export async function ensureSupportChannel(env: Env, requestedGuildId?: string): Promise<string | null> {
   if (!env.DISCORD_TOKEN) return null;
   const guildId = requestedGuildId ?? env.ALLOWED_GUILD_IDS?.split(',')[0]?.trim();
@@ -23,6 +59,7 @@ export async function ensureSupportChannel(env: Env, requestedGuildId?: string):
   const configuredChannel = await getSetting(env, 'support_channel_id');
   const configuredMessage = await getSetting(env, 'support_message_id');
   const rest = new DiscordRest(env.DISCORD_TOKEN);
+  await ensureSupportInboxChannel(env, guildId);
   if (configuredChannel && configuredMessage) {
     await rest.editMessage(configuredChannel, configuredMessage, supportPanelMessage());
     return configuredChannel;
@@ -105,13 +142,13 @@ export async function createSupportThread(
       "UPDATE support_threads SET thread_id = ?2, visibility = ?3, status = 'open', updated_at = datetime('now') WHERE id = ?1",
     ).bind(payload.ticketId, threadId, visibility).run();
 
-    const organizerChannelId = await getSetting(env, 'organizer_channel_id');
-    if (organizerChannelId) {
+    const supportInboxChannelId = await ensureSupportInboxChannel(env, payload.guildId);
+    if (supportInboxChannelId) {
       const threadLink = payload.guildId
         ? `https://discord.com/channels/${payload.guildId}/${threadId}`
         : `<#${threadId}>`;
       await enqueue(env, 'channel_msg', {
-        channelId: organizerChannelId,
+        channelId: supportInboxChannelId,
         message: {
           content:
             `🛟 **New support thread** · Ticket #${payload.ticketId} · ${payload.title}\n` +
@@ -166,5 +203,18 @@ export function supportOverwrites(
       type: 1,
       allow: bits(VIEW_HISTORY, SEND, SEND_IN_THREADS, MANAGE_THREADS, CREATE_PUBLIC_THREADS, CREATE_PRIVATE_THREADS),
     }] : []),
+  ];
+}
+
+export function supportInboxOverwrites(
+  guildId: string,
+  organizerRole: string,
+  botUser?: string,
+): unknown[] {
+  const allow = bits(VIEW_HISTORY, SEND);
+  return [
+    { id: guildId, type: 0, deny: String(1024n) },
+    { id: organizerRole, type: 0, allow },
+    ...(botUser ? [{ id: botUser, type: 1, allow }] : []),
   ];
 }

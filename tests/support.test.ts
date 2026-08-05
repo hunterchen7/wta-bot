@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { setSetting } from '../src/config';
 import { supportPanelMessage } from '../src/discord/support';
 import { executeOutbox } from '../src/engine/executor';
-import { supportOverwrites } from '../src/engine/support';
+import { ensureSupportInboxChannel, supportInboxOverwrites, supportOverwrites } from '../src/engine/support';
 import { asUser, makeSigner, sendInteraction } from './helpers';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -123,7 +123,7 @@ describe('support threads', () => {
        VALUES ('executor-user', 'Dashboard login', 'The dashboard keeps rejecting my login code.', 'pending')`,
     ).run();
     const ticketId = Number(inserted.meta.last_row_id);
-    await setSetting(env, 'organizer_channel_id', 'organizer-logs');
+    await setSetting(env, 'support_inbox_channel_id', 'support-inbox');
     const calls: Array<{ method: string; url: string; body: unknown }> = [];
     vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
       const method = init?.method ?? 'GET';
@@ -184,7 +184,7 @@ describe('support threads', () => {
       "SELECT payload FROM outbox WHERE kind = 'channel_msg' ORDER BY id DESC LIMIT 1",
     ).first<{ payload: string }>();
     expect(JSON.parse(organizerNotice!.payload)).toEqual({
-      channelId: 'organizer-logs',
+      channelId: 'support-inbox',
       message: {
         content:
           `🛟 **New support thread** · Ticket #${ticketId} · Dashboard login\n` +
@@ -411,5 +411,49 @@ describe('support threads', () => {
         allow: '395137059840',
       },
     ]);
+  });
+
+  it('keeps the support inbox private to organizers and the bot', () => {
+    expect(supportInboxOverwrites('guild', 'organizer', 'bot')).toEqual([
+      { id: 'guild', type: 0, deny: '1024' },
+      { id: 'organizer', type: 0, allow: '68608' },
+      { id: 'bot', type: 1, allow: '68608' },
+    ]);
+  });
+
+  it('provisions a private support inbox for an existing guild', async () => {
+    await env.DB.prepare("DELETE FROM settings WHERE key = 'support_inbox_channel_id'").run();
+    await setSetting(env, 'organizer_role_id', 'organizer');
+    await setSetting(env, 'category_id', 'program-category');
+    const calls: Array<{ method: string; url: string; body?: any }> = [];
+    vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      const url = String(input instanceof Request ? input.url : input);
+      calls.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (method === 'GET') return Promise.resolve(Response.json([]));
+      return Promise.resolve(Response.json({ id: 'new-support-inbox', name: 'support-inbox', type: 0 }));
+    });
+
+    expect(await ensureSupportInboxChannel(
+      { ...env, DISCORD_TOKEN: 'token', DISCORD_APP_ID: 'bot' } as any,
+      'guild',
+    )).toBe('new-support-inbox');
+    expect(calls).toEqual([
+      { method: 'GET', url: 'https://discord.com/api/v10/guilds/guild/channels', body: undefined },
+      {
+        method: 'POST',
+        url: 'https://discord.com/api/v10/guilds/guild/channels',
+        body: {
+          name: 'support-inbox',
+          type: 0,
+          topic: 'Private organizer inbox for newly created WTA support threads.',
+          parent_id: 'program-category',
+          permission_overwrites: supportInboxOverwrites('guild', 'organizer', 'bot'),
+        },
+      },
+    ]);
+    expect(await env.DB.prepare(
+      "SELECT value FROM settings WHERE key = 'support_inbox_channel_id'",
+    ).first()).toEqual({ value: 'new-support-inbox' });
   });
 });

@@ -54,9 +54,9 @@ describe('annual bootstrap', () => {
     const roles = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/guilds/G1/roles'));
     expect(roles.map((r) => r.body.name).sort()).toEqual(['Organizer', 'Participant']);
 
-    // category + five program channels, all private-first
+    // category + six program channels, all private-first
     const channels = calls.filter((c) => c.method === 'POST' && c.url.endsWith('/guilds/G1/channels'));
-    expect(channels).toHaveLength(6);
+    expect(channels).toHaveLength(7);
     expect(channels[0]!.body).toMatchObject({ name: 'WTA 2026', type: 4 });
     for (const ch of channels.slice(1)) {
       const everyone = ch.body.permission_overwrites.find((o: any) => o.id === 'G1');
@@ -66,9 +66,9 @@ describe('annual bootstrap', () => {
     // settings point at the new ids
     const { results } = await env.DB.prepare(
       `SELECT key, value FROM settings WHERE key IN
-       ('announce_channel_id','pairing_channel_id','threads_channel_id','support_channel_id','support_message_id','organizer_channel_id','participant_role_id','organizer_role_id','category_id')`,
+       ('announce_channel_id','pairing_channel_id','threads_channel_id','support_channel_id','support_inbox_channel_id','support_message_id','organizer_channel_id','participant_role_id','organizer_role_id','category_id')`,
     ).all<any>();
-    expect(results).toHaveLength(9);
+    expect(results).toHaveLength(10);
     for (const r of results) expect(String(r.value)).toMatch(/^id-/);
     expect(calls.some((call) => JSON.stringify(call.body).includes('verify:start'))).toBe(false);
 
@@ -95,7 +95,7 @@ describe('publish', () => {
       { guildId: 'G1', interactionToken: 'ptok' },
     );
     const patches = calls.filter((c) => c.method === 'PATCH' && !c.url.includes('/webhooks/'));
-    expect(patches).toHaveLength(5);
+    expect(patches).toHaveLength(6);
 
     const announcementsId = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'announce_channel_id'").first<any>())!.value;
     const announcements = patches.find((patch) => patch.url.endsWith(`/channels/${announcementsId}`))!;
@@ -119,6 +119,14 @@ describe('publish', () => {
       allow: '274877973504',
       deny: '103079217152',
     });
+
+    const supportInboxId = (await env.DB.prepare("SELECT value FROM settings WHERE key = 'support_inbox_channel_id'").first<any>())!.value;
+    const supportInbox = patches.find((patch) => patch.url.endsWith(`/channels/${supportInboxId}`))!;
+    expect(supportInbox.body.permission_overwrites).toEqual([
+      { id: 'G1', type: 0, deny: '1024' },
+      { id: expect.any(String), type: 0, allow: '68608' },
+      { id: 'botid', type: 1, allow: '68608' },
+    ]);
 
     expect(followupOf(calls).join('')).toContain('Live!');
   });
