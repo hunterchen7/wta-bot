@@ -455,7 +455,8 @@ adminApi.post('/api/admin/rounds/:weekId/extra-interviewer', async (c) => {
          extra_interviewer = 1,
          standby = 0,
          standby_interviewer_limit = 0,
-         standby_interviewee_limit = 0`,
+         standby_interviewee_limit = 0,
+         standby_override_exclusion = 0`,
     ).bind(weekId, participantId).run();
   } else {
     const optin = await c.env.DB.prepare(

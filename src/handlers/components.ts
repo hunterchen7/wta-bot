@@ -327,10 +327,17 @@ async function handleOptin(
   if (participant.status !== 'active') {
     return c.json(ephemeral('Your participation is currently on hold — contact the organizers.'));
   }
-  if (participant.pairing_excluded === 1 || await isOrganizer(c.env, interaction)) {
+  const organizer = await isOrganizer(c.env, interaction);
+  if (organizer) {
     const { excludeOrganizerFromPairing } = await import('../organizers');
     await excludeOrganizerFromPairing(c.env, participant.id);
-    return c.json(ephemeral('Organizers aren\'t included in participant matching. You can still use the dashboard and form previews.'));
+    if (choice !== 'standby') {
+      return c.json(ephemeral(
+        'Organizers aren\'t included in regular participant matching. Use **Set standby availability** if you want to cover extra sessions.',
+      ));
+    }
+  } else if (participant.pairing_excluded === 1) {
+    return c.json(ephemeral('Your participation is currently excluded from matching — contact the organizers.'));
   }
   const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(weekId).first<any>();
   if (!week) return c.json(ephemeral('This opt-in has expired.'));
@@ -396,7 +403,8 @@ async function handleOptin(
     if (optin?.extra_interviewer === 1) {
       await c.env.DB.prepare(
         `UPDATE optins SET regular_opt_in = 0, standby = 0, wants_double = 0,
-             standby_interviewer_limit = 0, standby_interviewee_limit = 0
+             standby_interviewer_limit = 0, standby_interviewee_limit = 0,
+             standby_override_exclusion = 0
          WHERE week_id = ?1 AND participant_id = ?2`,
       ).bind(weekId, participant.id).run();
     } else {
@@ -426,6 +434,7 @@ async function handleOptin(
        wants_double = ?3,
        standby_interviewer_limit = 0,
        standby_interviewee_limit = 0,
+       standby_override_exclusion = 0,
        regular_opt_in = 1`,
   )
     .bind(weekId, participant.id, choice === 'double' ? 1 : 0)
@@ -458,10 +467,12 @@ async function handleStandbySubmit(
   if (participant.status !== 'active') {
     return c.json(ephemeral('Your participation is currently on hold — contact the organizers.'));
   }
-  if (participant.pairing_excluded === 1 || await isOrganizer(c.env, interaction)) {
+  const organizer = await isOrganizer(c.env, interaction);
+  if (organizer) {
     const { excludeOrganizerFromPairing } = await import('../organizers');
     await excludeOrganizerFromPairing(c.env, participant.id);
-    return c.json(ephemeral('Organizers aren\'t included in participant matching. You can still use the dashboard and form previews.'));
+  } else if (participant.pairing_excluded === 1) {
+    return c.json(ephemeral('Your participation is currently excluded from matching — contact the organizers.'));
   }
   const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(weekId).first<any>();
   if (!week) return c.json(ephemeral('This opt-in has expired.'));
@@ -486,18 +497,33 @@ async function handleStandbySubmit(
     return c.json(ephemeral('Choose a standby limit from 0 to 3 for each role.'));
   }
   const enabled = interviewerLimit > 0 || intervieweeLimit > 0;
+  if (organizer && !enabled) {
+    await c.env.DB.prepare(
+      'DELETE FROM optins WHERE week_id = ?1 AND participant_id = ?2',
+    ).bind(weekId, participant.id).run();
+    return c.json(ephemeral(`✅ Organizer standby is off for round ${week.idx}.`));
+  }
   await c.env.DB.prepare(
     `INSERT INTO optins
        (week_id, participant_id, standby, wants_double, regular_opt_in,
-        standby_interviewer_limit, standby_interviewee_limit)
-     VALUES (?1, ?2, ?3, 0, 1, ?4, ?5)
+        standby_interviewer_limit, standby_interviewee_limit, standby_override_exclusion)
+     VALUES (?1, ?2, ?3, 0, ?4, ?5, ?6, ?7)
      ON CONFLICT(week_id, participant_id) DO UPDATE SET
        standby = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?3 END,
        wants_double = 0,
-       regular_opt_in = 1,
-       standby_interviewer_limit = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?4 END,
-       standby_interviewee_limit = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?5 END`,
-  ).bind(weekId, participant.id, enabled ? 1 : 0, interviewerLimit, intervieweeLimit).run();
+       regular_opt_in = ?4,
+       standby_interviewer_limit = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?5 END,
+       standby_interviewee_limit = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?6 END,
+       standby_override_exclusion = ?7`,
+  ).bind(
+    weekId,
+    participant.id,
+    enabled ? 1 : 0,
+    organizer ? 0 : 1,
+    interviewerLimit,
+    intervieweeLimit,
+    organizer && enabled ? 1 : 0,
+  ).run();
   const saved = await c.env.DB.prepare(
     `SELECT extra_interviewer, standby_interviewer_limit, standby_interviewee_limit
      FROM optins WHERE week_id = ?1 AND participant_id = ?2`,
@@ -506,7 +532,7 @@ async function handleStandbySubmit(
     standby_interviewer_limit: number;
     standby_interviewee_limit: number;
   }>();
-  if (now >= new Date(week.match_at)) {
+  if (!organizer && now >= new Date(week.match_at)) {
     await queueLateOptinDemand(c.env, weekId, participant.id, false);
   }
   if (saved?.extra_interviewer === 1) {
@@ -514,14 +540,17 @@ async function handleStandbySubmit(
       `✅ You're in for round ${week.idx}. An organizer has already added you as an extra interviewer, so standby capacity was left off.`,
     ));
   }
-  const timing = now >= new Date(week.match_at)
-    ? 'The bot checks for compatible re-pairs every 15 minutes.'
-    : `Initial pairings publish ${discordTime(week.match_at)}.`;
+  const timing = organizer
+    ? 'The bot will use this only when a compatible re-pair need opens.'
+    : now >= new Date(week.match_at)
+      ? 'The bot checks for compatible re-pairs every 15 minutes.'
+      : `Initial pairings publish ${discordTime(week.match_at)}.`;
   if (!enabled) {
     return c.json(ephemeral(`✅ You're in for round ${week.idx}; standby availability is off. ${timing}`));
   }
   return c.json(ephemeral(
-    `✅ You're in for round ${week.idx}. Standby availability: up to **${interviewerLimit}** extra as interviewer ` +
+    `✅ ${organizer ? 'Organizer standby saved' : `You're in for round ${week.idx}`}. ` +
+    `Standby availability: up to **${interviewerLimit}** extra as interviewer ` +
     `and **${intervieweeLimit}** extra as interviewee. ${timing}`,
   ));
 }

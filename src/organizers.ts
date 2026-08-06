@@ -51,14 +51,23 @@ export async function isCurrentOrganizer(env: Env, participantId: number): Promi
   }
 }
 
-/** Permanently keep a known organizer out of participant matching.
- * Enrollment remains available so organizers can exercise the real dashboard/forms. */
+/** Permanently keep a known organizer out of regular participant matching.
+ * Explicit organizer standby rows survive so organizers can still volunteer
+ * for role-specific re-pairs. */
 export async function excludeOrganizerFromPairing(env: Env, participantId: number): Promise<void> {
   await env.DB.batch([
     env.DB.prepare(
       "UPDATE participants SET pairing_excluded = 1, updated_at = datetime('now') WHERE id = ?1",
     ).bind(participantId),
-    env.DB.prepare('DELETE FROM optins WHERE participant_id = ?1').bind(participantId),
+    env.DB.prepare(
+      `DELETE FROM optins
+       WHERE participant_id = ?1 AND standby_override_exclusion = 0`,
+    ).bind(participantId),
+    env.DB.prepare(
+      `UPDATE optins
+       SET regular_opt_in = 0, wants_double = 0, extra_interviewer = 0
+       WHERE participant_id = ?1 AND standby_override_exclusion = 1`,
+    ).bind(participantId),
     env.DB.prepare(
       "UPDATE repair_queue SET state = 'expired' WHERE participant_id = ?1 AND state = 'open'",
     ).bind(participantId),

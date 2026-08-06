@@ -98,4 +98,35 @@ describe('standby repair assignments', () => {
     ).all<{ participant_id: number; assignments: number }>();
     expect(results.map((row) => Number(row.assignments))).toEqual([1, 1, 2]);
   });
+
+  it('allows an explicitly opted-in organizer to cover standby sessions', async () => {
+    await env.DB.prepare(
+      `INSERT INTO cohorts (id, name, status) VALUES (8301, 'Organizer standby', 'active')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO weeks (id, cohort_id, idx, reports_due_at)
+       VALUES (8301, 8301, 1, '2026-10-01T00:00:00.000Z')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO participants (id, discord_id, name, status, pairing_excluded)
+       VALUES
+         (8301, 'organizer-volunteer', 'Organizer Volunteer', 'active', 1),
+         (8302, 'organizer-victim', 'Victim', 'active', 0)`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO optins
+         (week_id, participant_id, regular_opt_in, standby,
+          standby_interviewer_limit, standby_interviewee_limit, standby_override_exclusion)
+       VALUES (8301, 8301, 0, 1, 1, 0, 1)`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO repair_queue (week_id, participant_id, need, state)
+       VALUES (8301, 8302, 'interviewer', 'open')`,
+    ).run();
+
+    expect(await repairScan(env, new Date('2026-09-01T00:00:00.000Z'))).toBe(1);
+    expect(await env.DB.prepare(
+      `SELECT interviewer_id, interviewee_id FROM sessions WHERE week_id = 8301`,
+    ).first()).toEqual({ interviewer_id: 8301, interviewee_id: 8302 });
+  });
 });

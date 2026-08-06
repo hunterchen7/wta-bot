@@ -142,8 +142,9 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
                WHERE sa.week_id = o.week_id
                  AND sa.participant_id = o.participant_id) AS total_assigned
        FROM optins o
-       JOIN participants p ON p.id = o.participant_id AND p.status = 'active' AND p.pairing_excluded = 0
+       JOIN participants p ON p.id = o.participant_id AND p.status = 'active'
        WHERE o.week_id = ?1 AND o.standby = 1 AND o.extra_interviewer = 0
+         AND (p.pairing_excluded = 0 OR o.standby_override_exclusion = 1)
          AND o.participant_id != ?2
          AND (CASE WHEN ?3 = 'interviewer'
                 THEN o.standby_interviewer_limit
@@ -247,9 +248,17 @@ export async function spawnSession(
   problemId?: number | null,
 ): Promise<number> {
   const eligible = await env.DB.prepare(
-    `SELECT count(*) AS n FROM participants
-     WHERE id IN (?1, ?2) AND status = 'active' AND pairing_excluded = 0`,
-  ).bind(interviewerId, intervieweeId).first<{ n: number }>();
+    `SELECT count(*) AS n FROM participants p
+     WHERE p.id IN (?1, ?2) AND p.status = 'active'
+       AND (
+         p.pairing_excluded = 0
+         OR EXISTS (
+           SELECT 1 FROM optins o
+           WHERE o.week_id = ?3 AND o.participant_id = p.id
+             AND o.standby = 1 AND o.standby_override_exclusion = 1
+         )
+       )`,
+  ).bind(interviewerId, intervieweeId, weekId).first<{ n: number }>();
   if (Number(eligible?.n ?? 0) !== 2) {
     throw new Error('Both participants must be active and eligible for matching.');
   }

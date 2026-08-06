@@ -133,10 +133,40 @@ describe('full weekly cycle', () => {
       'SELECT id FROM optins WHERE week_id = ?1 AND participant_id = ?2',
     ).bind(week1!.id, organizer!.id).first()).toBeNull();
 
-    // Even pre-existing/stale data cannot bypass the engine-level exclusion.
-    await env.DB.prepare(
-      'INSERT INTO optins (week_id, participant_id) VALUES (?1, ?2)',
-    ).bind(week1!.id, organizer!.id).run();
+    // Organizers may volunteer through the standby modal without entering the
+    // regular matching pool.
+    const organizerStandbyPrompt = await sendInteraction(
+      signer,
+      { ...button(`optin:${week1!.id}:standby`, '999'), ...asAdmin('999') },
+      OVERRIDES,
+    );
+    expect((await organizerStandbyPrompt.json<any>()).type).toBe(9);
+    const organizerStandbySaved = await sendInteraction(signer, {
+      type: 5,
+      id: 'organizer-standby-modal',
+      token: 'organizer-standby-token',
+      guild_id: GUILD,
+      data: {
+        custom_id: `optin:${week1!.id}:standby-submit`,
+        components: [
+          selectField('standby-interviewer-limit', '1'),
+          selectField('standby-interviewee-limit', '2'),
+        ],
+      },
+      ...asAdmin('999'),
+    }, OVERRIDES);
+    expect((await organizerStandbySaved.json<any>()).data.content).toContain('Organizer standby saved');
+    expect(await env.DB.prepare(
+      `SELECT regular_opt_in, standby, standby_interviewer_limit,
+              standby_interviewee_limit, standby_override_exclusion
+       FROM optins WHERE week_id = ?1 AND participant_id = ?2`,
+    ).bind(week1!.id, organizer!.id).first()).toEqual({
+      regular_opt_in: 0,
+      standby: 1,
+      standby_interviewer_limit: 1,
+      standby_interviewee_limit: 2,
+      standby_override_exclusion: 1,
+    });
 
     // channels configured (normally via /setup channels)
     await env.DB.prepare(
