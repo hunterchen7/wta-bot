@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { repairScan } from '../src/engine/repair';
 
 describe('standby repair assignments', () => {
-  it('uses each standby volunteer for at most one extra session per round', async () => {
+  it('respects the volunteer capacity for the needed role', async () => {
     await env.DB.prepare(
       `INSERT INTO cohorts (id, name, status) VALUES (8101, 'Standby cap', 'active')`,
     ).run();
@@ -19,8 +19,9 @@ describe('standby repair assignments', () => {
          (8103, 'standby-victim-b', 'Victim B', 'active')`,
     ).run();
     await env.DB.prepare(
-      `INSERT INTO optins (week_id, participant_id, standby)
-       VALUES (8101, 8101, 1)`,
+      `INSERT INTO optins
+         (week_id, participant_id, standby, standby_interviewer_limit, standby_interviewee_limit)
+       VALUES (8101, 8101, 1, 1, 3)`,
     ).run();
     await env.DB.prepare(
       `INSERT INTO repair_queue (week_id, participant_id, need, state)
@@ -34,7 +35,7 @@ describe('standby repair assignments', () => {
 
     expect(await env.DB.prepare(
       `SELECT count(*) AS n FROM standby_assignments
-       WHERE week_id = 8101 AND participant_id = 8101`,
+       WHERE week_id = 8101 AND participant_id = 8101 AND role = 'interviewer'`,
     ).first()).toEqual({ n: 1 });
     expect(await env.DB.prepare(
       `SELECT count(*) AS n FROM sessions
@@ -49,5 +50,52 @@ describe('standby repair assignments', () => {
         { state: 'open', n: 1 },
       ],
     });
+  });
+
+  it('spreads standby work across volunteers before reusing capacity', async () => {
+    await env.DB.prepare(
+      `INSERT INTO cohorts (id, name, status) VALUES (8201, 'Balanced standby', 'active')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO weeks (id, cohort_id, idx, reports_due_at)
+       VALUES (8201, 8201, 1, '2026-10-01T00:00:00.000Z')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO participants (id, discord_id, name, status)
+       VALUES
+         (8201, 'standby-a', 'Standby A', 'active'),
+         (8202, 'standby-b', 'Standby B', 'active'),
+         (8203, 'standby-c', 'Standby C', 'active'),
+         (8211, 'victim-a', 'Victim A', 'active'),
+         (8212, 'victim-b', 'Victim B', 'active'),
+         (8213, 'victim-c', 'Victim C', 'active'),
+         (8214, 'victim-d', 'Victim D', 'active')`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO optins
+         (week_id, participant_id, standby, standby_interviewer_limit, standby_interviewee_limit)
+       VALUES
+         (8201, 8201, 1, 3, 3),
+         (8201, 8202, 1, 3, 3),
+         (8201, 8203, 1, 3, 3)`,
+    ).run();
+    await env.DB.prepare(
+      `INSERT INTO repair_queue (week_id, participant_id, need, state)
+       VALUES
+         (8201, 8211, 'interviewer', 'open'),
+         (8201, 8212, 'interviewer', 'open'),
+         (8201, 8213, 'interviewer', 'open'),
+         (8201, 8214, 'interviewer', 'open')`,
+    ).run();
+
+    expect(await repairScan(env, new Date('2026-09-01T00:00:00.000Z'))).toBe(4);
+    const { results } = await env.DB.prepare(
+      `SELECT participant_id, count(*) AS assignments
+       FROM standby_assignments
+       WHERE week_id = 8201 AND role = 'interviewer'
+       GROUP BY participant_id
+       ORDER BY assignments, participant_id`,
+    ).all<{ participant_id: number; assignments: number }>();
+    expect(results.map((row) => Number(row.assignments))).toEqual([1, 1, 2]);
   });
 });

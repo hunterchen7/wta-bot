@@ -122,60 +122,87 @@ export async function repairScan(env: Env, now = new Date()): Promise<number> {
     created++;
   }
 
-  // 2) Standby volunteers for whoever is left
+  // 2) Standby volunteers for whoever is left. Prefer the people with the
+  // fewest total assignments, then the fewest in the needed role, so capacity
+  // is spread across the pool before anyone receives a second or third extra.
   for (const a of open) {
     if (used.has(a.id)) continue;
+    const volunteerRole = a.need === 'interviewer' ? 'interviewer' : 'interviewee';
     const candidates = await env.DB.prepare(
-      `SELECT o.participant_id FROM optins o
+      `SELECT o.participant_id,
+              CASE WHEN ?3 = 'interviewer'
+                THEN o.standby_interviewer_limit
+                ELSE o.standby_interviewee_limit
+              END AS capacity,
+              (SELECT count(*) FROM standby_assignments sa
+               WHERE sa.week_id = o.week_id
+                 AND sa.participant_id = o.participant_id
+                 AND sa.role = ?3) AS assigned,
+              (SELECT count(*) FROM standby_assignments sa
+               WHERE sa.week_id = o.week_id
+                 AND sa.participant_id = o.participant_id) AS total_assigned
+       FROM optins o
        JOIN participants p ON p.id = o.participant_id AND p.status = 'active' AND p.pairing_excluded = 0
        WHERE o.week_id = ?1 AND o.standby = 1 AND o.extra_interviewer = 0
          AND o.participant_id != ?2
+         AND (CASE WHEN ?3 = 'interviewer'
+                THEN o.standby_interviewer_limit
+                ELSE o.standby_interviewee_limit
+              END) > (SELECT count(*) FROM standby_assignments sa
+                       WHERE sa.week_id = o.week_id
+                         AND sa.participant_id = o.participant_id
+                         AND sa.role = ?3)
          AND NOT EXISTS (
            SELECT 1 FROM round_exclusions e
            WHERE e.week_id = o.week_id AND e.participant_id = o.participant_id
          )
-         AND NOT EXISTS (
-           SELECT 1 FROM standby_assignments sa
-           WHERE sa.week_id = o.week_id AND sa.participant_id = o.participant_id
-         )
-       ORDER BY RANDOM() LIMIT 5`,
+       ORDER BY total_assigned ASC, assigned ASC, RANDOM()
+       LIMIT 100`,
     )
-      .bind(a.week_id, a.participant_id)
-      .all<{ participant_id: number }>();
-    const ordered = [];
+      .bind(a.week_id, a.participant_id, volunteerRole)
+      .all<{ participant_id: number; capacity: number; assigned: number; total_assigned: number }>();
+    const compatible: typeof candidates.results = [];
+    const repeats: typeof candidates.results = [];
     for (const candidate of candidates.results) {
       const interviewerId = a.need === 'interviewer' ? candidate.participant_id : a.participant_id;
       const intervieweeId = a.need === 'interviewer' ? a.participant_id : candidate.participant_id;
-      if (!(await pairedBefore(env, a.week_id, interviewerId, intervieweeId))) ordered.unshift(candidate);
-      else ordered.push(candidate);
+      if (!(await pairedBefore(env, a.week_id, interviewerId, intervieweeId))) compatible.push(candidate);
+      else repeats.push(candidate);
     }
-    let volunteer: number | null = null;
-    for (const candidate of ordered) {
-      const claim = await env.DB.prepare(
-        `INSERT OR IGNORE INTO standby_assignments (week_id, participant_id)
-         VALUES (?1, ?2)`,
-      ).bind(a.week_id, candidate.participant_id).run();
-      if (Number(claim.meta.changes ?? 0) > 0) {
-        volunteer = candidate.participant_id;
+    let claim: { participantId: number; slot: number } | null = null;
+    for (const candidate of [...compatible, ...repeats]) {
+      for (let slot = 1; slot <= Number(candidate.capacity); slot++) {
+        const inserted = await env.DB.prepare(
+          `INSERT OR IGNORE INTO standby_assignments
+             (week_id, participant_id, role, slot)
+           VALUES (?1, ?2, ?3, ?4)`,
+        ).bind(a.week_id, candidate.participant_id, volunteerRole, slot).run();
+        if (Number(inserted.meta.changes ?? 0) > 0) {
+          claim = { participantId: candidate.participant_id, slot };
+          break;
+        }
+      }
+      if (claim) {
         break;
       }
     }
-    if (!volunteer) continue;
-    const interviewerId = a.need === 'interviewer' ? volunteer : a.participant_id;
-    const intervieweeId = a.need === 'interviewer' ? a.participant_id : volunteer;
+    if (!claim) continue;
+    const interviewerId = a.need === 'interviewer' ? claim.participantId : a.participant_id;
+    const intervieweeId = a.need === 'interviewer' ? a.participant_id : claim.participantId;
     used.add(a.id);
     try {
       const sessionId = await createRepairSession(env, a.week_id, interviewerId, intervieweeId, [a.id]);
       await env.DB.prepare(
         `UPDATE standby_assignments SET session_id = ?3
-         WHERE week_id = ?1 AND participant_id = ?2`,
-      ).bind(a.week_id, volunteer, sessionId).run();
+         WHERE week_id = ?1 AND participant_id = ?2 AND role = ?4 AND slot = ?5`,
+      ).bind(a.week_id, claim.participantId, sessionId, volunteerRole, claim.slot).run();
       created++;
     } catch (error) {
       await env.DB.prepare(
         `DELETE FROM standby_assignments
-         WHERE week_id = ?1 AND participant_id = ?2 AND session_id IS NULL`,
-      ).bind(a.week_id, volunteer).run();
+         WHERE week_id = ?1 AND participant_id = ?2 AND role = ?3 AND slot = ?4
+           AND session_id IS NULL`,
+      ).bind(a.week_id, claim.participantId, volunteerRole, claim.slot).run();
       throw error;
     }
   }

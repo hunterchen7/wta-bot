@@ -295,6 +295,9 @@ export async function handleModal(c: Ctx, interaction: Interaction) {
 
   if (id === 'support:create:submit') return handleSupportSubmit(c, interaction, values);
 
+  const standby = /^optin:(\d+):standby-submit$/.exec(id);
+  if (standby) return handleStandbySubmit(c, interaction, Number(standby[1]), values);
+
   // ---- session scheduling --------------------------------------------------
   const sched = /^sess:(\d+):schedmodal$/.exec(id);
   if (sched) return handleScheduleSubmit(c, interaction, Number(sched[1]), values);
@@ -346,6 +349,35 @@ async function handleOptin(
     return c.json(ephemeral(`Round ${week.idx} ended ${discordTime(roundEnd.toISOString(), 'R')}, so new matches are no longer available.`));
   }
 
+  if (choice === 'standby') {
+    const current = await c.env.DB.prepare(
+      `SELECT standby_interviewer_limit, standby_interviewee_limit
+       FROM optins WHERE week_id = ?1 AND participant_id = ?2`,
+    ).bind(weekId, participant.id).first<{
+      standby_interviewer_limit: number;
+      standby_interviewee_limit: number;
+    }>();
+    const quantityOptions = (selected: number) => [0, 1, 2, 3].map((amount) => ({
+      label: amount === 0 ? 'None' : `Up to ${amount} extra${amount === 1 ? '' : 's'}`,
+      value: String(amount),
+      default: amount === selected,
+    }));
+    return c.json(modal(`optin:${weekId}:standby-submit`, `Round ${week.idx} standby availability`, [
+      stringSelect({
+        id: 'standby-interviewer-limit',
+        label: 'Extras as interviewer',
+        description: 'Maximum additional sessions where you conduct the interview.',
+        options: quantityOptions(Number(current?.standby_interviewer_limit ?? 0)),
+      }),
+      stringSelect({
+        id: 'standby-interviewee-limit',
+        label: 'Extras as interviewee',
+        description: 'Maximum additional sessions where you complete the interview.',
+        options: quantityOptions(Number(current?.standby_interviewee_limit ?? 0)),
+      }),
+    ]));
+  }
+
   if (choice === 'out') {
     return c.json(ephemeral(
       `**Sit out round ${week.idx}?** You will not be included in new pairings for this round. ` +
@@ -363,7 +395,8 @@ async function handleOptin(
     ).bind(weekId, participant.id).first<{ extra_interviewer: number }>();
     if (optin?.extra_interviewer === 1) {
       await c.env.DB.prepare(
-        `UPDATE optins SET regular_opt_in = 0, standby = 0, wants_double = 0
+        `UPDATE optins SET regular_opt_in = 0, standby = 0, wants_double = 0,
+             standby_interviewer_limit = 0, standby_interviewee_limit = 0
          WHERE week_id = ?1 AND participant_id = ?2`,
       ).bind(weekId, participant.id).run();
     } else {
@@ -384,27 +417,23 @@ async function handleOptin(
   }
 
   await c.env.DB.prepare(
-    `INSERT INTO optins (week_id, participant_id, standby, wants_double, regular_opt_in)
-     VALUES (?1, ?2, ?3, ?4, 1)
+    `INSERT INTO optins
+       (week_id, participant_id, standby, wants_double, regular_opt_in,
+        standby_interviewer_limit, standby_interviewee_limit)
+     VALUES (?1, ?2, 0, ?3, 1, 0, 0)
      ON CONFLICT(week_id, participant_id) DO UPDATE SET
-       standby = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?3 END,
-       wants_double = ?4,
+       standby = 0,
+       wants_double = ?3,
+       standby_interviewer_limit = 0,
+       standby_interviewee_limit = 0,
        regular_opt_in = 1`,
   )
-    .bind(weekId, participant.id, choice === 'standby' ? 1 : 0, choice === 'double' ? 1 : 0)
+    .bind(weekId, participant.id, choice === 'double' ? 1 : 0)
     .run();
-  const savedOptin = await c.env.DB.prepare(
-    `SELECT standby, extra_interviewer FROM optins
-     WHERE week_id = ?1 AND participant_id = ?2`,
-  ).bind(weekId, participant.id).first<{ standby: number; extra_interviewer: number }>();
   const label =
     choice === 'in'
       ? "You're in"
-      : choice === 'double'
-        ? "You're in with a catch-up double (if you're behind)"
-        : savedOptin?.extra_interviewer === 1
-          ? "You're in, with one extra interviewer session already requested"
-          : "You're in, plus standby for one extra session";
+      : "You're in with a catch-up double (if you're behind)";
   if (now >= new Date(week.match_at)) {
     await queueLateOptinDemand(c.env, weekId, participant.id, choice === 'double');
     return c.json(ephemeral(
@@ -413,6 +442,88 @@ async function handleOptin(
     ));
   }
   return c.json(ephemeral(`✅ ${label} for round ${week.idx}. Initial pairings publish ${discordTime(week.match_at)}.`));
+}
+
+async function handleStandbySubmit(
+  c: Ctx,
+  interaction: Interaction,
+  weekId: number,
+  values: Map<string, string | string[]>,
+) {
+  const user = interactionUser(interaction)!;
+  const participant = await getParticipant(c.env, user.id);
+  if (!participant || participant.topics === null) {
+    return c.json(ephemeral("You're not enrolled yet — run `/join` first (takes ~a minute)."));
+  }
+  if (participant.status !== 'active') {
+    return c.json(ephemeral('Your participation is currently on hold — contact the organizers.'));
+  }
+  if (participant.pairing_excluded === 1 || await isOrganizer(c.env, interaction)) {
+    const { excludeOrganizerFromPairing } = await import('../organizers');
+    await excludeOrganizerFromPairing(c.env, participant.id);
+    return c.json(ephemeral('Organizers aren\'t included in participant matching. You can still use the dashboard and form previews.'));
+  }
+  const week = await c.env.DB.prepare('SELECT * FROM weeks WHERE id = ?1').bind(weekId).first<any>();
+  if (!week) return c.json(ephemeral('This opt-in has expired.'));
+  const roundExclusion = await c.env.DB.prepare(
+    'SELECT reason FROM round_exclusions WHERE week_id = ?1 AND participant_id = ?2',
+  ).bind(weekId, participant.id).first<{ reason: string }>();
+  if (roundExclusion) {
+    return c.json(ephemeral(
+      `You were removed from Round ${week.idx} after an unscheduled pairing went unanswered. ` +
+      'Contact an organizer if you think this was a mistake.',
+    ));
+  }
+  const now = new Date();
+  const roundEnd = new Date(week.grace_until ?? week.reports_due_at);
+  if (now > roundEnd) {
+    return c.json(ephemeral(`Round ${week.idx} ended ${discordTime(roundEnd.toISOString(), 'R')}, so new matches are no longer available.`));
+  }
+
+  const interviewerLimit = Number(modalValue(values, 'standby-interviewer-limit'));
+  const intervieweeLimit = Number(modalValue(values, 'standby-interviewee-limit'));
+  if (![interviewerLimit, intervieweeLimit].every((value) => Number.isInteger(value) && value >= 0 && value <= 3)) {
+    return c.json(ephemeral('Choose a standby limit from 0 to 3 for each role.'));
+  }
+  const enabled = interviewerLimit > 0 || intervieweeLimit > 0;
+  await c.env.DB.prepare(
+    `INSERT INTO optins
+       (week_id, participant_id, standby, wants_double, regular_opt_in,
+        standby_interviewer_limit, standby_interviewee_limit)
+     VALUES (?1, ?2, ?3, 0, 1, ?4, ?5)
+     ON CONFLICT(week_id, participant_id) DO UPDATE SET
+       standby = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?3 END,
+       wants_double = 0,
+       regular_opt_in = 1,
+       standby_interviewer_limit = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?4 END,
+       standby_interviewee_limit = CASE WHEN extra_interviewer = 1 THEN 0 ELSE ?5 END`,
+  ).bind(weekId, participant.id, enabled ? 1 : 0, interviewerLimit, intervieweeLimit).run();
+  const saved = await c.env.DB.prepare(
+    `SELECT extra_interviewer, standby_interviewer_limit, standby_interviewee_limit
+     FROM optins WHERE week_id = ?1 AND participant_id = ?2`,
+  ).bind(weekId, participant.id).first<{
+    extra_interviewer: number;
+    standby_interviewer_limit: number;
+    standby_interviewee_limit: number;
+  }>();
+  if (now >= new Date(week.match_at)) {
+    await queueLateOptinDemand(c.env, weekId, participant.id, false);
+  }
+  if (saved?.extra_interviewer === 1) {
+    return c.json(ephemeral(
+      `✅ You're in for round ${week.idx}. An organizer has already added you as an extra interviewer, so standby capacity was left off.`,
+    ));
+  }
+  const timing = now >= new Date(week.match_at)
+    ? 'The bot checks for compatible re-pairs every 15 minutes.'
+    : `Initial pairings publish ${discordTime(week.match_at)}.`;
+  if (!enabled) {
+    return c.json(ephemeral(`✅ You're in for round ${week.idx}; standby availability is off. ${timing}`));
+  }
+  return c.json(ephemeral(
+    `✅ You're in for round ${week.idx}. Standby availability: up to **${interviewerLimit}** extra as interviewer ` +
+    `and **${intervieweeLimit}** extra as interviewee. ${timing}`,
+  ));
 }
 
 async function handleSessionButton(

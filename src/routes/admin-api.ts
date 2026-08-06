@@ -447,9 +447,15 @@ adminApi.post('/api/admin/rounds/:weekId/extra-interviewer', async (c) => {
 
   if (body.enabled) {
     await c.env.DB.prepare(
-      `INSERT INTO optins (week_id, participant_id, regular_opt_in, extra_interviewer, standby)
-       VALUES (?1, ?2, 0, 1, 0)
-       ON CONFLICT(week_id, participant_id) DO UPDATE SET extra_interviewer = 1, standby = 0`,
+      `INSERT INTO optins
+         (week_id, participant_id, regular_opt_in, extra_interviewer, standby,
+          standby_interviewer_limit, standby_interviewee_limit)
+       VALUES (?1, ?2, 0, 1, 0, 0, 0)
+       ON CONFLICT(week_id, participant_id) DO UPDATE SET
+         extra_interviewer = 1,
+         standby = 0,
+         standby_interviewer_limit = 0,
+         standby_interviewee_limit = 0`,
     ).bind(weekId, participantId).run();
   } else {
     const optin = await c.env.DB.prepare(

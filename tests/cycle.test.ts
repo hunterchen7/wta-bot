@@ -202,8 +202,44 @@ describe('full weekly cycle', () => {
     await env.DB.prepare(
       'UPDATE optins SET extra_interviewer = 0 WHERE week_id = ?1 AND participant_id = ?2',
     ).bind(week1!.id, alice!.id).run();
-    // one standby volunteer among them
-    await sendInteraction(signer, button(`optin:${week1!.id}:standby`, '104'), OVERRIDES);
+    // One participant sets role-specific standby capacity through a modal.
+    const standbyPrompt = await sendInteraction(
+      signer,
+      button(`optin:${week1!.id}:standby`, '104'),
+      OVERRIDES,
+    );
+    const standbyPromptJson = await standbyPrompt.json<any>();
+    expect(standbyPromptJson.type).toBe(9);
+    expect(standbyPromptJson.data.custom_id).toBe(`optin:${week1!.id}:standby-submit`);
+    expect(standbyPromptJson.data.components).toHaveLength(2);
+    const standbySaved = await sendInteraction(signer, {
+      type: 5,
+      id: 'standby-modal',
+      token: 'standby-token',
+      guild_id: GUILD,
+      data: {
+        custom_id: `optin:${week1!.id}:standby-submit`,
+        components: [
+          selectField('standby-interviewer-limit', '2'),
+          selectField('standby-interviewee-limit', '1'),
+        ],
+      },
+      ...asUser('104'),
+    }, OVERRIDES);
+    expect((await standbySaved.json<any>()).data.content).toContain(
+      'up to **2** extra as interviewer and **1** extra as interviewee',
+    );
+    const standbyParticipant = await env.DB.prepare(
+      'SELECT id FROM participants WHERE discord_id = ?1',
+    ).bind('104').first<{ id: number }>();
+    expect(await env.DB.prepare(
+      `SELECT standby, standby_interviewer_limit, standby_interviewee_limit
+       FROM optins WHERE week_id = ?1 AND participant_id = ?2`,
+    ).bind(week1!.id, standbyParticipant!.id).first()).toEqual({
+      standby: 1,
+      standby_interviewer_limit: 2,
+      standby_interviewee_limit: 1,
+    });
 
     // --- matching ---------------------------------------------------------------
     const result = await closeAndMatch(env, week1!, cohort);
