@@ -31,6 +31,7 @@ type OpenParticipant = (participantId: number) => void;
 
 const SESSION_COLUMN_STORAGE_KEY = 'wta:round-session-columns:v1';
 const SESSION_SORT_STORAGE_KEY = 'wta:round-session-sort:v1';
+const LOCAL_TIME_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
 const SESSION_COLUMNS = ['session', 'participants', 'scheduled', 'assignment', 'reports', 'state'] as const;
 type SessionColumn = typeof SESSION_COLUMNS[number];
 type SessionSortDirection = 'asc' | 'desc';
@@ -101,6 +102,9 @@ export function RoundsPage() {
       <Metric label="Reports filed" value={`${counts.reports}/${data.sessions.length * 2}`} note={`${Math.max(0, data.sessions.length * 2 - counts.reports)} outstanding`} />
     </div>
     {data.selectedWeek ? <Panel>
+      <div className="border-b border-slate-100 px-5 py-2.5 text-right text-xs text-slate-500 dark:border-border dark:text-muted-foreground">
+        Times shown in your local timezone{LOCAL_TIME_ZONE ? <> (<span className="font-semibold text-slate-700 dark:text-foreground">{LOCAL_TIME_ZONE}</span>)</> : null}.
+      </div>
       <div className="grid gap-px bg-slate-100 dark:bg-border sm:grid-cols-4">
         <Timeline label="Opt-in opens" value={data.selectedWeek.optin_opens_at} />
         <Timeline label="Initial pairings" value={data.selectedWeek.match_at} />
