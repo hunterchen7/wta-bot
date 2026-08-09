@@ -60,6 +60,7 @@ describe('participant practice problems', () => {
         expect.objectContaining({ round: 2, number: 875 }),
         expect.objectContaining({ round: 2, number: 146 }),
         expect.objectContaining({ round: 2, number: 567 }),
+        expect.objectContaining({ round: 2, number: 735 }),
       ]),
     });
   });

@@ -345,6 +345,14 @@ describe('full weekly cycle', () => {
     expect(pairingAnnouncementPayload.message.content).toContain(
       '<@&participant-role> 🤝',
     );
+    const announcementContent = pairingAnnouncementPayload.message.content as string;
+    expect(announcementContent).toContain(
+      "We're also providing some practice problems for this round.",
+    );
+    expect(announcementContent).toContain(
+      '[Daily Temperatures](https://leetcode.com/problems/daily-temperatures/)',
+    );
+    expect(announcementContent).toContain('Let us know if you have any questions, and best of luck!');
     expect(pairingAnnouncementPayload.message.allowed_mentions).toEqual({
       parse: [],
       roles: ['participant-role'],

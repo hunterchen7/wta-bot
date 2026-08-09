@@ -256,6 +256,20 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
     const participantRoleMention = cfg.participant_role_id
       ? `<@&${cfg.participant_role_id}> `
       : '';
+    const { results: practiceProblems } = await env.DB.prepare(
+      `SELECT title, url FROM practice_problems
+       WHERE week_idx = ?1 AND active = 1
+       ORDER BY CASE WHEN number = 146 THEN 1 ELSE 0 END, id`,
+    )
+      .bind(week.idx)
+      .all<{ title: string; url: string }>();
+    const practiceLines = practiceProblems.length
+      ? `\n\nWe're also providing some practice problems for this round. ` +
+        `You can expect the interview questions to be different problems of similar difficulty:\n\n` +
+        practiceProblems
+          .map((problem) => `- [${problem.title}](${problem.url})`)
+          .join('\n')
+      : '';
     let bankLines = '';
     if (cfg.question_bank_public === 'on') {
       const { results: bank } = await env.DB.prepare(
@@ -275,7 +289,8 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
       message: {
         content:
           `${participantRoleMention}🤝 **Round ${week.idx} pairings are out!** ` +
-          `Check your DMs and session threads.${bankLines}`,
+          `Check your DMs and session threads.${practiceLines}${bankLines}` +
+          `\n\nLet us know if you have any questions, and best of luck! \u{1F340}`,
         allowed_mentions: {
           parse: [],
           roles: cfg.participant_role_id ? [cfg.participant_role_id] : [],
