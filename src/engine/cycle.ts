@@ -6,7 +6,7 @@ import { matchWeek, type Demand } from '../matching';
 import { discordTime } from '../time';
 import { enqueue, enqueueMany } from './outbox';
 import { pickProblem, reserveProblem } from './problems';
-import { creditsOf, demandFor } from './progress';
+import { demandFor, matchingCreditsOf } from './progress';
 import type { Cohort, Week } from './weeks';
 
 // The weekly cycle (DESIGN §2): opt-in → match → threads → forms → nudges.
@@ -149,7 +149,7 @@ export async function closeAndMatch(env: Env, week: Week, cohort: Cohort): Promi
   const demands: Demand[] = [];
   for (const o of optins) {
     const normal = o.regular_opt_in === 1
-      ? demandFor(week.idx, await creditsOf(env, o.participant_id), o.wants_double === 1)
+      ? demandFor(week.idx, await matchingCreditsOf(env, o.participant_id), o.wants_double === 1)
       : { interviewer: 0, interviewee: 0 };
     const interviewer = normal.interviewer + (o.extra_interviewer === 1 ? 1 : 0);
     if (interviewer > 0 || normal.interviewee > 0) {

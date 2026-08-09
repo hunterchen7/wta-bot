@@ -53,9 +53,10 @@ describe('demand math', () => {
     expect(demandFor(3, { interviewer: 1, interviewee: 2 }, true)).toEqual({ interviewer: 2, interviewee: 1 });
     expect(demandFor(3, { interviewer: 1, interviewee: 2 }, false)).toEqual({ interviewer: 1, interviewee: 1 });
   });
-  it('never exceeds the remaining target', () => {
-    expect(demandFor(3, { interviewer: 3, interviewee: 2 }, true)).toEqual({ interviewer: 0, interviewee: 1 });
-    expect(demandFor(2, { interviewer: 2, interviewee: 3 }, true)).toEqual({ interviewer: 1, interviewee: 0 });
+  it('never lets surplus credits erase a later round baseline', () => {
+    expect(demandFor(3, { interviewer: 3, interviewee: 2 }, true)).toEqual({ interviewer: 1, interviewee: 1 });
+    expect(demandFor(2, { interviewer: 2, interviewee: 3 }, true)).toEqual({ interviewer: 1, interviewee: 1 });
+    expect(demandFor(3, { interviewer: 8, interviewee: 8 }, false)).toEqual({ interviewer: 1, interviewee: 1 });
   });
 });
 

@@ -2,6 +2,9 @@ import type { Env } from '../env';
 
 // Credit accounting (DESIGN §4/§5): your side of a session is credited when
 // YOUR report is filed. Target = one credit per role per week elapsed.
+// All credits remain visible in progress and eligibility totals. Matching uses
+// a narrower count that excludes sessions taken as a standby volunteer, so an
+// extra never replaces the baseline interview offered in a later round.
 
 export type Credits = { interviewer: number; interviewee: number };
 
@@ -10,6 +13,30 @@ export async function creditsOf(env: Env, participantId: number): Promise<Credit
     `SELECT
        (SELECT count(*) FROM sessions WHERE interviewer_id = ?1 AND interviewer_credited = 1) AS interviewer,
        (SELECT count(*) FROM sessions WHERE interviewee_id = ?1 AND interviewee_credited = 1) AS interviewee`,
+  )
+    .bind(participantId)
+    .first<Credits>();
+  return row ?? { interviewer: 0, interviewee: 0 };
+}
+
+/** Credits that can satisfy catch-up pace. A repair still counts for the
+ * participant whose original session broke, while the counterpart recorded in
+ * standby_assignments is treated as a bonus volunteer assignment. */
+export async function matchingCreditsOf(env: Env, participantId: number): Promise<Credits> {
+  const row = await env.DB.prepare(
+    `SELECT
+       (SELECT count(*) FROM sessions s
+        WHERE s.interviewer_id = ?1 AND s.interviewer_credited = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM standby_assignments sa
+            WHERE sa.session_id = s.id AND sa.participant_id = ?1 AND sa.role = 'interviewer'
+          )) AS interviewer,
+       (SELECT count(*) FROM sessions s
+        WHERE s.interviewee_id = ?1 AND s.interviewee_credited = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM standby_assignments sa
+            WHERE sa.session_id = s.id AND sa.participant_id = ?1 AND sa.role = 'interviewee'
+          )) AS interviewee`,
   )
     .bind(participantId)
     .first<Credits>();
@@ -27,20 +54,17 @@ export async function strikesOf(env: Env, participantId: number): Promise<number
   return row?.n ?? 0;
 }
 
-/** Per-role demand for a week: 1, or 2 when behind pace and asking to double —
- *  never more than what's still needed to reach the per-role target of 3. */
+/** Every opt-in requests one baseline session in each role for this round.
+ * Catch-up adds one more only for roles missed before this round. Surplus
+ * credits can never erase the current round's baseline. */
 export function demandFor(
   weekIdx: number,
   credits: Credits,
   wantsDouble: boolean,
-  target = 3,
 ): { interviewer: number; interviewee: number } {
   const per = (have: number) => {
-    const remaining = Math.max(0, target - have);
-    if (remaining === 0) return 0;
-    const deficit = Math.max(0, weekIdx - 1 - have);
-    const want = wantsDouble && deficit > 0 ? 2 : 1;
-    return Math.min(want, remaining, 2);
+    const missedEarlierRounds = Math.max(0, weekIdx - 1 - have);
+    return 1 + Number(wantsDouble && missedEarlierRounds > 0);
   };
   return { interviewer: per(credits.interviewer), interviewee: per(credits.interviewee) };
 }
