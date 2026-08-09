@@ -1,10 +1,12 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useBlocker, useParams, useSearchParams } from 'react-router-dom';
 import { adminRequest, publicRequest, SettingsSaveError } from '../api';
+import { useDocumentTitle } from '../components/DocumentTitle';
 import { PublicShell } from '../components/PublicShell';
 import { CodeEditor } from '../components/CodeEditor';
 import { SelectControl } from '../components/SelectControl';
 import { VideoUploadField } from '../components/VideoUploadField';
+import { reportDocumentTitle } from '../report-title';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { RadioGroup, RadioGroupItem } from '../components/ui/radio-group';
@@ -43,6 +45,7 @@ export function ReportPage({ previewKind }: { previewKind?: string }) {
   const [saved, setSaved] = useState(false);
   const [submissionComplete, setSubmissionComplete] = useState<'submitted' | 'updated' | null>(null);
   const dirty = useMemo(() => !previewKind && JSON.stringify(values) !== baseline, [values, baseline, previewKind]);
+  useDocumentTitle(reportDocumentTitle(data?.kind ?? previewKind, Boolean(previewKind)));
   const blocker = useBlocker(dirty && !saved);
 
   useEffect(() => {
