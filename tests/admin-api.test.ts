@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCohort } from '../src/engine/weeks';
 import { signToken } from '../src/forms/token';
 import { app } from '../src/index';
@@ -197,8 +197,14 @@ describe('admin operational data', () => {
     expect(rounds.participants).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: STUDENT_ID, name: 'Student Person', discord_username: 'student.account' }),
     ]));
-    const defaultRounds = await (await request('/api/admin/rounds')).json<any>();
-    expect(defaultRounds.selectedWeek.id).toBe(weekId);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-27T12:00:00.000Z'));
+    try {
+      const defaultRounds = await (await request('/api/admin/rounds')).json<any>();
+      expect(defaultRounds.selectedWeek.id).toBe(weekId);
+    } finally {
+      vi.useRealTimers();
+    }
 
     const reports = await (await request(`/api/admin/rounds/${weekId}/reports`)).json<any>();
     expect(reports.week.id).toBe(weekId);
