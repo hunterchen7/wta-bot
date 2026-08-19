@@ -49,11 +49,7 @@ async function dynamicFields(env: Env, instance: LoadedInstance): Promise<Field[
       .bind(instance.problem_id).first<{ id: number; title: string; number: number | null }>()
     : null;
   const { results } = assigned
-    ? await env.DB.prepare(
-      `SELECT p.id, p.title, p.number FROM week_problem_sets wps JOIN problems p ON p.id = wps.problem_id
-       WHERE wps.week_id = (SELECT week_id FROM sessions WHERE id = ?1)
-       ORDER BY CASE WHEN p.id = ?2 THEN 0 ELSE 1 END, p.id`,
-    ).bind(instance.session_id, assigned.id).all<{ id: number; title: string; number: number | null }>()
+    ? { results: [assigned] }
     : await env.DB.prepare(
       `SELECT p.id, p.title, p.number FROM week_problem_sets wps JOIN problems p ON p.id = wps.problem_id
        WHERE wps.week_id = (SELECT week_id FROM sessions WHERE id = ?1)
@@ -73,6 +69,7 @@ async function dynamicFields(env: Env, instance: LoadedInstance): Promise<Field[
   const picker: Field = {
     id: 'problem_used', label: 'Which interview question did you choose?', type: 'select', required: true,
     options: results.map((problem) => ({ value: String(problem.id), label: `${problem.number ? `#${problem.number} ` : ''}${problem.title}` })),
+    readOnly: Boolean(assigned),
     help: assigned
       ? 'Pre-filled with the problem assigned to this session. Change it only if you used a different problem.'
       : 'Choose the problem you actually used. If the interview took place, your interviewee receives its solution notes after submitting.',

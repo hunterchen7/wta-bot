@@ -289,9 +289,8 @@ describe('problem bank', () => {
     expect(report.values.problem_used).toBe(String(assigned!.problem_id));
     expect(report.fields.find((field: any) => field.id === 'problem_used')).toMatchObject({
       help: expect.stringContaining('Pre-filled'),
-      options: expect.arrayContaining([
-        expect.objectContaining({ value: String(assigned!.problem_id) }),
-      ]),
+      readOnly: true,
+      options: [expect.objectContaining({ value: String(assigned!.problem_id) })],
     });
   });
 

@@ -7,6 +7,7 @@ export type Field = {
   label: string;
   type: 'radio' | 'select' | 'scale' | 'text' | 'textarea' | 'url';
   options?: Array<{ value: string; label: string }>;
+  readOnly?: boolean;
   required?: boolean;
   shared?: boolean; // relayed to the partner
   help?: string;
