@@ -38,6 +38,15 @@ export async function executeOutbox(env: Env, kind: OutboxKind, payload: any): P
       await needRest().send(payload.channelId, payload.message);
       return;
 
+    case 'channel_edit_latest': {
+      const messages = await needRest().getChannelMessages(payload.channelId, { limit: 50 });
+      const match = String(payload.match ?? '');
+      const target = messages.find((message) => message.author?.bot && message.content.includes(match));
+      if (!target) throw new Error('matching bot message not found');
+      await needRest().editMessage(payload.channelId, target.id, payload.message);
+      return;
+    }
+
     case 'thread_create': {
       const r = needRest();
       const thread = await r.createSessionThread(payload.channelId, payload.name, payload.starter);
