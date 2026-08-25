@@ -323,13 +323,73 @@ describe('admin mutations and audit history', () => {
     });
   });
 
-  it('verifies and resets reviews with audit entries', async () => {
-    const verify = await request('/api/admin/reviews/9201', {
+  it('loads review evidence and saves a completion rubric before approval', async () => {
+    const queue = await request('/api/admin/reviews');
+    expect(queue.status).toBe(200);
+    expect((await queue.json<any>()).reviews).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 9201,
+        reports_in: 2,
+        problem_title: 'Two Sum',
+        video_url: 'https://example.com/video',
+      }),
+    ]));
+
+    const detail = await request('/api/admin/reviews/9201');
+    expect(detail.status).toBe(200);
+    expect(await detail.json<any>()).toMatchObject({
+      session: { id: 9201, interviewer_name: 'Admin Person', interviewee_name: 'Student Person' },
+      videoUrl: 'https://example.com/video',
+      rubric: null,
+      reports: expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'interviewee_report',
+          answers: expect.arrayContaining([
+            expect.objectContaining({ id: 'rating_experience', value: '4' }),
+          ]),
+        }),
+      ]),
+    });
+
+    const draft = await request('/api/admin/reviews/9201/rubric', {
       method: 'POST',
-      body: JSON.stringify({ action: 'verify', note: 'Recording reviewed' }),
+      body: JSON.stringify({ action: 'save', completionRating: 3, notes: 'Review in progress' }),
+    });
+    expect(await draft.json<any>()).toMatchObject({ ok: true, state: 'pending' });
+    expect(await env.DB.prepare(
+      'SELECT reviewer_id, completion_rating, communication_rating, notes, submitted_at FROM session_reviews WHERE session_id = 9201',
+    ).first()).toEqual({ reviewer_id: ADMIN_ID, completion_rating: 3, communication_rating: null, notes: 'Review in progress', submitted_at: null });
+
+    const incomplete = await request('/api/admin/reviews/9201/rubric', {
+      method: 'POST', body: JSON.stringify({ action: 'approve', completionRating: 4 }),
+    });
+    expect(incomplete.status).toBe(400);
+    expect((await incomplete.json<any>()).error).toBe('incomplete_rubric');
+
+    const insufficient = await request('/api/admin/reviews/9201/rubric', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'approve', completionRating: 2, communicationRating: 3,
+        problemSolvingRating: 3, implementationRating: 3, testingRating: 2,
+        recordingQuality: 4, notes: 'Only part of the interview was completed',
+      }),
+    });
+    expect(insufficient.status).toBe(400);
+    expect((await insufficient.json<any>()).error).toBe('insufficient_completion');
+
+    const verify = await request('/api/admin/reviews/9201/rubric', {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'approve', completionRating: 4, communicationRating: 3,
+        problemSolvingRating: 3, implementationRating: 3, testingRating: 2,
+        recordingQuality: 4, notes: 'Recording reviewed',
+      }),
     });
     expect(await verify.json<any>()).toMatchObject({ ok: true, state: 'verified' });
     expect(await env.DB.prepare('SELECT review_state FROM sessions WHERE id = 9201').first()).toEqual({ review_state: 'verified' });
+    expect(await env.DB.prepare(
+      'SELECT completion_rating, communication_rating, submitted_at FROM session_reviews WHERE session_id = 9201',
+    ).first()).toEqual({ completion_rating: 4, communication_rating: 3, submitted_at: expect.any(String) });
 
     const reset = await request('/api/admin/reviews/9201', {
       method: 'POST',

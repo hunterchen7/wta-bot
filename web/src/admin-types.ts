@@ -76,8 +76,67 @@ export type RoundReport = {
 };
 export type RoundReportsData = { week: Week; reports: RoundReport[] };
 
-export type ReviewRow = { id: number; review_state: string; state: string; round: number; interviewer_name: string; interviewee_name: string; interviewee_id: number; video_url: string | null };
+export type ReviewRow = {
+  id: number;
+  review_state: string;
+  state: string;
+  scheduled_at: string | null;
+  round: number;
+  interviewer_name: string;
+  interviewee_name: string;
+  interviewee_id: number;
+  problem_number: number | null;
+  problem_title: string | null;
+  reports_in: number;
+  video_url: string | null;
+  completion_rating: number | null;
+  rubric_updated_at: string | null;
+  reviewer_name: string | null;
+};
 export type ReviewsData = { reviews: ReviewRow[] };
+export type ReviewAnswer = { id: string; label: string; type: string; value: string };
+export type ReviewReport = {
+  id: number;
+  kind: 'interviewer_report' | 'interviewee_report';
+  assigneeId: number;
+  assigneeName: string;
+  submittedAt: string | null;
+  answers: ReviewAnswer[];
+};
+export type ReviewRubric = {
+  session_id: number;
+  reviewer_id: number;
+  reviewer_name: string;
+  completion_rating: number | null;
+  communication_rating: number | null;
+  problem_solving_rating: number | null;
+  implementation_rating: number | null;
+  testing_rating: number | null;
+  recording_quality: number | null;
+  notes: string;
+  submitted_at: string | null;
+  updated_at: string;
+};
+export type ReviewDetail = {
+  session: {
+    id: number;
+    review_state: string;
+    state: string;
+    scheduled_at: string | null;
+    thread_id: string | null;
+    round: number;
+    interviewer_id: number;
+    interviewer_name: string;
+    interviewee_id: number;
+    interviewee_name: string;
+    problem_number: number | null;
+    problem_title: string | null;
+    problem_difficulty: string | null;
+  };
+  reports: ReviewReport[];
+  videoUrl: string | null;
+  rubric: ReviewRubric | null;
+};
 
 export type ProblemLanguage = 'python' | 'javascript' | 'typescript' | 'java' | 'cpp';
 export type ProblemTestCase = { description: string; input: string; expectedOutput: string; isHidden: boolean };

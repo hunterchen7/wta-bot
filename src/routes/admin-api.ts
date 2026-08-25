@@ -130,6 +130,106 @@ function previewRecordingExtension(contentType: string) {
   return '.mp4';
 }
 
+type ReviewSessionRow = {
+  id: number;
+  review_state: string;
+  state: string;
+  scheduled_at: string | null;
+  thread_id: string | null;
+  round: number;
+  interviewer_id: number;
+  interviewer_name: string;
+  interviewee_id: number;
+  interviewee_name: string;
+  problem_number: number | null;
+  problem_title: string | null;
+  problem_difficulty: string | null;
+};
+
+type ReviewFormRow = {
+  id: number;
+  kind: string;
+  assignee_id: number;
+  assignee_name: string;
+  submitted_at: string | null;
+  payload: string | null;
+};
+
+type ReviewRubricRow = {
+  session_id: number;
+  reviewer_id: number;
+  reviewer_name: string;
+  completion_rating: number | null;
+  communication_rating: number | null;
+  problem_solving_rating: number | null;
+  implementation_rating: number | null;
+  testing_rating: number | null;
+  recording_quality: number | null;
+  notes: string;
+  submitted_at: string | null;
+  updated_at: string;
+};
+
+type ReviewRubricRequest = {
+  action: 'save' | 'approve' | 'flag';
+  completionRating?: number | null;
+  communicationRating?: number | null;
+  problemSolvingRating?: number | null;
+  implementationRating?: number | null;
+  testingRating?: number | null;
+  recordingQuality?: number | null;
+  notes?: string;
+};
+
+function validReviewRating(value: unknown): value is number {
+  return Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 4;
+}
+
+function nullableRating(value: unknown) {
+  return validReviewRating(value) ? value : null;
+}
+
+function reviewReport(form: ReviewFormRow, session: ReviewSessionRow) {
+  let payload: Record<string, string> = {};
+  try {
+    const parsed = JSON.parse(form.payload ?? '{}');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) payload = parsed as Record<string, string>;
+  } catch {
+    payload = {};
+  }
+  const baseFields = fieldsFor(form.kind) ?? [];
+  const fields = form.kind === 'interviewer_report'
+    ? [
+        ...baseFields.slice(0, 4),
+        { id: 'problem_used', label: 'Which interview question did you choose?', type: 'select' as const },
+        ...baseFields.slice(4),
+      ]
+    : baseFields;
+  const known = new Set(fields.map((field) => field.id));
+  const answers = fields
+    .filter((field) => payload[field.id] != null && payload[field.id] !== '')
+    .map((field) => ({
+      id: field.id,
+      label: field.label,
+      type: field.type,
+      value: field.id === 'problem_used' && session.problem_title
+        ? `${session.problem_number ? `#${session.problem_number} · ` : ''}${session.problem_title}`
+        : field.options?.find((option) => option.value === payload[field.id])?.label ?? payload[field.id],
+    }));
+  for (const [id, value] of Object.entries(payload)) {
+    if (!known.has(id) && value) answers.push({ id, label: id.replaceAll('_', ' '), type: 'text', value });
+  }
+  return {
+    id: form.id,
+    kind: form.kind,
+    assigneeId: form.assignee_id,
+    assigneeName: form.assignee_name,
+    submittedAt: form.submitted_at,
+    answers,
+    raw: payload,
+  };
+}
+
 const count = async (env: Env, sql: string, ...bindings: unknown[]) => {
   const row = await env.DB.prepare(sql).bind(...bindings).first<{ n: number }>();
   return Number(row?.n ?? 0);
@@ -481,17 +581,144 @@ adminApi.get('/api/admin/reviews', async (c) => {
   const gate = await requireOrganizer(c);
   if (gate instanceof Response) return gate;
   const { results } = await c.env.DB.prepare(
-    `SELECT s.id, s.review_state, s.state, w.idx AS round, pi.name AS interviewer_name, pe.name AS interviewee_name,
-            pe.id AS interviewee_id,
+    `SELECT s.id, s.review_state, s.state, s.scheduled_at, w.idx AS round,
+            pi.name AS interviewer_name, pe.name AS interviewee_name, pe.id AS interviewee_id,
+            p.number AS problem_number, p.title AS problem_title,
+            (SELECT count(*) FROM form_instances submitted
+             WHERE submitted.session_id = s.id AND submitted.submitted_at IS NOT NULL) AS reports_in,
             (SELECT json_extract(f.payload, '$.video_url') FROM form_instances f
              WHERE f.session_id = s.id AND f.kind = 'interviewee_report' AND f.submitted_at IS NOT NULL
-             ORDER BY f.id DESC LIMIT 1) AS video_url
+             ORDER BY f.id DESC LIMIT 1) AS video_url,
+            sr.completion_rating, sr.updated_at AS rubric_updated_at, reviewer.name AS reviewer_name
      FROM sessions s JOIN weeks w ON w.id = s.week_id
      JOIN participants pi ON pi.id = s.interviewer_id JOIN participants pe ON pe.id = s.interviewee_id
+     LEFT JOIN problems p ON p.id = s.problem_id
+     LEFT JOIN session_reviews sr ON sr.session_id = s.id
+     LEFT JOIN participants reviewer ON reviewer.id = sr.reviewer_id
      WHERE s.review_state != 'none'
      ORDER BY CASE s.review_state WHEN 'pending' THEN 0 WHEN 'flagged' THEN 1 WHEN 'verified' THEN 2 ELSE 3 END, s.id DESC`,
   ).all<any>();
   return c.json({ reviews: results });
+});
+
+adminApi.get('/api/admin/reviews/:id', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const id = Number(c.req.param('id'));
+  if (!Number.isInteger(id)) return c.json({ error: 'invalid_id' }, 400);
+
+  const session = await c.env.DB.prepare(
+    `SELECT s.id, s.review_state, s.state, s.scheduled_at, s.thread_id, w.idx AS round,
+            pi.id AS interviewer_id, pi.name AS interviewer_name,
+            pe.id AS interviewee_id, pe.name AS interviewee_name,
+            p.number AS problem_number, p.title AS problem_title, p.difficulty AS problem_difficulty
+     FROM sessions s
+     JOIN weeks w ON w.id = s.week_id
+     JOIN participants pi ON pi.id = s.interviewer_id
+     JOIN participants pe ON pe.id = s.interviewee_id
+     LEFT JOIN problems p ON p.id = s.problem_id
+     WHERE s.id = ?1 AND s.review_state != 'none'`,
+  ).bind(id).first<ReviewSessionRow>();
+  if (!session) return c.json({ error: 'not_found', message: 'That review is not available.' }, 404);
+
+  const [forms, rubric] = await Promise.all([
+    c.env.DB.prepare(
+      `SELECT f.id, f.kind, f.assignee_id, f.submitted_at, f.payload,
+              assignee.name AS assignee_name
+       FROM form_instances f
+       JOIN participants assignee ON assignee.id = f.assignee_id
+       WHERE f.session_id = ?1
+       ORDER BY CASE f.kind WHEN 'interviewee_report' THEN 0 ELSE 1 END, f.id`,
+    ).bind(id).all<ReviewFormRow>(),
+    c.env.DB.prepare(
+      `SELECT sr.session_id, sr.reviewer_id, reviewer.name AS reviewer_name,
+              sr.completion_rating, sr.communication_rating, sr.problem_solving_rating,
+              sr.implementation_rating, sr.testing_rating, sr.recording_quality,
+              sr.notes, sr.submitted_at, sr.updated_at
+       FROM session_reviews sr
+       JOIN participants reviewer ON reviewer.id = sr.reviewer_id
+       WHERE sr.session_id = ?1`,
+    ).bind(id).first<ReviewRubricRow>(),
+  ]);
+
+  const reports = forms.results.map((form) => reviewReport(form, session));
+  const intervieweeReport = reports.find((report) => report.kind === 'interviewee_report');
+  const videoUrl = intervieweeReport?.raw.video_url ?? null;
+  return c.json({
+    session,
+    reports: reports.map(({ raw: _raw, ...report }) => report),
+    videoUrl,
+    rubric,
+  });
+});
+
+adminApi.post('/api/admin/reviews/:id/rubric', async (c) => {
+  const gate = await requireOrganizer(c);
+  if (gate instanceof Response) return gate;
+  const id = Number(c.req.param('id'));
+  const body = await c.req.json<ReviewRubricRequest>().catch(() => null);
+  if (!Number.isInteger(id) || !body || !['save', 'approve', 'flag'].includes(body.action)) {
+    return c.json({ error: 'invalid_request', message: 'The review could not be saved.' }, 400);
+  }
+  const row = await c.env.DB.prepare(
+    "SELECT interviewee_id, review_state FROM sessions WHERE id = ?1 AND review_state != 'none'",
+  ).bind(id).first<{ interviewee_id: number; review_state: string }>();
+  if (!row) return c.json({ error: 'not_found', message: 'That review is not available.' }, 404);
+
+  const ratings = [
+    body.completionRating, body.communicationRating, body.problemSolvingRating,
+    body.implementationRating, body.testingRating, body.recordingQuality,
+  ];
+  if (ratings.some((rating) => rating !== null && rating !== undefined && !validReviewRating(rating))) {
+    return c.json({ error: 'invalid_rubric', message: 'Rubric ratings must be between 1 and 4.' }, 400);
+  }
+  if (body.action !== 'save' && ratings.some((rating) => !validReviewRating(rating))) {
+    return c.json({ error: 'incomplete_rubric', message: 'Rate every rubric category before completing the review.' }, 400);
+  }
+  if (body.action === 'approve' && (body.completionRating ?? 0) < 3) {
+    return c.json({ error: 'insufficient_completion', message: 'Approve only sessions rated mostly complete or complete.' }, 400);
+  }
+  const notes = String(body.notes ?? '').trim().slice(0, 4000);
+  if (body.action === 'flag' && !notes) {
+    return c.json({ error: 'note_required', message: 'Add a note explaining what needs follow-up.' }, 400);
+  }
+
+  const now = new Date().toISOString();
+  const submittedAt = body.action === 'save' ? null : now;
+  await c.env.DB.prepare(
+    `INSERT INTO session_reviews
+       (session_id, reviewer_id, completion_rating, communication_rating, problem_solving_rating,
+        implementation_rating, testing_rating, recording_quality, notes, submitted_at, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+     ON CONFLICT(session_id) DO UPDATE SET
+       reviewer_id = excluded.reviewer_id,
+       completion_rating = excluded.completion_rating,
+       communication_rating = excluded.communication_rating,
+       problem_solving_rating = excluded.problem_solving_rating,
+       implementation_rating = excluded.implementation_rating,
+       testing_rating = excluded.testing_rating,
+       recording_quality = excluded.recording_quality,
+       notes = excluded.notes,
+       submitted_at = CASE WHEN ?12 = 'save' THEN session_reviews.submitted_at ELSE excluded.submitted_at END,
+       updated_at = excluded.updated_at`,
+  ).bind(
+    id, gate.participantId,
+    nullableRating(body.completionRating), nullableRating(body.communicationRating),
+    nullableRating(body.problemSolvingRating), nullableRating(body.implementationRating),
+    nullableRating(body.testingRating), nullableRating(body.recordingQuality),
+    notes, submittedAt, now, body.action,
+  ).run();
+
+  const state = body.action === 'approve' ? 'verified' : body.action === 'flag' ? 'flagged' : row.review_state;
+  if (state !== row.review_state) {
+    await c.env.DB.prepare('UPDATE sessions SET review_state = ?2 WHERE id = ?1').bind(id, state).run();
+  }
+  if (body.action === 'approve') await maybeMarkEligible(c.env, row.interviewee_id);
+  await audit(c.env, gate.participantId, body.action === 'save' ? 'review.rubric_saved' : `review.${body.action}`, 'session', id, {
+    completionRating: body.completionRating ?? null,
+    note: notes,
+  });
+  return c.json({ ok: true, state, rubric: { ...body, reviewerId: gate.participantId, updatedAt: now, submittedAt } });
 });
 
 adminApi.post('/api/admin/reviews/:id', async (c) => {

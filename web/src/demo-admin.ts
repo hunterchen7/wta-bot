@@ -83,6 +83,10 @@ export async function adminDemoRequest(path: string, init?: RequestInit): Promis
   await new Promise((resolve) => setTimeout(resolve, init?.method ? 180 : 80));
   if (path === '/mcp-token/reset' && init?.method === 'POST') return { mcpUrl: 'https://wta.hunterchen.ca/mcp', token: 'wta_admin_demo_personal_mcp_token_123456789', credential: { id: 2, tokenPrefix: 'wta_admin_demo_per', scopes: ['admin:read', 'participants:write', 'problems:write', 'program:write', 'operations:write'], lastUsedAt: null, createdAt: now } } satisfies AdminMcpData;
   if (path.match(/^\/problems\/\d+\/session$/) && init?.method === 'POST') return { ok: true, sessionId: 499 };
+  if (path.match(/^\/reviews\/\d+\/rubric$/) && init?.method === 'POST') {
+    const body = JSON.parse(String(init.body ?? '{}')) as { action?: string };
+    return { ok: true, state: body.action === 'flag' ? 'flagged' : body.action === 'approve' ? 'verified' : 'pending' };
+  }
   if (init?.method && init.method !== 'GET') return { ok: true, updated: 1, queued: 1, skipped: 0, state: 'verified', id: 99, weeks };
   if (path === '/overview') return overview;
   if (path === '/participants') return { participants, cohort, currentWeek: weeks[1] } satisfies ParticipantsData;
@@ -122,10 +126,18 @@ export async function adminDemoRequest(path: string, init?: RequestInit): Promis
   } satisfies RoundReportsData;
   if (path.startsWith('/rounds')) return { cohort, weeks, selectedWeek: weeks[1], sessions, participants: participants.filter((p) => p.status === 'active').map((p) => ({ id: p.id, name: p.name, discord_username: p.discord_username })), optins: participants.filter((p) => p.opted_in).map((p) => ({ participant_id: p.id, name: p.name, regular_opt_in: 1, extra_interviewer: p.id === 4 ? 1 : 0, standby: p.id === 7 ? 1 : 0, standby_interviewer_limit: p.id === 7 ? 2 : 0, standby_interviewee_limit: p.id === 7 ? 1 : 0, wants_double: p.id === 4 ? 1 : 0, status: p.status })), repairs: [{ id: 1, participant_id: 8, name: 'Amara Okafor', need: 'interviewer', state: 'open', created_at: now }] } satisfies RoundsData;
   if (path === '/reviews') return { reviews: [
-    { id: 71, review_state: 'pending', state: 'completed', round: 3, interviewer_name: 'Jordan Lee', interviewee_name: 'Maya Singh', interviewee_id: 3, video_url: 'https://example.com/recording' },
-    { id: 70, review_state: 'flagged', state: 'completed', round: 3, interviewer_name: 'Alex Chen', interviewee_name: 'Sam Wilson', interviewee_id: 4, video_url: null },
-    { id: 68, review_state: 'verified', state: 'completed', round: 3, interviewer_name: 'Taylor Kim', interviewee_name: 'Priya Patel', interviewee_id: 6, video_url: 'https://example.com/recording2' },
+    { id: 71, review_state: 'pending', state: 'completed', scheduled_at: now, round: 3, interviewer_name: 'Jordan Lee', interviewee_name: 'Maya Singh', interviewee_id: 3, problem_number: 1631, problem_title: 'Path With Minimum Effort', reports_in: 2, video_url: 'https://example.com/recording.mp4', completion_rating: null, rubric_updated_at: null, reviewer_name: null },
+    { id: 70, review_state: 'flagged', state: 'completed', scheduled_at: now, round: 3, interviewer_name: 'Alex Chen', interviewee_name: 'Sam Wilson', interviewee_id: 4, problem_number: 909, problem_title: 'Snakes and Ladders', reports_in: 2, video_url: null, completion_rating: 2, rubric_updated_at: now, reviewer_name: 'Alex Chen' },
+    { id: 68, review_state: 'verified', state: 'completed', scheduled_at: now, round: 3, interviewer_name: 'Taylor Kim', interviewee_name: 'Priya Patel', interviewee_id: 6, problem_number: 1976, problem_title: 'Number of Ways to Arrive at Destination', reports_in: 2, video_url: 'https://example.com/recording2.mp4', completion_rating: 4, rubric_updated_at: now, reviewer_name: 'Alex Chen' },
   ] } satisfies ReviewsData;
+  if (path.match(/^\/reviews\/\d+$/)) return {
+    session: { id: Number(path.split('/').at(-1)), review_state: 'pending', state: 'completed', scheduled_at: now, thread_id: null, round: 3, interviewer_id: 2, interviewer_name: 'Jordan Lee', interviewee_id: 3, interviewee_name: 'Maya Singh', problem_number: 1631, problem_title: 'Path With Minimum Effort', problem_difficulty: 'medium' },
+    videoUrl: 'https://example.com/recording.mp4', rubric: null,
+    reports: [
+      { id: 701, kind: 'interviewee_report', assigneeId: 3, assigneeName: 'Maya Singh', submittedAt: now, answers: [{ id: 'rating_experience', label: 'Rate the quality of your experience', type: 'scale', value: '4' }, { id: 'code', label: 'Copy the code that you wrote', type: 'textarea', value: 'function minimumEffortPath(heights) {\n  // implementation\n}' }] },
+      { id: 702, kind: 'interviewer_report', assigneeId: 2, assigneeName: 'Jordan Lee', submittedAt: now, answers: [{ id: 'rating_problem_solving', label: 'Rate the interviewee’s problem solving', type: 'scale', value: '3' }, { id: 'strengths', label: 'What did your interviewee do well?', type: 'textarea', value: 'Explained the graph model clearly and adjusted after feedback.' }] },
+    ],
+  };
   if (path === '/problems') return { problems, sets: problems.filter((problem) => problem.available_weeks.includes(2)).map((problem) => ({ week_id: 2, round: 2, cohort_name: cohort.name, problem_id: problem.id, title: problem.title })), cohort, weeks, participants: participants.filter((p) => p.status === 'active').map((p) => ({ id: p.id, name: p.name, discord_username: p.discord_username })) } satisfies ProblemsData;
   if (path === '/analytics') return { participants: overview.participantStatuses.map((row) => ({ label: row.status, value: row.n })), sessions: overview.sessionStates.map((row) => ({ label: row.state, value: row.n })), reports: [{ label: 'interviewee_report', total: 18, submitted: 15 }, { label: 'interviewer_report', total: 18, submitted: 14 }], reviews: [{ label: 'verified', value: 9 }, { label: 'pending', value: 3 }, { label: 'flagged', value: 2 }], problems: problems.map((problem) => ({ id: problem.id, title: problem.title, difficulty: problem.difficulty, uses: problem.uses, avg_experience: problem.uses ? 4.2 - problem.id * .2 : null })), rounds: [{ cohort: cohort.name, round: 1, optins: 12, sessions: 20, completed: 18 }, { cohort: cohort.name, round: 2, optins: 10, sessions: 19, completed: 7 }, { cohort: cohort.name, round: 3, optins: 0, sessions: 0, completed: 0 }] } satisfies AnalyticsData;
   if (path === '/operations') return operations;
