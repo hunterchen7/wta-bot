@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createCohort } from '../src/engine/weeks';
 import { app } from '../src/index';
-import { extractModelText } from '../src/services/review-analysis';
+import { aiReviewSchema, extractModelText, normalizeAiReview } from '../src/services/review-analysis';
 
 let jobId = 0;
 const workerId = 'test-olares-worker';
@@ -133,5 +133,100 @@ describe('Workers AI response parsing', () => {
   it('rejects malformed model envelopes without guessing', () => {
     expect(() => extractModelText({ output: [{ type: 'reasoning', content: [] }] }))
       .toThrow(/Evaluator returned no text/);
+  });
+});
+
+const moment = (note = 'Observed exchange') => ({ startSeconds: 60, endSeconds: 75, note, scope: 'moment' as const });
+const observed = (rating: 1 | 2 | 3 | 4, evidence: Array<{
+  startSeconds: number;
+  endSeconds: number;
+  note: string;
+  scope: 'moment' | 'interval' | 'session' | 'report' | 'code';
+}> = [moment()]) => ({ status: 'observed' as const, rating, confidence: 0.8, evidence });
+
+function reviewDraft() {
+  return aiReviewSchema.parse({
+    rubricVersion: 'round3-review-v2',
+    recap: 'A complete mock interview.',
+    sessionCompletion: {
+      recommendation: 'completed',
+      rationale: 'Both participants completed a substantive interview.',
+      evidence: [{ startSeconds: 0, endSeconds: 4200, note: 'The full session was reviewed.', scope: 'session' }],
+    },
+    candidate: {
+      dimensions: {
+        problemFraming: observed(3),
+        reasoning: observed(3),
+        implementation: observed(3),
+        testingAndComplexity: observed(3),
+        communication: observed(3),
+        independence: observed(2),
+        coachability: observed(4),
+      },
+      score: 3.05,
+      readiness: 'pass',
+      solutionOutcome: 'optimal_implemented_tested_and_analyzed',
+      rationale: 'The candidate reached a correct solution with assistance.',
+    },
+    interviewer: {
+      dimensions: {
+        structure: observed(3),
+        questionFidelity: observed(4),
+        probing: observed(3),
+        hintDiscipline: observed(2),
+        timeManagement: observed(2, [{ startSeconds: 0, endSeconds: 4200, note: 'The session ran for 70 minutes.', scope: 'session' }]),
+        feedbackAndConduct: observed(4),
+      },
+      score: 2.85,
+      recommendation: 'effective',
+      criticalFlags: [],
+    },
+    hints: [],
+    phaseTimeline: [{ phase: 'implementation', startSeconds: 600, endSeconds: 3000, summary: 'Implementation occupied most of the session.', pacingControl: 'shared' }],
+    keyMoments: [{ startSeconds: 60, endSeconds: 75, title: 'Approach', note: 'The candidate began framing the solution.' }],
+    contradictions: [],
+    confidence: { transcript: 0.7, speakerAttribution: 0.7, overall: 0.7 },
+    organizerChecks: [],
+  });
+}
+
+describe('AI review normalization', () => {
+  it('recomputes scores and bands instead of trusting model-authored values', () => {
+    const review = normalizeAiReview(reviewDraft());
+    expect(review.candidate.score).toBe(65);
+    expect(review.candidate.scoreBand).toBe('pass');
+    expect(review.candidate.readiness).toBe('pass');
+    expect(review.interviewer.score).toBe(61.7);
+    expect(review.interviewer.recommendation).toBe('coaching_recommended');
+  });
+
+  it('separates a score band from a manual-review integrity override', () => {
+    const draft = reviewDraft();
+    draft.interviewer.criticalFlags = [{
+      code: 'external_ai_assistance',
+      summary: 'The interviewer used an external AI system to debug candidate code.',
+      compromisesCandidateEvidence: true,
+      evidence: [{ startSeconds: 4119, endSeconds: 4137, note: 'The interviewer disclosed the external AI use.', scope: 'interval' }],
+    }];
+    const review = normalizeAiReview(draft);
+    expect(review.candidate.score).toBe(65);
+    expect(review.candidate.scoreBand).toBe('pass');
+    expect(review.candidate.readiness).toBe('manual_review');
+    expect(review.candidate.manualReviewReasons).toContain('The interviewer used an external AI system to debug candidate code.');
+    expect(review.interviewer.requiresOrganizerReview).toBe(true);
+  });
+
+  it('will not score time management from a single opening timestamp', () => {
+    const draft = reviewDraft();
+    draft.interviewer.dimensions.timeManagement.evidence = [moment('The session began.')];
+    const review = normalizeAiReview(draft);
+    expect(review.interviewer.dimensions.timeManagement.status).toBe('not_observed');
+    expect(review.interviewer.dimensions.timeManagement.rating).toBeNull();
+    expect(review.organizerChecks).toContain('Time management was left unscored because its evidence did not cover a meaningful session interval.');
+  });
+
+  it('rejects inconsistent observed and unobserved dimension states', () => {
+    const invalid = { ...reviewDraft().candidate.dimensions.reasoning, status: 'not_observed', rating: 4 };
+    expect(() => aiReviewSchema.shape.candidate.shape.dimensions.shape.reasoning.parse(invalid)).toThrow();
   });
 });

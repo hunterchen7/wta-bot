@@ -117,7 +117,12 @@ export type ReviewRubric = {
   submitted_at: string | null;
   updated_at: string;
 };
-export type ReviewEvidence = { startSeconds: number; endSeconds: number; note: string };
+export type ReviewEvidence = {
+  startSeconds: number;
+  endSeconds: number;
+  note: string;
+  scope: 'moment' | 'interval' | 'session' | 'report' | 'code';
+};
 export type ReviewAiDimension = {
   rating: number | null;
   status: 'observed' | 'not_observed';
@@ -136,6 +141,9 @@ export type ReviewAiEvaluation = {
     dimensions: Record<string, ReviewAiDimension>;
     score: number | null;
     readiness: 'strong_pass' | 'pass' | 'borderline' | 'not_demonstrated' | 'manual_review';
+    scoreBand?: 'strong_pass' | 'pass' | 'borderline' | 'not_demonstrated' | null;
+    requiresManualReview?: boolean;
+    manualReviewReasons?: string[];
     solutionOutcome: string;
     rationale: string;
   };
@@ -143,7 +151,13 @@ export type ReviewAiEvaluation = {
     dimensions: Record<string, ReviewAiDimension>;
     score: number | null;
     recommendation: 'strong' | 'effective' | 'coaching_recommended' | 'organizer_follow_up';
-    criticalFlags: string[];
+    requiresOrganizerReview?: boolean;
+    criticalFlags: Array<string | {
+      code: string;
+      summary: string;
+      compromisesCandidateEvidence: boolean;
+      evidence: ReviewEvidence[];
+    }>;
   };
   hints: Array<{
     startSeconds: number;
@@ -155,6 +169,13 @@ export type ReviewAiEvaluation = {
     matchedOfficialLadder: boolean | null;
     smallerInterventionAvailable: boolean | null;
     outcome: string;
+  }>;
+  phaseTimeline?: Array<{
+    phase: 'setup' | 'clarification' | 'approach' | 'implementation' | 'testing' | 'complexity' | 'feedback' | 'downtime' | 'wrap_up';
+    startSeconds: number;
+    endSeconds: number;
+    summary: string;
+    pacingControl: 'interviewer' | 'candidate' | 'shared' | 'external' | 'not_applicable';
   }>;
   keyMoments: Array<{ startSeconds: number; endSeconds: number; title: string; note: string }>;
   contradictions: Array<{ summary: string; evidence: ReviewEvidence[] }>;

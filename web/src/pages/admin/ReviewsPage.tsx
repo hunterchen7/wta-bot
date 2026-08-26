@@ -501,9 +501,20 @@ function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek
 
     <div className="grid gap-3 md:grid-cols-3">
       <AiDecisionCard label="Completion" value={labelize(evaluation.sessionCompletion.recommendation)} detail="Independent of whether the problem was solved" tone={evaluation.sessionCompletion.recommendation === 'completed' ? 'emerald' : 'amber'} />
-      <AiDecisionCard label="Candidate readiness" value={labelize(evaluation.candidate.readiness)} detail={evaluation.candidate.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.candidate.score)}/100 observed score`} tone="western" />
-      <AiDecisionCard label="Interviewer quality" value={labelize(evaluation.interviewer.recommendation)} detail={evaluation.interviewer.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.interviewer.score)}/100 observed score`} tone="sky" />
+      <AiDecisionCard label="Candidate readiness" value={labelize(evaluation.candidate.readiness)} detail={evaluation.candidate.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.candidate.score)}/100 calculated score${evaluation.candidate.requiresManualReview && evaluation.candidate.scoreBand ? ` · ${labelize(evaluation.candidate.scoreBand)} band` : ''}`} tone="western" />
+      <AiDecisionCard label="Interviewer quality" value={labelize(evaluation.interviewer.recommendation)} detail={evaluation.interviewer.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.interviewer.score)}/100 calculated score${evaluation.interviewer.requiresOrganizerReview ? ' · Organizer review required' : ''}`} tone="sky" />
     </div>
+
+    {evaluation.phaseTimeline?.length ? <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <h4 className="text-sm font-black">Session timeline</h4>
+      <p className="mt-1 text-xs leading-5 text-slate-400">Whole-session pacing evidence used for completion and time-management judgments.</p>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {evaluation.phaseTimeline.map((phase, index) => <button key={`${phase.phase}-${phase.startSeconds}-${index}`} type="button" onClick={() => onSeek(phase.startSeconds)} className="cursor-pointer rounded-xl border border-white/10 bg-slate-950/60 p-3 text-left transition hover:border-western-300/40 hover:bg-western-400/10">
+          <span className="text-[0.65rem] font-black uppercase tracking-[0.12em] text-western-200">{labelize(phase.phase)} · {formatVideoTime(phase.startSeconds)}–{formatVideoTime(phase.endSeconds)}</span>
+          <span className="mt-1 block text-xs leading-5 text-slate-300">{phase.summary}</span>
+        </button>)}
+      </div>
+    </section> : null}
 
     <section className="rounded-xl border border-white/10 bg-white/5 p-4">
       <h4 className="text-sm font-black">Key moments</h4>
@@ -534,7 +545,8 @@ function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek
     {evaluation.contradictions.length || evaluation.organizerChecks.length || evaluation.interviewer.criticalFlags.length ? <section className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-4">
       <h4 className="flex items-center gap-2 text-sm font-black text-amber-100"><AlertTriangle className="size-4" /> Organizer checks</h4>
       <ul className="mt-3 space-y-2 text-xs leading-5 text-amber-100/80">
-        {evaluation.interviewer.criticalFlags.map((item) => <li key={`flag-${item}`}>• {item}</li>)}
+        {evaluation.candidate.manualReviewReasons?.map((item) => <li key={`manual-${item}`}>• {item}</li>)}
+        {evaluation.interviewer.criticalFlags.map((item, index) => <li key={`flag-${typeof item === 'string' ? item : `${item.code}-${index}`}`}>• {typeof item === 'string' ? item : item.summary}</li>)}
         {evaluation.contradictions.map((item) => <li key={`conflict-${item.summary}`}>• {item.summary}</li>)}
         {evaluation.organizerChecks.map((item) => <li key={`check-${item}`}>• {item}</li>)}
       </ul>
@@ -543,6 +555,7 @@ function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek
     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[0.68rem] font-semibold text-slate-500">
       <span>Transcript {percent(evaluation.confidence.transcript)}</span>
       <span>Speaker attribution {percent(evaluation.confidence.speakerAttribution)}</span>
+      {analysis.evaluatorModel ? <span>Evaluator {analysis.evaluatorModel}</span> : null}
       {analysis.evaluatedAt ? <span>Generated {formatDate(analysis.evaluatedAt)}</span> : null}
       <span>AI output requires organizer confirmation</span>
     </div>
@@ -570,7 +583,10 @@ function DimensionSection({ title, dimensions, onSeek }: { title: string; dimens
 }
 
 function EvidenceButton({ evidence, onSeek }: { evidence: ReviewEvidence; onSeek: (seconds: number) => void }) {
-  return <button type="button" title={evidence.note} onClick={() => onSeek(evidence.startSeconds)} className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white/5 px-2 py-1 text-[0.65rem] font-bold text-slate-400 transition hover:bg-western-400/15 hover:text-western-200"><Clock3 className="size-3" />{formatVideoTime(evidence.startSeconds)}</button>;
+  const timestamp = evidence.endSeconds > evidence.startSeconds
+    ? `${formatVideoTime(evidence.startSeconds)}–${formatVideoTime(evidence.endSeconds)}`
+    : formatVideoTime(evidence.startSeconds);
+  return <button type="button" title={evidence.note} onClick={() => onSeek(evidence.startSeconds)} className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white/5 px-2 py-1 text-[0.65rem] font-bold text-slate-400 transition hover:bg-western-400/15 hover:text-western-200"><Clock3 className="size-3" />{timestamp}<span className="text-[0.58rem] uppercase tracking-wide text-slate-500">{evidence.scope}</span></button>;
 }
 
 function percent(value: number) {
