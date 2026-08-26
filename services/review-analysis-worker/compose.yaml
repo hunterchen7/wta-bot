@@ -17,7 +17,7 @@ services:
     volumes:
       - wta-review-models:/models
     tmpfs:
-      - /work:size=12g,mode=1770
+      - /work:size=12g,mode=1770,uid=10001,gid=10001
 
 volumes:
   wta-review-models:
