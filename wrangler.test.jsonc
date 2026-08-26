@@ -1,0 +1,24 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "wta-bot-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "vars": {
+    "ALLOWED_GUILD_IDS": "1124746819184906431",
+    "PUBLIC_ORIGIN": "https://wta.test",
+    "OUTBOX_BUDGET": "100",
+    "DASHBOARD_ADMINS": "",
+    "EMAIL_FROM": "hello@wta.hunterchen.ca",
+    "EMAIL_FROM_NAME": "Western Tech Alumni"
+  },
+  "send_email": [{ "name": "EMAIL" }],
+  "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "wta-recordings-test" }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "wta-bot-test",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ]
+}

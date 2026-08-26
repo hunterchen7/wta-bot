@@ -7,7 +7,9 @@ export default defineConfig(async () => {
   return {
     plugins: [
       cloudflareTest({
-        wrangler: { configPath: './wrangler.jsonc' },
+        // Keep remote-only bindings (notably Workers AI) out of unit tests so
+        // CI never needs production Cloudflare credentials.
+        wrangler: { configPath: './wrangler.test.jsonc' },
         miniflare: {
           bindings: {
             TEST_MIGRATIONS: migrations,
