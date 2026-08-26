@@ -500,12 +500,45 @@ function safeJsonObject(value: string | null): Record<string, unknown> {
   }
 }
 
-function extractModelText(value: unknown): string {
+export function extractModelText(value: unknown): string {
   if (!value || typeof value !== 'object') throw new Error('Evaluator returned no response.');
   const response = Reflect.get(value, 'response');
   if (typeof response === 'string' && response.trim()) return response;
   if (response && typeof response === 'object') return JSON.stringify(response);
-  throw new Error('Evaluator returned no text.');
+
+  // GPT-OSS can return the Responses API envelope when invoked through the
+  // Workers binding. Ignore reasoning items and take only the assistant's
+  // explicit output text.
+  const outputText = Reflect.get(value, 'output_text');
+  if (typeof outputText === 'string' && outputText.trim()) return outputText;
+  const output = Reflect.get(value, 'output');
+  if (Array.isArray(output)) {
+    for (const item of output) {
+      if (!item || typeof item !== 'object' || Reflect.get(item, 'type') !== 'message') continue;
+      const content = Reflect.get(item, 'content');
+      if (!Array.isArray(content)) continue;
+      for (const part of content) {
+        if (!part || typeof part !== 'object' || Reflect.get(part, 'type') !== 'output_text') continue;
+        const text = Reflect.get(part, 'text');
+        if (typeof text === 'string' && text.trim()) return text;
+      }
+    }
+  }
+
+  // Also accept the OpenAI Chat Completions envelope used by the compatible
+  // endpoint and by newer Workers AI model adapters.
+  const choices = Reflect.get(value, 'choices');
+  if (Array.isArray(choices)) {
+    const message = choices[0] && typeof choices[0] === 'object' ? Reflect.get(choices[0], 'message') : null;
+    if (message && typeof message === 'object') {
+      const parsed = Reflect.get(message, 'parsed');
+      if (parsed && typeof parsed === 'object') return JSON.stringify(parsed);
+      const content = Reflect.get(message, 'content');
+      if (typeof content === 'string' && content.trim()) return content;
+    }
+  }
+
+  throw new Error(`Evaluator returned no text (keys: ${Object.keys(value).slice(0, 12).join(', ') || 'none'}).`);
 }
 
 function extractJsonObject(value: string): string {

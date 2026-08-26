@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createCohort } from '../src/engine/weeks';
 import { app } from '../src/index';
+import { extractModelText } from '../src/services/review-analysis';
 
 let jobId = 0;
 const workerId = 'test-olares-worker';
@@ -113,5 +114,19 @@ describe('private review analysis worker API', () => {
     const evaluation = await workerRequest(`/api/analysis/worker/jobs/${jobId}/evaluate`, { method: 'POST' });
     expect(evaluation.status).toBe(200);
     expect(await evaluation.json()).toEqual({ ok: true, status: 'none' });
+  });
+});
+
+describe('Workers AI response parsing', () => {
+  it('accepts legacy, Responses API, and Chat Completions envelopes', () => {
+    expect(extractModelText({ response: '{"legacy":true}' })).toBe('{"legacy":true}');
+    expect(extractModelText({
+      output: [
+        { type: 'reasoning', content: [{ type: 'summary_text', text: 'not the answer' }] },
+        { type: 'message', content: [{ type: 'output_text', text: '{"responses":true}' }] },
+      ],
+    })).toBe('{"responses":true}');
+    expect(extractModelText({ choices: [{ message: { content: '{"chat":true}' } }] })).toBe('{"chat":true}');
+    expect(extractModelText({ choices: [{ message: { parsed: { structured: true } } }] })).toBe('{"structured":true}');
   });
 });
