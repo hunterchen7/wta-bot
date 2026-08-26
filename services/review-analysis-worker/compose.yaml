@@ -1,0 +1,21 @@
+services:
+  worker:
+    build: .
+    restart: unless-stopped
+    env_file:
+      - /etc/wta-review-analysis.env
+    environment:
+      WTA_WORKER_ID: olares-gpu-01
+      WTA_MODEL: large-v3
+      WTA_COMPUTE_TYPE: float16
+      WTA_POLL_SECONDS: "10"
+    devices:
+      - nvidia.com/gpu=all
+    volumes:
+      - wta-review-models:/models
+    tmpfs:
+      - /work:size=12g,mode=1770
+
+volumes:
+  wta-review-models:
+

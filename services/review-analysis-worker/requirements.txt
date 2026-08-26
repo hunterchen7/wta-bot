@@ -1,0 +1,8 @@
+faster-whisper==1.2.1
+numpy==2.2.6
+requests==2.32.5
+scikit-learn==1.7.2
+speechbrain==1.0.3
+torch==2.8.0
+torchaudio==2.8.0
+
