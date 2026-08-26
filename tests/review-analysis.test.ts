@@ -218,7 +218,12 @@ describe('AI review normalization', () => {
 
   it('will not score time management from a single opening timestamp', () => {
     const draft = reviewDraft();
-    draft.interviewer.dimensions.timeManagement.evidence = [moment('The session began.')];
+    draft.interviewer.dimensions.timeManagement.evidence = [{
+      startSeconds: 3,
+      endSeconds: 73,
+      note: 'Only the opening setup was cited.',
+      scope: 'session',
+    }];
     const review = normalizeAiReview(draft);
     expect(review.interviewer.dimensions.timeManagement.status).toBe('not_observed');
     expect(review.interviewer.dimensions.timeManagement.rating).toBeNull();
