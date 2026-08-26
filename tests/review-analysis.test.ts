@@ -51,6 +51,7 @@ beforeAll(async () => {
 describe('private review analysis worker API', () => {
   it('requires the worker secret', async () => {
     expect((await app.request('/api/analysis/worker/claim', { method: 'POST' }, env)).status).toBe(401);
+    expect((await app.request(`/api/analysis/worker/jobs/${jobId}/evaluate`, { method: 'POST' }, env)).status).toBe(401);
   });
 
   it('leases one job and streams only that recording', async () => {
@@ -108,5 +109,9 @@ describe('private review analysis worker API', () => {
     });
     expect(await env.RECORDINGS!.get(String(row!.transcript_object_key))).not.toBeNull();
     expect(await env.RECORDINGS!.get(String(row!.captions_object_key))).not.toBeNull();
+
+    const evaluation = await workerRequest(`/api/analysis/worker/jobs/${jobId}/evaluate`, { method: 'POST' });
+    expect(evaluation.status).toBe(200);
+    expect(await evaluation.json()).toEqual({ ok: true, status: 'none' });
   });
 });

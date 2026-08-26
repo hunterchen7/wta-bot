@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 import sys
+from unittest.mock import Mock
 
 MODULE_PATH = Path(__file__).with_name("worker.py")
 SPEC = importlib.util.spec_from_file_location("wta_review_worker", MODULE_PATH)
@@ -33,3 +34,25 @@ def test_fill_short_segments_uses_nearest_known_speaker():
     ]
     worker.fill_short_segment_speakers(segments)
     assert segments[1]["speaker"] == "SPEAKER_00"
+
+
+def test_evaluate_waits_for_worker_ai_result():
+    settings = worker.Settings(
+        base_url="https://example.test",
+        secret="secret",
+        worker_id="worker",
+        model_name="large-v3",
+        compute_type="float16",
+        poll_seconds=10,
+    )
+    client = worker.WtaClient(settings)
+    response = Mock()
+    response.json.return_value = {"status": "ready"}
+    client.session.post = Mock(return_value=response)
+
+    assert client.evaluate(42) == "ready"
+    client.session.post.assert_called_once_with(
+        "https://example.test/api/analysis/worker/jobs/42/evaluate",
+        timeout=300,
+    )
+    response.raise_for_status.assert_called_once_with()

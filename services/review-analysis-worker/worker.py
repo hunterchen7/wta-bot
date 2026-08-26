@@ -84,6 +84,14 @@ class WtaClient:
         )
         response.raise_for_status()
 
+    def evaluate(self, job_id: int) -> str:
+        response = self.session.post(
+            f"{self.settings.base_url}/api/analysis/worker/jobs/{job_id}/evaluate",
+            timeout=300,
+        )
+        response.raise_for_status()
+        return str(response.json()["status"])
+
     def fail(self, job_id: int, error: str, retryable: bool = True) -> None:
         response = self.session.post(
             f"{self.settings.base_url}/api/analysis/worker/jobs/{job_id}/fail",
@@ -316,6 +324,13 @@ def process_job(client: WtaClient, transcriber: Transcriber, job: dict[str, Any]
             result = transcriber.run(media_path, work_dir)
             client.submit_transcript(job_id, result)
         LOGGER.info("submitted transcript job=%s segments=%s", job_id, len(result["segments"]))
+        try:
+            evaluation_status = client.evaluate(job_id)
+            LOGGER.info("evaluation trigger job=%s status=%s", job_id, evaluation_status)
+        except Exception:
+            # The transcript is already durable. A transient evaluation error
+            # must not retranscribe the recording; the Worker cron retries it.
+            LOGGER.exception("evaluation trigger failed for job=%s; cron will retry", job_id)
     except Exception as error:
         LOGGER.exception("job=%s failed", job_id)
         try:
@@ -358,4 +373,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

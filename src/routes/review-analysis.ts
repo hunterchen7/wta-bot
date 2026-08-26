@@ -64,6 +64,19 @@ reviewAnalysisRoutes.post('/api/analysis/worker/jobs/:id/transcript', async (c) 
   return c.json({ ok: true, status: 'evaluating' }, 202);
 });
 
+reviewAnalysisRoutes.post('/api/analysis/worker/jobs/:id/evaluate', async (c) => {
+  if (!(await workerAuthorized(c.env, c.req.header('authorization')))) return c.json({ error: 'unauthorized' }, 401);
+  const jobId = Number(c.req.param('id'));
+  if (!Number.isInteger(jobId)) return c.json({ error: 'invalid_request' }, 400);
+
+  // Keep the request open while Workers AI runs. `waitUntil` work is bounded
+  // after the transcript response is sent, which is too short for a long
+  // interview. The Olares worker waits for this response; cron remains the
+  // durable backstop if either side is interrupted.
+  const status = await runPendingReviewEvaluation(c.env, jobId);
+  return c.json({ ok: status !== 'failed', status }, status === 'failed' ? 503 : 200);
+});
+
 reviewAnalysisRoutes.post('/api/analysis/worker/jobs/:id/fail', async (c) => {
   if (!(await workerAuthorized(c.env, c.req.header('authorization')))) return c.json({ error: 'unauthorized' }, 401);
   const jobId = Number(c.req.param('id'));
