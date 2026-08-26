@@ -94,6 +94,8 @@ export const aiReviewSchema = z.object({
   organizerChecks: z.array(z.string().max(1000)).max(20),
 });
 
+const aiReviewJsonSchema = z.toJSONSchema(aiReviewSchema);
+
 export type AiReview = z.infer<typeof aiReviewSchema>;
 
 const transcriptSegmentSchema = z.object({
@@ -314,7 +316,14 @@ export async function runPendingReviewEvaluation(env: Env, preferredJobId?: numb
       ],
       temperature: 0.1,
       max_tokens: 8000,
-      response_format: { type: 'json_object' },
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'wta_round3_review',
+          strict: true,
+          schema: aiReviewJsonSchema,
+        },
+      },
     });
     const raw = extractModelText(response);
     const parsed = aiReviewSchema.parse(JSON.parse(extractJsonObject(raw)));
@@ -478,7 +487,10 @@ const aiReviewOutputShape = {
   sessionCompletion: { recommendation: 'completed|incomplete|unreviewable', rationale: 'string', evidence: [{ startSeconds: 0, endSeconds: 0, note: 'string' }] },
   candidate: {
     dimensions: Object.fromEntries(['problemFraming', 'reasoning', 'implementation', 'testingAndComplexity', 'communication', 'independence', 'coachability'].map((key) => [key, { rating: 1, status: 'observed|not_observed', confidence: 0.5, evidence: [] }])),
-    score: 0, readiness: 'strong_pass|pass|borderline|not_demonstrated|manual_review', solutionOutcome: 'one documented milestone', rationale: 'string',
+    score: 0,
+    readiness: 'strong_pass|pass|borderline|not_demonstrated|manual_review',
+    solutionOutcome: 'no_viable_approach|partial_insight|correct_naive_described|correct_naive_implemented_or_optimal_described|optimal_mostly_implemented|optimal_implemented_tested_and_analyzed',
+    rationale: 'string',
   },
   interviewer: {
     dimensions: Object.fromEntries(['structure', 'questionFidelity', 'probing', 'hintDiscipline', 'timeManagement', 'feedbackAndConduct'].map((key) => [key, { rating: 1, status: 'observed|not_observed', confidence: 0.5, evidence: [] }])),

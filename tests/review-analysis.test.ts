@@ -129,4 +129,9 @@ describe('Workers AI response parsing', () => {
     expect(extractModelText({ choices: [{ message: { content: '{"chat":true}' } }] })).toBe('{"chat":true}');
     expect(extractModelText({ choices: [{ message: { parsed: { structured: true } } }] })).toBe('{"structured":true}');
   });
+
+  it('rejects malformed model envelopes without guessing', () => {
+    expect(() => extractModelText({ output: [{ type: 'reasoning', content: [] }] }))
+      .toThrow(/Evaluator returned no text/);
+  });
 });
