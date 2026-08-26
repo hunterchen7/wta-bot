@@ -270,6 +270,7 @@ export async function retryReviewAnalysis(env: Env, sessionId: number): Promise<
   const result = await env.DB.prepare(
     `UPDATE review_analysis_jobs
      SET status = CASE WHEN transcript_object_key IS NULL THEN 'queued' ELSE 'evaluating' END,
+         attempt_count = CASE WHEN transcript_object_key IS NULL THEN 0 ELSE attempt_count END,
          worker_id = NULL, lease_expires_at = NULL, last_error = NULL, updated_at = ?2
      WHERE id = (
        SELECT id FROM review_analysis_jobs WHERE session_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1
@@ -313,6 +314,7 @@ export async function runPendingReviewEvaluation(env: Env, preferredJobId?: numb
       ],
       temperature: 0.1,
       max_tokens: 8000,
+      response_format: { type: 'json_object' },
     });
     const raw = extractModelText(response);
     const parsed = aiReviewSchema.parse(JSON.parse(extractJsonObject(raw)));
@@ -349,8 +351,12 @@ export async function reviewAnalysisForSession(env: Env, sessionId: number) {
   if (row.status === 'ready' && row.evaluation_object_key && env.RECORDINGS) {
     const object = await env.RECORDINGS.get(row.evaluation_object_key);
     if (object && object.size <= MAX_TRANSCRIPT_BYTES) {
-      const parsed = aiReviewSchema.safeParse(JSON.parse(await object.text()));
-      if (parsed.success) evaluation = parsed.data;
+      try {
+        const parsed = aiReviewSchema.safeParse(JSON.parse(await object.text()));
+        if (parsed.success) evaluation = parsed.data;
+      } catch {
+        // A damaged private artifact must not take down the entire review queue.
+      }
     }
   }
   return {
@@ -497,8 +503,9 @@ function safeJsonObject(value: string | null): Record<string, unknown> {
 function extractModelText(value: unknown): string {
   if (!value || typeof value !== 'object') throw new Error('Evaluator returned no response.');
   const response = Reflect.get(value, 'response');
-  if (typeof response !== 'string' || !response.trim()) throw new Error('Evaluator returned no text.');
-  return response;
+  if (typeof response === 'string' && response.trim()) return response;
+  if (response && typeof response === 'object') return JSON.stringify(response);
+  throw new Error('Evaluator returned no text.');
 }
 
 function extractJsonObject(value: string): string {
