@@ -23,4 +23,4 @@ docker compose up -d
 docker compose logs -f worker
 ```
 
-The compose service uses NVIDIA CDI (`nvidia.com/gpu=all`), persists model caches in a named volume, and keeps per-job media only in a temporary in-memory filesystem.
+The compose service uses NVIDIA CDI (`nvidia.com/gpu=all`), persists model caches in a named volume, and keeps per-job media only in a temporary in-memory filesystem. Build and runtime traffic use Olares host networking because that host's Docker bridge DNS is intentionally unavailable; the worker does not listen on any port.

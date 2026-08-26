@@ -1,6 +1,9 @@
 services:
   worker:
-    build: .
+    build:
+      context: .
+      network: host
+    network_mode: host
     restart: unless-stopped
     env_file:
       - /etc/wta-review-analysis.env
@@ -18,4 +21,3 @@ services:
 
 volumes:
   wta-review-models:
-
