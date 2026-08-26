@@ -13,6 +13,7 @@ import { ensureSupportChannel } from './engine/support';
 import { ensurePairingChannel } from './engine/bootstrap';
 import { activeCohort, cohortStartTuple, cohortWeeks, weekAnchors } from './engine/weeks';
 import type { Env } from './env';
+import { runPendingReviewEvaluation } from './services/review-analysis';
 
 // Single */15 cron tick (wrangler.jsonc). The program calendar lives in the
 // weeks table, so scheduling survives DST, redeploys, and config changes.
@@ -67,6 +68,7 @@ export async function tick(env: Env, now: Date): Promise<void> {
   }
 
   await cleanupOrphanedRecordings(env, now).catch((err) => console.error('recording cleanup failed:', err));
+  await runPendingReviewEvaluation(env).catch((err) => console.error('review evaluation failed:', err));
   // Poll DM channels for student replies to the bot (runs regardless of cohort).
   await inboxScan(env, now).catch((err) => console.error('inboxScan failed:', err));
 

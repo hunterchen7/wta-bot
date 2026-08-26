@@ -9,6 +9,7 @@ import { fizzBuzzDemoPacket } from '../demo/fizzbuzz-packet';
 import { createPairyQuestionPack, pairyQuestionPackFilename } from '../pairy-question-pack';
 import { effectiveInterviewerNotes, effectiveProblemExecution } from '../problem-authoring';
 import { readAvailableWeeks } from '../question-markdown';
+import { enqueueRecordingAnalysis } from '../services/review-analysis';
 
 // Signed report and problem links now hydrate React pages. This module exposes
 // data and mutations only; it intentionally contains no HTML rendering.
@@ -180,7 +181,8 @@ forms.put('/api/forms/:token/recording/:id/part/:part', async (c) => {
 forms.post('/api/forms/:token/recording/:id/complete', async (c) => {
   if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
   const instance = await loadInstance(c.env, c.req.param('token'));
-  const asset = instance ? await recordingAsset(c.env, Number(c.req.param('id')), instance.id) : null;
+  if (!instance) return c.json({ error: 'invalid_upload' }, 404);
+  const asset = await recordingAsset(c.env, Number(c.req.param('id')), instance.id);
   const body = await c.req.json<{ parts?: Array<{ partNumber: number; etag: string }> }>().catch(() => null);
   if (!asset || asset.status !== 'pending' || !body?.parts?.length) return c.json({ error: 'invalid_upload' }, 404);
   const parts = body.parts
@@ -193,6 +195,7 @@ forms.post('/api/forms/:token/recording/:id/complete', async (c) => {
   await c.env.DB.prepare(
     `UPDATE recording_assets SET status = 'uploaded', stored_bytes = ?2, completed_at = ?3 WHERE id = ?1`,
   ).bind(asset.id, storedBytes, new Date().toISOString()).run();
+  await enqueueRecordingAnalysis(c.env, asset.id, instance.session_id);
   return c.json({ ok: true, id: asset.id, url: `${new URL(c.req.url).origin}/api/recordings/${asset.id}`, storedBytes });
 });
 

@@ -159,6 +159,9 @@ describe('form rail', () => {
     expect(recording.storedBytes).toBe(bytes.byteLength);
     expect(recording.url).toContain(`/api/recordings/${upload.id}`);
     uploadedRecordingUrl = recording.url;
+    expect(await env.DB.prepare(
+      'SELECT session_id, recording_asset_id, status FROM review_analysis_jobs WHERE recording_asset_id = ?1',
+    ).bind(upload.id).first()).toEqual({ session_id: sessionId, recording_asset_id: upload.id, status: 'queued' });
 
     const anonymous = await app.request(`/api/recordings/${upload.id}`, {}, env);
     expect(anonymous.status).toBe(401);

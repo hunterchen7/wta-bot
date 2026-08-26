@@ -1,0 +1,510 @@
+import { z } from 'zod';
+import type { Env } from '../env';
+
+export const REVIEW_RUBRIC_VERSION = 'round3-review-v1';
+export const REVIEW_TRANSCRIPT_VERSION = 'wta-transcript-v1';
+export const REVIEW_EVALUATOR_MODEL = '@cf/openai/gpt-oss-120b';
+
+const MAX_TRANSCRIPT_BYTES = 8 * 1024 * 1024;
+const TRANSCRIPTION_LEASE_MS = 6 * 60 * 60 * 1000;
+const EVALUATION_LEASE_MS = 15 * 60 * 1000;
+
+const evidenceSchema = z.object({
+  startSeconds: z.number().min(0),
+  endSeconds: z.number().min(0),
+  note: z.string().min(1).max(1000),
+});
+
+const dimensionSchema = z.object({
+  rating: z.number().int().min(1).max(4).nullable(),
+  status: z.enum(['observed', 'not_observed']),
+  confidence: z.number().min(0).max(1),
+  evidence: z.array(evidenceSchema).max(12),
+});
+
+export const aiReviewSchema = z.object({
+  rubricVersion: z.literal(REVIEW_RUBRIC_VERSION),
+  recap: z.string().min(1).max(4000),
+  sessionCompletion: z.object({
+    recommendation: z.enum(['completed', 'incomplete', 'unreviewable']),
+    rationale: z.string().min(1).max(3000),
+    evidence: z.array(evidenceSchema).max(12),
+  }),
+  candidate: z.object({
+    dimensions: z.object({
+      problemFraming: dimensionSchema,
+      reasoning: dimensionSchema,
+      implementation: dimensionSchema,
+      testingAndComplexity: dimensionSchema,
+      communication: dimensionSchema,
+      independence: dimensionSchema,
+      coachability: dimensionSchema,
+    }),
+    score: z.number().min(0).max(100).nullable(),
+    readiness: z.enum(['strong_pass', 'pass', 'borderline', 'not_demonstrated', 'manual_review']),
+    solutionOutcome: z.enum([
+      'no_viable_approach',
+      'partial_insight',
+      'correct_naive_described',
+      'correct_naive_implemented_or_optimal_described',
+      'optimal_mostly_implemented',
+      'optimal_implemented_tested_and_analyzed',
+    ]),
+    rationale: z.string().min(1).max(3000),
+  }),
+  interviewer: z.object({
+    dimensions: z.object({
+      structure: dimensionSchema,
+      questionFidelity: dimensionSchema,
+      probing: dimensionSchema,
+      hintDiscipline: dimensionSchema,
+      timeManagement: dimensionSchema,
+      feedbackAndConduct: dimensionSchema,
+    }),
+    score: z.number().min(0).max(100).nullable(),
+    recommendation: z.enum(['strong', 'effective', 'coaching_recommended', 'organizer_follow_up']),
+    criticalFlags: z.array(z.string().max(1000)).max(20),
+  }),
+  hints: z.array(z.object({
+    startSeconds: z.number().min(0),
+    endSeconds: z.number().min(0),
+    excerpt: z.string().min(1).max(1200),
+    level: z.number().int().min(0).max(4),
+    requested: z.boolean().nullable(),
+    priorCandidateProgress: z.string().max(1500),
+    matchedOfficialLadder: z.boolean().nullable(),
+    smallerInterventionAvailable: z.boolean().nullable(),
+    outcome: z.string().max(1500),
+  })).max(100),
+  keyMoments: z.array(z.object({
+    startSeconds: z.number().min(0),
+    endSeconds: z.number().min(0),
+    title: z.string().min(1).max(200),
+    note: z.string().min(1).max(1200),
+  })).min(1).max(8),
+  contradictions: z.array(z.object({
+    summary: z.string().min(1).max(1200),
+    evidence: z.array(evidenceSchema).max(8),
+  })).max(20),
+  confidence: z.object({
+    transcript: z.number().min(0).max(1),
+    speakerAttribution: z.number().min(0).max(1),
+    overall: z.number().min(0).max(1),
+  }),
+  organizerChecks: z.array(z.string().max(1000)).max(20),
+});
+
+export type AiReview = z.infer<typeof aiReviewSchema>;
+
+const transcriptSegmentSchema = z.object({
+  start: z.number().min(0),
+  end: z.number().min(0),
+  speaker: z.string().min(1).max(80),
+  text: z.string().min(1).max(20_000),
+  confidence: z.number().min(0).max(1).nullable().optional(),
+});
+
+export const transcriptResultSchema = z.object({
+  version: z.literal(REVIEW_TRANSCRIPT_VERSION),
+  language: z.string().min(1).max(30),
+  durationSeconds: z.number().positive().max(8 * 60 * 60),
+  transcriptConfidence: z.number().min(0).max(1),
+  speakerConfidence: z.number().min(0).max(1),
+  transcriptionModel: z.string().min(1).max(200),
+  diarizationModel: z.string().min(1).max(200),
+  segments: z.array(transcriptSegmentSchema).min(1).max(30_000),
+  vtt: z.string().min(1).max(MAX_TRANSCRIPT_BYTES),
+});
+
+export type TranscriptResult = z.infer<typeof transcriptResultSchema>;
+
+type AnalysisJobRow = {
+  id: number;
+  session_id: number;
+  recording_asset_id: number;
+  status: 'queued' | 'transcribing' | 'evaluating' | 'ready' | 'failed';
+  attempt_count: number;
+  worker_id: string | null;
+  lease_expires_at: string | null;
+  transcript_object_key: string | null;
+  captions_object_key: string | null;
+  evaluation_object_key: string | null;
+  transcription_model: string | null;
+  diarization_model: string | null;
+  evaluator_model: string | null;
+  rubric_version: string;
+  transcript_confidence: number | null;
+  speaker_confidence: number | null;
+  last_error: string | null;
+  created_at: string;
+  started_at: string | null;
+  transcribed_at: string | null;
+  evaluated_at: string | null;
+  updated_at: string;
+};
+
+export async function enqueueRecordingAnalysis(env: Env, recordingAssetId: number, sessionId: number): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO review_analysis_jobs (session_id, recording_asset_id, rubric_version)
+     SELECT s.id, ?2, ?3 FROM sessions s JOIN weeks w ON w.id = s.week_id
+     WHERE s.id = ?1 AND w.idx = 3
+     ON CONFLICT(recording_asset_id) DO NOTHING`,
+  ).bind(sessionId, recordingAssetId, REVIEW_RUBRIC_VERSION).run();
+}
+
+export async function claimRecordingAnalysis(env: Env, workerId: string, now = new Date()) {
+  const leaseExpiresAt = new Date(now.getTime() + TRANSCRIPTION_LEASE_MS).toISOString();
+  const job = await env.DB.prepare(
+    `UPDATE review_analysis_jobs
+     SET status = 'transcribing', worker_id = ?1, lease_expires_at = ?2,
+         attempt_count = attempt_count + 1,
+         started_at = COALESCE(started_at, ?3), updated_at = ?3, last_error = NULL
+     WHERE id = (
+       SELECT id FROM review_analysis_jobs
+       WHERE status = 'queued'
+          OR (status = 'transcribing' AND lease_expires_at < ?3)
+       ORDER BY created_at, id LIMIT 1
+     )
+     RETURNING *`,
+  ).bind(workerId, leaseExpiresAt, now.toISOString()).first<AnalysisJobRow>();
+  if (!job) return null;
+  const asset = await env.DB.prepare(
+    `SELECT object_key, content_type, original_filename, stored_bytes
+     FROM recording_assets
+     WHERE id = ?1 AND session_id = ?2 AND status = 'uploaded' AND cleanup_started_at IS NULL`,
+  ).bind(job.recording_asset_id, job.session_id).first<{
+    object_key: string;
+    content_type: string;
+    original_filename: string;
+    stored_bytes: number;
+  }>();
+  if (!asset) {
+    await markAnalysisFailed(env, job.id, workerId, 'recording_unavailable', false);
+    return null;
+  }
+  return {
+    id: job.id,
+    sessionId: job.session_id,
+    recordingAssetId: job.recording_asset_id,
+    attempt: job.attempt_count,
+    filename: asset.original_filename,
+    contentType: asset.content_type,
+    storedBytes: asset.stored_bytes,
+  };
+}
+
+export async function analysisMediaObject(env: Env, jobId: number, workerId: string) {
+  if (!env.RECORDINGS) return null;
+  const row = await env.DB.prepare(
+    `SELECT ra.object_key
+     FROM review_analysis_jobs j
+     JOIN recording_assets ra ON ra.id = j.recording_asset_id
+     WHERE j.id = ?1 AND j.worker_id = ?2 AND j.status = 'transcribing'
+       AND j.lease_expires_at > ?3
+       AND ra.status = 'uploaded' AND ra.cleanup_started_at IS NULL`,
+  ).bind(jobId, workerId, new Date().toISOString()).first<{ object_key: string }>();
+  return row ? env.RECORDINGS.get(row.object_key) : null;
+}
+
+export async function saveTranscriptResult(
+  env: Env,
+  jobId: number,
+  workerId: string,
+  result: TranscriptResult,
+): Promise<'saved' | 'stale'> {
+  if (!env.RECORDINGS) throw new Error('Recording storage is not configured.');
+  const job = await env.DB.prepare(
+    `SELECT id, session_id FROM review_analysis_jobs
+     WHERE id = ?1 AND worker_id = ?2 AND status = 'transcribing' AND lease_expires_at > ?3`,
+  ).bind(jobId, workerId, new Date().toISOString()).first<{ id: number; session_id: number }>();
+  if (!job) return 'stale';
+
+  const prefix = `analysis/sessions/${job.session_id}/jobs/${jobId}`;
+  const transcriptKey = `${prefix}/transcript.json`;
+  const captionsKey = `${prefix}/captions.vtt`;
+  const transcriptJson = JSON.stringify({ ...result, vtt: undefined });
+  if (new TextEncoder().encode(transcriptJson).byteLength > MAX_TRANSCRIPT_BYTES) {
+    throw new Error('Transcript exceeds the supported size.');
+  }
+  await Promise.all([
+    env.RECORDINGS.put(transcriptKey, transcriptJson, {
+      httpMetadata: { contentType: 'application/json; charset=utf-8', cacheControl: 'private, no-store' },
+    }),
+    env.RECORDINGS.put(captionsKey, result.vtt, {
+      httpMetadata: { contentType: 'text/vtt; charset=utf-8', cacheControl: 'private, no-store' },
+    }),
+  ]);
+  const now = new Date().toISOString();
+  const saved = await env.DB.prepare(
+    `UPDATE review_analysis_jobs
+     SET status = 'evaluating', transcript_object_key = ?3, captions_object_key = ?4,
+         transcription_model = ?5, diarization_model = ?6,
+         transcript_confidence = ?7, speaker_confidence = ?8,
+         worker_id = NULL, lease_expires_at = NULL, transcribed_at = ?9, updated_at = ?9, last_error = NULL
+     WHERE id = ?1 AND worker_id = ?2 AND status = 'transcribing'`,
+  ).bind(
+    jobId, workerId, transcriptKey, captionsKey,
+    result.transcriptionModel, result.diarizationModel,
+    result.transcriptConfidence, result.speakerConfidence, now,
+  ).run();
+  return saved.meta.changes === 1 ? 'saved' : 'stale';
+}
+
+export async function markAnalysisFailed(
+  env: Env,
+  jobId: number,
+  workerId: string,
+  error: string,
+  retryable: boolean,
+): Promise<void> {
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE review_analysis_jobs
+     SET status = CASE WHEN ?4 = 1 AND attempt_count < 3 THEN 'queued' ELSE 'failed' END,
+         worker_id = NULL, lease_expires_at = NULL, last_error = ?3, updated_at = ?5
+     WHERE id = ?1 AND worker_id = ?2 AND status = 'transcribing'`,
+  ).bind(jobId, workerId, error.slice(0, 2000), retryable ? 1 : 0, now).run();
+}
+
+export async function retryReviewAnalysis(env: Env, sessionId: number): Promise<boolean> {
+  const result = await env.DB.prepare(
+    `UPDATE review_analysis_jobs
+     SET status = CASE WHEN transcript_object_key IS NULL THEN 'queued' ELSE 'evaluating' END,
+         worker_id = NULL, lease_expires_at = NULL, last_error = NULL, updated_at = ?2
+     WHERE id = (
+       SELECT id FROM review_analysis_jobs WHERE session_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1
+     )`,
+  ).bind(sessionId, new Date().toISOString()).run();
+  return result.meta.changes === 1;
+}
+
+export async function runPendingReviewEvaluation(env: Env, preferredJobId?: number): Promise<'none' | 'ready' | 'failed'> {
+  if (!env.AI || !env.RECORDINGS) return 'none';
+  const now = new Date();
+  const lease = new Date(now.getTime() + EVALUATION_LEASE_MS).toISOString();
+  const job = await env.DB.prepare(
+    `UPDATE review_analysis_jobs
+     SET lease_expires_at = ?2, updated_at = ?3, last_error = NULL
+     WHERE id = (
+       SELECT id FROM review_analysis_jobs
+       WHERE status = 'evaluating'
+         AND transcript_object_key IS NOT NULL
+         AND (lease_expires_at IS NULL OR lease_expires_at < ?3)
+         AND (?1 IS NULL OR id = ?1)
+       ORDER BY transcribed_at, id LIMIT 1
+     )
+     RETURNING *`,
+  ).bind(preferredJobId ?? null, lease, now.toISOString()).first<AnalysisJobRow>();
+  if (!job?.transcript_object_key) return 'none';
+
+  try {
+    const [transcriptObject, context] = await Promise.all([
+      env.RECORDINGS.get(job.transcript_object_key),
+      evaluationContext(env, job.session_id),
+    ]);
+    if (!transcriptObject || !context) throw new Error('Evaluation evidence is unavailable.');
+    if (transcriptObject.size > MAX_TRANSCRIPT_BYTES) throw new Error('Transcript exceeds the supported size.');
+    const transcript = await transcriptObject.text();
+    const prompt = buildEvaluationPrompt(context, transcript);
+    const response = await env.AI.run(REVIEW_EVALUATOR_MODEL, {
+      messages: [
+        { role: 'system', content: evaluatorSystemPrompt },
+        { role: 'user', content: prompt },
+      ],
+      temperature: 0.1,
+      max_tokens: 8000,
+    });
+    const raw = extractModelText(response);
+    const parsed = aiReviewSchema.parse(JSON.parse(extractJsonObject(raw)));
+    const evaluationKey = `analysis/sessions/${job.session_id}/jobs/${job.id}/evaluation.json`;
+    await env.RECORDINGS.put(evaluationKey, JSON.stringify(parsed), {
+      httpMetadata: { contentType: 'application/json; charset=utf-8', cacheControl: 'private, no-store' },
+    });
+    const completedAt = new Date().toISOString();
+    await env.DB.prepare(
+      `UPDATE review_analysis_jobs
+       SET status = 'ready', evaluation_object_key = ?2, evaluator_model = ?3,
+           evaluated_at = ?4, updated_at = ?4, lease_expires_at = NULL, last_error = NULL
+       WHERE id = ?1 AND status = 'evaluating'`,
+    ).bind(job.id, evaluationKey, REVIEW_EVALUATOR_MODEL, completedAt).run();
+    return 'ready';
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    await env.DB.prepare(
+      `UPDATE review_analysis_jobs
+       SET lease_expires_at = NULL, last_error = ?2, updated_at = ?3
+       WHERE id = ?1 AND status = 'evaluating'`,
+    ).bind(job.id, message.slice(0, 2000), new Date().toISOString()).run();
+    console.error(JSON.stringify({ message: 'review evaluation failed', jobId: job.id, error: message }));
+    return 'failed';
+  }
+}
+
+export async function reviewAnalysisForSession(env: Env, sessionId: number) {
+  const row = await env.DB.prepare(
+    `SELECT * FROM review_analysis_jobs WHERE session_id = ?1 ORDER BY created_at DESC, id DESC LIMIT 1`,
+  ).bind(sessionId).first<AnalysisJobRow>();
+  if (!row) return null;
+  let evaluation: AiReview | null = null;
+  if (row.status === 'ready' && row.evaluation_object_key && env.RECORDINGS) {
+    const object = await env.RECORDINGS.get(row.evaluation_object_key);
+    if (object && object.size <= MAX_TRANSCRIPT_BYTES) {
+      const parsed = aiReviewSchema.safeParse(JSON.parse(await object.text()));
+      if (parsed.success) evaluation = parsed.data;
+    }
+  }
+  return {
+    id: row.id,
+    status: row.status,
+    rubricVersion: row.rubric_version,
+    transcriptionModel: row.transcription_model,
+    diarizationModel: row.diarization_model,
+    evaluatorModel: row.evaluator_model,
+    transcriptConfidence: row.transcript_confidence,
+    speakerConfidence: row.speaker_confidence,
+    lastError: row.last_error,
+    createdAt: row.created_at,
+    startedAt: row.started_at,
+    transcribedAt: row.transcribed_at,
+    evaluatedAt: row.evaluated_at,
+    captionsUrl: row.captions_object_key ? `/api/admin/reviews/${sessionId}/captions` : null,
+    transcriptUrl: row.transcript_object_key ? `/api/admin/reviews/${sessionId}/transcript` : null,
+    evaluation,
+  };
+}
+
+export async function reviewAnalysisArtifact(
+  env: Env,
+  sessionId: number,
+  kind: 'captions' | 'transcript',
+): Promise<R2ObjectBody | null> {
+  if (!env.RECORDINGS) return null;
+  const column = kind === 'captions' ? 'captions_object_key' : 'transcript_object_key';
+  const row = await env.DB.prepare(
+    `SELECT ${column} AS object_key FROM review_analysis_jobs
+     WHERE session_id = ?1 AND ${column} IS NOT NULL
+     ORDER BY created_at DESC, id DESC LIMIT 1`,
+  ).bind(sessionId).first<{ object_key: string }>();
+  return row ? env.RECORDINGS.get(row.object_key) : null;
+}
+
+type EvaluationContext = {
+  session: Record<string, unknown>;
+  problem: Record<string, unknown>;
+  reports: Array<Record<string, unknown>>;
+};
+
+async function evaluationContext(env: Env, sessionId: number): Promise<EvaluationContext | null> {
+  const session = await env.DB.prepare(
+    `SELECT s.id, s.scheduled_at, s.state, w.idx AS round,
+            pi.name AS interviewer_name, pe.name AS interviewee_name,
+            p.number AS problem_number, p.title AS problem_title, p.difficulty,
+            p.statement_md, p.interviewer_notes_md, p.hints_md, p.solution_md
+     FROM sessions s
+     JOIN weeks w ON w.id = s.week_id
+     JOIN participants pi ON pi.id = s.interviewer_id
+     JOIN participants pe ON pe.id = s.interviewee_id
+     LEFT JOIN problems p ON p.id = s.problem_id
+     WHERE s.id = ?1`,
+  ).bind(sessionId).first<Record<string, unknown>>();
+  if (!session) return null;
+  const { results } = await env.DB.prepare(
+    `SELECT kind, submitted_at, payload FROM form_instances
+     WHERE session_id = ?1 ORDER BY kind, id`,
+  ).bind(sessionId).all<{ kind: string; submitted_at: string | null; payload: string | null }>();
+  const reports = results.map((row) => ({
+    kind: row.kind,
+    submittedAt: row.submitted_at,
+    answers: safeJsonObject(row.payload),
+  }));
+  const {
+    statement_md, interviewer_notes_md, hints_md, solution_md,
+    problem_number, problem_title, difficulty, ...sessionMetadata
+  } = session;
+  return {
+    session: sessionMetadata,
+    problem: {
+      number: problem_number,
+      title: problem_title,
+      difficulty,
+      statement: statement_md,
+      interviewerNotes: interviewer_notes_md,
+      hintLadder: hints_md,
+      solution: solution_md,
+    },
+    reports,
+  };
+}
+
+const evaluatorSystemPrompt = `You are the advisory WTA interview-review evaluator for rubric ${REVIEW_RUBRIC_VERSION}.
+Return exactly one JSON object and no markdown. Never make final participant decisions.
+Completion, candidate readiness, and interviewer quality are independent decisions.
+Every material rating or claim must cite timestamped evidence. Use null with status "not_observed" when evidence is missing.
+Do not score accent, dialect, speaking speed, vocal confidence, filler words, camera use, appearance, or personality.
+Treat speaker labels as uncertain evidence unless the conversation clearly establishes the roles.
+Classify interviewer help from 0 (no solution help) to 4 (solution leadership). Avoid double-penalizing the candidate and interviewer for the same hint.
+Use the assigned problem packet as the source of truth. The output must match the schema described in the user message.`;
+
+function buildEvaluationPrompt(context: EvaluationContext, transcript: string) {
+  return `Evaluate this recorded mock interview using the WTA Round 3 rubric.
+
+Required output shape:
+${JSON.stringify(aiReviewOutputShape)}
+
+Rating weights and anchors:
+- Candidate: problem framing 10%, reasoning 20%, implementation 20%, testing/complexity 15%, technical communication 10%, independence 15%, coachability 10%.
+- Interviewer: structure 15%, question fidelity 15%, probing 20%, hint discipline 30%, time management 10%, feedback/conduct 10%.
+- Ratings are 1 to 4. Use rating=null and status="not_observed" when evidence is insufficient.
+- Candidate readiness: 80-100 strong_pass, 65-79 pass, 50-64 borderline, 0-49 not_demonstrated. Use manual_review when independence is 1, interviewer conduct compromises the evidence, or more than two candidate dimensions are not observed.
+- Interviewer recommendation: 80-100 strong, 65-79 effective, 50-64 coaching_recommended, 0-49 organizer_follow_up.
+- Session completion is completed, incomplete, or unreviewable and does not depend on solving the problem.
+
+Evidence packet:
+${JSON.stringify(context)}
+
+Timestamped transcript JSON:
+${transcript}`;
+}
+
+const aiReviewOutputShape = {
+  rubricVersion: REVIEW_RUBRIC_VERSION,
+  recap: 'string',
+  sessionCompletion: { recommendation: 'completed|incomplete|unreviewable', rationale: 'string', evidence: [{ startSeconds: 0, endSeconds: 0, note: 'string' }] },
+  candidate: {
+    dimensions: Object.fromEntries(['problemFraming', 'reasoning', 'implementation', 'testingAndComplexity', 'communication', 'independence', 'coachability'].map((key) => [key, { rating: 1, status: 'observed|not_observed', confidence: 0.5, evidence: [] }])),
+    score: 0, readiness: 'strong_pass|pass|borderline|not_demonstrated|manual_review', solutionOutcome: 'one documented milestone', rationale: 'string',
+  },
+  interviewer: {
+    dimensions: Object.fromEntries(['structure', 'questionFidelity', 'probing', 'hintDiscipline', 'timeManagement', 'feedbackAndConduct'].map((key) => [key, { rating: 1, status: 'observed|not_observed', confidence: 0.5, evidence: [] }])),
+    score: 0, recommendation: 'strong|effective|coaching_recommended|organizer_follow_up', criticalFlags: [],
+  },
+  hints: [{ startSeconds: 0, endSeconds: 0, excerpt: 'string', level: 0, requested: null, priorCandidateProgress: 'string', matchedOfficialLadder: null, smallerInterventionAvailable: null, outcome: 'string' }],
+  keyMoments: [{ startSeconds: 0, endSeconds: 0, title: 'string', note: 'string' }],
+  contradictions: [{ summary: 'string', evidence: [] }],
+  confidence: { transcript: 0.5, speakerAttribution: 0.5, overall: 0.5 },
+  organizerChecks: [],
+};
+
+function safeJsonObject(value: string | null): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(value ?? '{}');
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+function extractModelText(value: unknown): string {
+  if (!value || typeof value !== 'object') throw new Error('Evaluator returned no response.');
+  const response = Reflect.get(value, 'response');
+  if (typeof response !== 'string' || !response.trim()) throw new Error('Evaluator returned no text.');
+  return response;
+}
+
+function extractJsonObject(value: string): string {
+  const trimmed = value.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start < 0 || end <= start) throw new Error('Evaluator response did not contain JSON.');
+  return trimmed.slice(start, end + 1);
+}

@@ -25,6 +25,7 @@ import { participantResume, resumeDownloadHeaders, resumeSummary, ResumeUploadEr
 import { enrollmentFunnel } from '../services/enrollment-events';
 import { spawnSession } from '../engine/repair';
 import { readAvailableWeeks } from '../question-markdown';
+import { reviewAnalysisForSession } from '../services/review-analysis';
 
 export const adminApi = new Hono<{ Bindings: Env }>();
 
@@ -621,7 +622,7 @@ adminApi.get('/api/admin/reviews/:id', async (c) => {
   ).bind(id).first<ReviewSessionRow>();
   if (!session) return c.json({ error: 'not_found', message: 'That review is not available.' }, 404);
 
-  const [forms, rubric] = await Promise.all([
+  const [forms, rubric, analysis] = await Promise.all([
     c.env.DB.prepare(
       `SELECT f.id, f.kind, f.assignee_id, f.submitted_at, f.payload,
               assignee.name AS assignee_name
@@ -639,6 +640,7 @@ adminApi.get('/api/admin/reviews/:id', async (c) => {
        JOIN participants reviewer ON reviewer.id = sr.reviewer_id
        WHERE sr.session_id = ?1`,
     ).bind(id).first<ReviewRubricRow>(),
+    reviewAnalysisForSession(c.env, id),
   ]);
 
   const reports = forms.results.map((form) => reviewReport(form, session));
@@ -649,6 +651,7 @@ adminApi.get('/api/admin/reviews/:id', async (c) => {
     reports: reports.map(({ raw: _raw, ...report }) => report),
     videoUrl,
     rubric,
+    analysis,
   });
 });
 

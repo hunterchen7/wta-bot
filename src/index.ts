@@ -9,6 +9,7 @@ import { adminApi } from './routes/admin-api';
 import { publicApi } from './routes/public-api';
 import { automationApi } from './routes/automation-api';
 import { mcpRoutes } from './routes/mcp';
+import { reviewAnalysisRoutes } from './routes/review-analysis';
 import { tick } from './cron';
 import { executeOutbox } from './engine/executor';
 import { drainOutbox } from './engine/outbox';
@@ -74,6 +75,7 @@ app.route('/', adminApi);
 app.route('/', automationApi);
 app.route('/', mcpRoutes);
 app.route('/', publicApi);
+app.route('/', reviewAnalysisRoutes);
 
 export default {
   fetch: app.fetch,
