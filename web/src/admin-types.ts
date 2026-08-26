@@ -117,6 +117,68 @@ export type ReviewRubric = {
   submitted_at: string | null;
   updated_at: string;
 };
+export type ReviewEvidence = { startSeconds: number; endSeconds: number; note: string };
+export type ReviewAiDimension = {
+  rating: number | null;
+  status: 'observed' | 'not_observed';
+  confidence: number;
+  evidence: ReviewEvidence[];
+};
+export type ReviewAiEvaluation = {
+  rubricVersion: string;
+  recap: string;
+  sessionCompletion: {
+    recommendation: 'completed' | 'incomplete' | 'unreviewable';
+    rationale: string;
+    evidence: ReviewEvidence[];
+  };
+  candidate: {
+    dimensions: Record<string, ReviewAiDimension>;
+    score: number | null;
+    readiness: 'strong_pass' | 'pass' | 'borderline' | 'not_demonstrated' | 'manual_review';
+    solutionOutcome: string;
+    rationale: string;
+  };
+  interviewer: {
+    dimensions: Record<string, ReviewAiDimension>;
+    score: number | null;
+    recommendation: 'strong' | 'effective' | 'coaching_recommended' | 'organizer_follow_up';
+    criticalFlags: string[];
+  };
+  hints: Array<{
+    startSeconds: number;
+    endSeconds: number;
+    excerpt: string;
+    level: number;
+    requested: boolean | null;
+    priorCandidateProgress: string;
+    matchedOfficialLadder: boolean | null;
+    smallerInterventionAvailable: boolean | null;
+    outcome: string;
+  }>;
+  keyMoments: Array<{ startSeconds: number; endSeconds: number; title: string; note: string }>;
+  contradictions: Array<{ summary: string; evidence: ReviewEvidence[] }>;
+  confidence: { transcript: number; speakerAttribution: number; overall: number };
+  organizerChecks: string[];
+};
+export type ReviewAnalysis = {
+  id: number;
+  status: 'queued' | 'transcribing' | 'evaluating' | 'ready' | 'failed';
+  rubricVersion: string;
+  transcriptionModel: string | null;
+  diarizationModel: string | null;
+  evaluatorModel: string | null;
+  transcriptConfidence: number | null;
+  speakerConfidence: number | null;
+  lastError: string | null;
+  createdAt: string;
+  startedAt: string | null;
+  transcribedAt: string | null;
+  evaluatedAt: string | null;
+  captionsUrl: string | null;
+  transcriptUrl: string | null;
+  evaluation: ReviewAiEvaluation | null;
+};
 export type ReviewDetail = {
   session: {
     id: number;
@@ -136,6 +198,7 @@ export type ReviewDetail = {
   reports: ReviewReport[];
   videoUrl: string | null;
   rubric: ReviewRubric | null;
+  analysis: ReviewAnalysis | null;
 };
 
 export type ProblemLanguage = 'python' | 'javascript' | 'typescript' | 'java' | 'cpp';

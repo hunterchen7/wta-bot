@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, ExternalLink, Flag, Maximize2, Pause, Play, RotateCcw, RotateCw, Save, Video, Volume2, VolumeX } from 'lucide-react';
-import type { ReviewDetail, ReviewReport, ReviewRow, ReviewsData } from '../../admin-types';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
+import { AlertTriangle, Bot, CheckCircle2, Clock3, ExternalLink, Flag, LoaderCircle, Maximize2, Pause, Play, RotateCcw, RotateCw, Save, Sparkles, Video, Volume2, VolumeX } from 'lucide-react';
+import type { ReviewAiDimension, ReviewAnalysis, ReviewDetail, ReviewEvidence, ReviewReport, ReviewRow, ReviewsData } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { SelectControl } from '../../components/SelectControl';
 import { Badge, Button, Dialog, EmptyState, ErrorState, LoadingState, PageIntro, Panel, Tabs, formatDate } from '../../components/AdminUI';
@@ -133,6 +133,7 @@ function ReviewQueueRow({ row, onOpen }: { row: ReviewRow; onOpen: () => void })
 }
 
 function ReviewWorkspace({ sessionId, onClose, onSaved }: { sessionId: number; onClose: () => void; onSaved: (state: string, draft: RubricDraft) => void }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   const [detail, setDetail] = useState<ReviewDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [draft, setDraft] = useState<RubricDraft>(emptyRubric);
@@ -156,6 +157,16 @@ function ReviewWorkspace({ sessionId, onClose, onSaved }: { sessionId: number; o
       });
     return () => controller.abort();
   }, [sessionId]);
+
+  useEffect(() => {
+    if (!detail?.analysis || !['queued', 'transcribing', 'evaluating'].includes(detail.analysis.status)) return;
+    const refresh = window.setInterval(() => {
+      void adminRequest<ReviewDetail>(`/reviews/${sessionId}`)
+        .then((value) => setDetail(value))
+        .catch(() => undefined);
+    }, 5000);
+    return () => window.clearInterval(refresh);
+  }, [detail?.analysis?.status, sessionId]);
 
   const close = () => {
     if (dirty && !window.confirm('Discard the unsaved rubric changes?')) return;
@@ -201,8 +212,22 @@ function ReviewWorkspace({ sessionId, onClose, onSaved }: { sessionId: number; o
     {!detail && !loadError ? <ReviewWorkspaceSkeleton /> : null}
     {detail ? <div className="grid min-h-full lg:grid-cols-[minmax(0,1.3fr)_minmax(23rem,.7fr)]">
       <div className="min-w-0 space-y-5 border-b border-border bg-slate-950 p-4 text-slate-100 lg:border-r lg:border-b-0 sm:p-5">
-        <RecordingPanel url={detail.videoUrl} />
+        <RecordingPanel url={detail.videoUrl} captionsUrl={detail.analysis?.captionsUrl ?? null} videoRef={videoRef} />
         <SessionContext detail={detail} />
+        <AiReviewPanel
+          analysis={detail.analysis}
+          onSeek={(seconds) => {
+            const video = videoRef.current;
+            if (!video) return;
+            video.currentTime = Math.max(0, seconds);
+            void video.play().catch(() => undefined);
+          }}
+          onRetry={async () => {
+            await adminRequest(`/reviews/${sessionId}/analysis/retry`, { method: 'POST' });
+            const value = await adminRequest<ReviewDetail>(`/reviews/${sessionId}`);
+            setDetail(value);
+          }}
+        />
         <SubmittedReports reports={detail.reports} />
       </div>
       <div className="min-w-0 bg-background p-5 sm:p-6">
@@ -220,20 +245,19 @@ function ReviewWorkspaceSkeleton() {
   </div>;
 }
 
-function RecordingPanel({ url }: { url: string | null }) {
+function RecordingPanel({ url, captionsUrl, videoRef }: { url: string | null; captionsUrl: string | null; videoRef: RefObject<HTMLVideoElement | null> }) {
   if (!url) return <div className="grid aspect-video place-items-center rounded-2xl border border-rose-400/30 bg-slate-900 p-8 text-center">
     <div><Video className="mx-auto size-8 text-rose-300" /><div className="mt-3 font-black">Recording missing</div><p className="mt-1 text-sm text-slate-400">The interviewee report does not contain a recording.</p></div>
   </div>;
   if (!isPlayableRecording(url)) return <div className="grid aspect-video place-items-center rounded-2xl border border-white/10 bg-slate-900 p-8 text-center">
     <div><ExternalLink className="mx-auto size-8 text-western-300" /><div className="mt-3 font-black">External recording</div><p className="mt-1 max-w-md text-sm text-slate-400">This provider cannot be played safely inside the dashboard.</p><a href={url} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-western-400 px-4 py-2.5 text-sm font-black text-slate-950">Open recording <ExternalLink className="size-4" /></a></div>
   </div>;
-  return <ReviewVideoPlayer src={url} />;
+  return <ReviewVideoPlayer src={url} captionsUrl={captionsUrl} videoRef={videoRef} />;
 }
 
 const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
 
-function ReviewVideoPlayer({ src }: { src: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+function ReviewVideoPlayer({ src, captionsUrl, videoRef }: { src: string; captionsUrl: string | null; videoRef: RefObject<HTMLVideoElement | null> }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [playing, setPlaying] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -308,7 +332,10 @@ function ReviewVideoPlayer({ src }: { src: string }) {
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
         onVolumeChange={(event) => setMuted(event.currentTarget.muted || event.currentTarget.volume === 0)}
-      >Your browser cannot play this recording.</video>
+      >
+        {captionsUrl ? <track kind="captions" src={captionsUrl} srcLang="en" label="English" default /> : null}
+        Your browser cannot play this recording.
+      </video>
       {!playing ? <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10"><span className="grid size-16 place-items-center rounded-full border border-white/20 bg-black/65 text-white shadow-xl backdrop-blur-sm transition-transform group-hover:scale-105"><Play className="ml-1 size-7 fill-current" /></span></span> : null}
     </button>
     <div className="space-y-3 border-t border-white/10 bg-slate-950 px-3 py-3 text-white sm:px-4">
@@ -389,6 +416,169 @@ function SessionContext({ detail }: { detail: ReviewDetail }) {
 
 function ContextItem({ label, value }: { label: string; value: string }) {
   return <div><div className="text-[0.65rem] font-black uppercase tracking-[0.15em] text-slate-500">{label}</div><div className="mt-1 text-sm font-bold text-slate-100">{value}</div></div>;
+}
+
+function AiReviewPanel({ analysis, onSeek, onRetry }: { analysis: ReviewAnalysis | null; onSeek: (seconds: number) => void; onRetry: () => Promise<void> }) {
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
+  const status = analysis?.status ?? null;
+  const statusLabel = status === 'queued' ? 'Queued'
+    : status === 'transcribing' ? 'Transcribing'
+      : status === 'evaluating' ? 'Evaluating'
+        : status === 'ready' ? 'Ready'
+          : status === 'failed' ? 'Failed'
+            : 'Unavailable';
+  const running = status === 'queued' || status === 'transcribing' || status === 'evaluating';
+  const evaluation = analysis?.evaluation ?? null;
+
+  return <div className="overflow-hidden rounded-2xl border border-western-300/20 bg-gradient-to-br from-western-950/40 to-slate-950">
+    <Accordion type="single" collapsible>
+      <AccordionItem value="ai-review" className="border-0 px-4">
+        <AccordionTrigger className="py-4 text-slate-100 hover:no-underline">
+          <span className="flex min-w-0 items-center gap-3 text-left">
+            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-western-400/15 text-western-200">
+              {running ? <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" /> : status === 'failed' ? <AlertTriangle className="size-4 text-rose-300" /> : <Sparkles className="size-4" />}
+            </span>
+            <span className="min-w-0">
+              <span className="block text-sm font-black">AI-assisted review</span>
+              <span className="mt-0.5 block text-xs font-normal text-slate-400">{statusLabel} · Advisory evidence, hidden until opened</span>
+            </span>
+          </span>
+        </AccordionTrigger>
+        <AccordionContent className="pb-4">
+          {!analysis ? <AnalysisMessage
+            icon={<Bot className="size-5" />}
+            title="No automatic analysis"
+            description="Automatic analysis is available for recordings uploaded directly to WTA. External recording links still use the organizer rubric."
+          /> : null}
+          {running ? <AnalysisMessage
+            icon={<LoaderCircle className="size-5 animate-spin motion-reduce:animate-none" />}
+            title={status === 'queued' ? 'Waiting for the GPU worker' : status === 'transcribing' ? 'Creating transcript and captions' : 'Evaluating against the rubric'}
+            description={status === 'transcribing'
+              ? 'The recording is being processed privately on the Olares GPU. This panel refreshes automatically.'
+              : status === 'evaluating'
+                ? 'The transcript is ready. The evaluator is building an evidence-linked recap and recommendations.'
+                : 'The recording is safely stored and will be claimed automatically.'}
+          /> : null}
+          {status === 'failed' || analysis?.lastError && status === 'evaluating' ? <div className="rounded-xl border border-rose-400/25 bg-rose-400/10 p-4">
+            <div className="flex items-start gap-3"><AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-300" /><div><div className="text-sm font-black text-rose-100">Analysis needs another attempt</div><p className="mt-1 text-xs leading-5 text-rose-200/75">{analysis?.lastError ?? 'The analysis worker could not complete this recording.'}</p></div></div>
+            <button
+              type="button"
+              disabled={retrying}
+              onClick={() => {
+                setRetrying(true);
+                setRetryError(null);
+                void onRetry().catch((cause) => setRetryError(cause instanceof Error ? cause.message : 'Could not retry analysis.')).finally(() => setRetrying(false));
+              }}
+              className="mt-3 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-rose-100 px-3 py-2 text-xs font-black text-rose-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+            >{retrying ? <LoaderCircle className="size-3.5 animate-spin motion-reduce:animate-none" /> : <RotateCw className="size-3.5" />}{retrying ? 'Retrying…' : 'Retry analysis'}</button>
+            {retryError ? <p role="alert" className="mt-2 text-xs font-bold text-rose-200">{retryError}</p> : null}
+          </div> : null}
+          {status === 'ready' && evaluation && analysis ? <AiReviewResult analysis={analysis} onSeek={onSeek} /> : null}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  </div>;
+}
+
+function AnalysisMessage({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+  return <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-white/5 p-4 text-slate-200">
+    <span className="mt-0.5 text-western-200">{icon}</span>
+    <div><div className="text-sm font-black">{title}</div><p className="mt-1 text-xs leading-5 text-slate-400">{description}</p></div>
+  </div>;
+}
+
+function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek: (seconds: number) => void }) {
+  const evaluation = analysis.evaluation!;
+  return <div className="space-y-4 text-slate-100">
+    <div className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-western-200">Advisory recap</span>
+        <span className="text-[0.65rem] font-bold text-slate-500">{analysis.rubricVersion} · {percent(evaluation.confidence.overall)} confidence</span>
+      </div>
+      <p className="mt-2 text-sm leading-6 text-slate-200">{evaluation.recap}</p>
+    </div>
+
+    <div className="grid gap-3 md:grid-cols-3">
+      <AiDecisionCard label="Completion" value={labelize(evaluation.sessionCompletion.recommendation)} detail="Independent of whether the problem was solved" tone={evaluation.sessionCompletion.recommendation === 'completed' ? 'emerald' : 'amber'} />
+      <AiDecisionCard label="Candidate readiness" value={labelize(evaluation.candidate.readiness)} detail={evaluation.candidate.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.candidate.score)}/100 observed score`} tone="western" />
+      <AiDecisionCard label="Interviewer quality" value={labelize(evaluation.interviewer.recommendation)} detail={evaluation.interviewer.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.interviewer.score)}/100 observed score`} tone="sky" />
+    </div>
+
+    <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <h4 className="text-sm font-black">Key moments</h4>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {evaluation.keyMoments.map((moment, index) => <button key={`${moment.startSeconds}-${index}`} type="button" onClick={() => onSeek(moment.startSeconds)} className="group cursor-pointer rounded-xl border border-white/10 bg-slate-950/60 p-3 text-left transition hover:border-western-300/40 hover:bg-western-400/10">
+          <span className="inline-flex items-center gap-1.5 text-[0.68rem] font-black text-western-200"><Play className="size-3 fill-current" />{formatVideoTime(moment.startSeconds)}</span>
+          <span className="mt-1 block text-xs font-black text-slate-100">{moment.title}</span>
+          <span className="mt-1 block text-xs leading-5 text-slate-400">{moment.note}</span>
+        </button>)}
+      </div>
+    </section>
+
+    <div className="grid gap-3 xl:grid-cols-2">
+      <DimensionSection title="Candidate evidence" dimensions={evaluation.candidate.dimensions} onSeek={onSeek} />
+      <DimensionSection title="Interviewer evidence" dimensions={evaluation.interviewer.dimensions} onSeek={onSeek} />
+    </div>
+
+    {evaluation.hints.length ? <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+      <h4 className="text-sm font-black">Hint timeline</h4>
+      <div className="mt-3 space-y-2">
+        {evaluation.hints.map((hint, index) => <button key={`${hint.startSeconds}-${index}`} type="button" onClick={() => onSeek(hint.startSeconds)} className="flex w-full cursor-pointer items-start gap-3 rounded-xl border border-white/10 bg-slate-950/60 p-3 text-left transition hover:border-western-300/40">
+          <span className="mt-0.5 shrink-0 rounded-md bg-western-400/15 px-2 py-1 text-[0.65rem] font-black text-western-200">L{hint.level}</span>
+          <span className="min-w-0"><span className="block text-xs font-bold text-slate-200">{formatVideoTime(hint.startSeconds)} · “{hint.excerpt}”</span><span className="mt-1 block text-xs leading-5 text-slate-400">{hint.outcome}</span></span>
+        </button>)}
+      </div>
+    </section> : null}
+
+    {evaluation.contradictions.length || evaluation.organizerChecks.length || evaluation.interviewer.criticalFlags.length ? <section className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-4">
+      <h4 className="flex items-center gap-2 text-sm font-black text-amber-100"><AlertTriangle className="size-4" /> Organizer checks</h4>
+      <ul className="mt-3 space-y-2 text-xs leading-5 text-amber-100/80">
+        {evaluation.interviewer.criticalFlags.map((item) => <li key={`flag-${item}`}>• {item}</li>)}
+        {evaluation.contradictions.map((item) => <li key={`conflict-${item.summary}`}>• {item.summary}</li>)}
+        {evaluation.organizerChecks.map((item) => <li key={`check-${item}`}>• {item}</li>)}
+      </ul>
+    </section> : null}
+
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[0.68rem] font-semibold text-slate-500">
+      <span>Transcript {percent(evaluation.confidence.transcript)}</span>
+      <span>Speaker attribution {percent(evaluation.confidence.speakerAttribution)}</span>
+      {analysis.evaluatedAt ? <span>Generated {formatDate(analysis.evaluatedAt)}</span> : null}
+      <span>AI output requires organizer confirmation</span>
+    </div>
+  </div>;
+}
+
+function AiDecisionCard({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: 'emerald' | 'amber' | 'western' | 'sky' }) {
+  const toneClass = tone === 'emerald' ? 'border-emerald-300/20 bg-emerald-400/10 text-emerald-200'
+    : tone === 'amber' ? 'border-amber-300/20 bg-amber-400/10 text-amber-200'
+      : tone === 'sky' ? 'border-sky-300/20 bg-sky-400/10 text-sky-200'
+        : 'border-western-300/20 bg-western-400/10 text-western-200';
+  return <div className={`rounded-xl border p-3 ${toneClass}`}><div className="text-[0.62rem] font-black uppercase tracking-[0.14em] opacity-70">{label}</div><div className="mt-1 text-sm font-black">{value}</div><div className="mt-1 text-[0.68rem] leading-4 opacity-70">{detail}</div></div>;
+}
+
+function DimensionSection({ title, dimensions, onSeek }: { title: string; dimensions: Record<string, ReviewAiDimension>; onSeek: (seconds: number) => void }) {
+  return <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+    <h4 className="text-sm font-black">{title}</h4>
+    <div className="mt-3 space-y-2">
+      {Object.entries(dimensions).map(([key, dimension]) => <div key={key} className="rounded-lg border border-white/10 bg-slate-950/50 p-3">
+        <div className="flex items-center justify-between gap-2"><span className="text-xs font-bold text-slate-200">{labelize(key)}</span><span className="text-xs font-black text-western-200">{dimension.rating == null ? 'Not observed' : `${dimension.rating}/4`}</span></div>
+        {dimension.evidence.length ? <div className="mt-2 flex flex-wrap gap-1.5">{dimension.evidence.slice(0, 3).map((item, index) => <EvidenceButton key={`${item.startSeconds}-${index}`} evidence={item} onSeek={onSeek} />)}</div> : null}
+      </div>)}
+    </div>
+  </section>;
+}
+
+function EvidenceButton({ evidence, onSeek }: { evidence: ReviewEvidence; onSeek: (seconds: number) => void }) {
+  return <button type="button" title={evidence.note} onClick={() => onSeek(evidence.startSeconds)} className="inline-flex cursor-pointer items-center gap-1 rounded-md bg-white/5 px-2 py-1 text-[0.65rem] font-bold text-slate-400 transition hover:bg-western-400/15 hover:text-western-200"><Clock3 className="size-3" />{formatVideoTime(evidence.startSeconds)}</button>;
+}
+
+function percent(value: number) {
+  return `${Math.round(value * 100)}%`;
+}
+
+function labelize(value: string) {
+  return value.replace(/([a-z])([A-Z])/g, '$1 $2').replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
 function SubmittedReports({ reports }: { reports: ReviewReport[] }) {
