@@ -1,7 +1,7 @@
 # Round 3 Recording Review Rubric
 
 > **Status:** Draft for organizer calibration  
-> **Rubric version:** `round3-review-v1`  
+> **Rubric version:** `round3-review-v2`  
 > **Applies to:** Human organizer reviews and AI-assisted reviews of Round 3 interview recordings
 
 ## Purpose
@@ -15,6 +15,8 @@ Round 3 recording review serves three related but separate purposes:
 Completion is not the same as passing. A participant can complete the interview without solving the problem. A technically strong result can also provide weak evidence of independent ability if the interviewer supplied most of the solution.
 
 The AI review is advisory. It must never automatically approve completion, determine eligibility, reject a participant, or change a human review. An organizer makes the final decisions.
+
+For locally verified reviews, follow the standardized input and two-pass procedure in [ROUND_3_LOCAL_SUBAGENT_REVIEW.md](./ROUND_3_LOCAL_SUBAGENT_REVIEW.md).
 
 ## Review inputs
 
@@ -31,7 +33,11 @@ The AI must distinguish the speakers as `INTERVIEWER` and `INTERVIEWEE`. If role
 
 ## Evidence rules
 
-Every AI rating and material claim must cite one or more timestamps. A claim without transcript or submitted-code evidence must be omitted or marked `not_observed`.
+Every AI rating and material claim must cite evidence. Evidence is classified as a local `moment`, a meaningful `interval`, a whole-`session` conclusion, a submitted `report`, or submitted `code`. A claim without supporting evidence must be omitted or marked `not_observed`.
+
+Before assigning ratings, the reviewer must read the complete transcript and build a phase timeline covering the full usable recording. For each dimension, it must consider the opportunity to demonstrate the behaviour, representative supporting evidence, material counterevidence, and evidence limitations.
+
+Session completion and time management are longitudinal judgments. They must cite the opening, stopping point, and relevant phase or session ranges. A single isolated timestamp cannot support either judgment.
 
 The AI must:
 
@@ -131,12 +137,15 @@ Rate each dimension from 1 to 4. Use `not_observed` when the session did not pro
 
 ### Candidate score
 
-For observed dimensions, calculate the weighted score as:
+Application code—not the evaluator—calculates the score and band. For observed dimensions:
 
 ```text
-dimension contribution = weight × (rating - 1) / 3
-candidate score = sum of observed contributions, normalized over observed weights
+observed weight = sum(weight)
+numerator = sum(weight × (rating - 1))
+raw score = 100 × numerator / (3 × observed weight)
 ```
+
+If there are no observed dimensions, the score is `null`. Derive the recommendation from the unrounded raw score, then round only the displayed score. Model-authored scores and recommendation labels are ignored.
 
 The score is supporting evidence, not the final decision.
 
@@ -147,7 +156,7 @@ The score is supporting evidence, not the final decision.
 | 50–64 | `borderline` — organizer judgment and additional evidence required |
 | 0–49 | `not_demonstrated` — readiness was not demonstrated in this session |
 
-The AI must return `manual_review` instead of a passing recommendation when independence is rated 1, when a critical interviewer issue materially compromised the evidence, or when more than two weighted dimensions are `not_observed`.
+The application retains the numeric band but requires manual review when independence is rated 1, a structured integrity flag says interviewer conduct materially compromised candidate evidence, less than 70% of the rubric weight was observed, or reasoning, implementation, or independence was not observed.
 
 Passing does not itself create a referral. Organizers retain discretion based on the complete program record and available opportunities.
 
@@ -289,12 +298,12 @@ The evaluator should return validated JSON shaped approximately as follows:
 
 ```json
 {
-  "rubricVersion": "round3-review-v1",
+  "rubricVersion": "round3-review-v2",
   "recap": "string",
   "sessionCompletion": {
     "recommendation": "completed | incomplete | unreviewable",
     "rationale": "string",
-    "evidence": [{ "startSeconds": 0, "endSeconds": 0, "note": "string" }]
+    "evidence": [{ "startSeconds": 0, "endSeconds": 0, "note": "string", "scope": "session" }]
   },
   "candidate": {
     "dimensions": {
@@ -307,7 +316,10 @@ The evaluator should return validated JSON shaped approximately as follows:
       "coachability": { "rating": 1, "confidence": 0.0, "evidence": [] }
     },
     "score": 0,
+    "scoreBand": "strong_pass | pass | borderline | not_demonstrated",
     "readiness": "strong_pass | pass | borderline | not_demonstrated | manual_review",
+    "requiresManualReview": false,
+    "manualReviewReasons": [],
     "solutionOutcome": "no_viable_approach",
     "rationale": "string"
   },
@@ -322,8 +334,10 @@ The evaluator should return validated JSON shaped approximately as follows:
     },
     "score": 0,
     "recommendation": "strong | effective | coaching_recommended | organizer_follow_up",
+    "requiresOrganizerReview": false,
     "criticalFlags": []
   },
+  "phaseTimeline": [],
   "hints": [],
   "keyMoments": [],
   "contradictions": [],
