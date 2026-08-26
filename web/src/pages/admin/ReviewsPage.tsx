@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ExternalLink, Flag, Play, Save, Video } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, ExternalLink, Flag, Maximize2, Pause, Play, RotateCcw, RotateCw, Save, Video, Volume2, VolumeX } from 'lucide-react';
 import type { ReviewDetail, ReviewReport, ReviewRow, ReviewsData } from '../../admin-types';
 import { adminRequest } from '../../api';
+import { SelectControl } from '../../components/SelectControl';
 import { Badge, Button, Dialog, EmptyState, ErrorState, LoadingState, PageIntro, Panel, Tabs, formatDate } from '../../components/AdminUI';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '../../components/ui/accordion';
 import { RadioGroup, RadioGroupItem } from '../../components/ui/radio-group';
 import { Skeleton } from '../../components/ui/skeleton';
+import { Slider } from '../../components/ui/slider';
 import { Textarea } from '../../components/ui/textarea';
 import { useAdminData } from '../../hooks/useAdminData';
 import { LIVE_REFRESH_INTERVAL_MS } from '../../hooks/useAutoRefresh';
@@ -225,9 +227,144 @@ function RecordingPanel({ url }: { url: string | null }) {
   if (!isPlayableRecording(url)) return <div className="grid aspect-video place-items-center rounded-2xl border border-white/10 bg-slate-900 p-8 text-center">
     <div><ExternalLink className="mx-auto size-8 text-western-300" /><div className="mt-3 font-black">External recording</div><p className="mt-1 max-w-md text-sm text-slate-400">This provider cannot be played safely inside the dashboard.</p><a href={url} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl bg-western-400 px-4 py-2.5 text-sm font-black text-slate-950">Open recording <ExternalLink className="size-4" /></a></div>
   </div>;
-  return <div className="overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl">
-    <video key={url} controls preload="metadata" playsInline className="aspect-video w-full bg-black" src={url}>Your browser cannot play this recording.</video>
+  return <ReviewVideoPlayer src={url} />;
+}
+
+const playbackRates = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4];
+
+function ReviewVideoPlayer({ src }: { src: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [playing, setPlaying] = useState(false);
+  const [muted, setMuted] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [playbackRate, setPlaybackRate] = useState(readReviewPlaybackRate);
+
+  useEffect(() => {
+    const onFullscreenChange = () => setFullscreen(document.fullscreenElement === containerRef.current);
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (video) video.playbackRate = playbackRate;
+    try { window.localStorage.setItem('wta.reviewPlaybackRate', String(playbackRate)); } catch { /* Storage can be unavailable in strict browser modes. */ }
+  }, [playbackRate]);
+
+  const togglePlayback = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    if (video.paused) void video.play().catch(() => undefined);
+    else video.pause();
+  };
+  const seekBy = (seconds: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    video.currentTime = Math.max(0, Math.min(duration || video.duration || 0, video.currentTime + seconds));
+  };
+  const toggleMute = () => {
+    const video = videoRef.current;
+    if (video) video.muted = !video.muted;
+  };
+  const toggleFullscreen = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    if (document.fullscreenElement) void document.exitFullscreen();
+    else void container.requestFullscreen();
+  };
+  const handleShortcut = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    if (event.key === ' ' || event.key.toLowerCase() === 'k') { event.preventDefault(); togglePlayback(); }
+    else if (event.key === 'ArrowLeft' || event.key.toLowerCase() === 'j') { event.preventDefault(); seekBy(-10); }
+    else if (event.key === 'ArrowRight' || event.key.toLowerCase() === 'l') { event.preventDefault(); seekBy(10); }
+    else if (event.key.toLowerCase() === 'm') { event.preventDefault(); toggleMute(); }
+    else if (event.key.toLowerCase() === 'f') { event.preventDefault(); toggleFullscreen(); }
+  };
+
+  return <div
+    ref={containerRef}
+    tabIndex={0}
+    onKeyDown={handleShortcut}
+    aria-label="Interview recording player. Space or K plays and pauses; J and L seek ten seconds; M mutes; F enters fullscreen."
+    className="group overflow-hidden rounded-2xl border border-white/10 bg-black shadow-2xl outline-none focus-visible:ring-2 focus-visible:ring-western-300"
+  >
+    <button type="button" aria-label={playing ? 'Pause video' : 'Play video'} onClick={togglePlayback} className="relative block aspect-video w-full cursor-pointer bg-black">
+      <video
+        ref={videoRef}
+        preload="metadata"
+        playsInline
+        className="h-full w-full bg-black object-contain"
+        src={src}
+        onLoadedMetadata={(event) => {
+          const nextDuration = Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0;
+          setDuration(nextDuration);
+          event.currentTarget.playbackRate = playbackRate;
+        }}
+        onDurationChange={(event) => setDuration(Number.isFinite(event.currentTarget.duration) ? event.currentTarget.duration : 0)}
+        onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+        onVolumeChange={(event) => setMuted(event.currentTarget.muted || event.currentTarget.volume === 0)}
+      >Your browser cannot play this recording.</video>
+      {!playing ? <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10"><span className="grid size-16 place-items-center rounded-full border border-white/20 bg-black/65 text-white shadow-xl backdrop-blur-sm transition-transform group-hover:scale-105"><Play className="ml-1 size-7 fill-current" /></span></span> : null}
+    </button>
+    <div className="space-y-3 border-t border-white/10 bg-slate-950 px-3 py-3 text-white sm:px-4">
+      <Slider
+        aria-label="Video progress"
+        value={[Math.min(currentTime, duration || 0)]}
+        max={duration || 1}
+        step={0.1}
+        onValueChange={([next]) => {
+          const video = videoRef.current;
+          if (video && next != null) video.currentTime = next;
+        }}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <PlayerButton label={playing ? 'Pause' : 'Play'} onClick={togglePlayback}>{playing ? <Pause /> : <Play className="fill-current" />}</PlayerButton>
+          <PlayerButton label="Back 10 seconds" onClick={() => seekBy(-10)}><RotateCcw /></PlayerButton>
+          <PlayerButton label="Forward 10 seconds" onClick={() => seekBy(10)}><RotateCw /></PlayerButton>
+          <span className="ml-1 min-w-[6.8rem] text-xs font-bold tabular-nums text-slate-300">{formatVideoTime(currentTime)} / {formatVideoTime(duration)}</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <SelectControl
+            label="Playback speed"
+            value={String(playbackRate)}
+            onChange={(value) => setPlaybackRate(Number(value))}
+            options={playbackRates.map((rate) => ({ value: String(rate), label: `${rate}×` }))}
+            className="h-8 w-[5.5rem] rounded-lg border-white/15 bg-white/10 px-2.5 text-xs font-black text-white hover:bg-white/15"
+          />
+          <PlayerButton label={muted ? 'Unmute' : 'Mute'} onClick={toggleMute}>{muted ? <VolumeX /> : <Volume2 />}</PlayerButton>
+          <PlayerButton label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'} onClick={toggleFullscreen}><Maximize2 /></PlayerButton>
+        </div>
+      </div>
+    </div>
   </div>;
+}
+
+function PlayerButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return <button type="button" title={label} aria-label={label} onClick={onClick} className="grid size-9 cursor-pointer place-items-center rounded-lg text-slate-200 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-western-300 [&_svg]:size-4">{children}</button>;
+}
+
+function readReviewPlaybackRate() {
+  try {
+    const stored = Number(window.localStorage.getItem('wta.reviewPlaybackRate'));
+    return playbackRates.includes(stored) ? stored : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function formatVideoTime(seconds: number) {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+  const rounded = Math.floor(seconds);
+  const hours = Math.floor(rounded / 3600);
+  const minutes = Math.floor((rounded % 3600) / 60);
+  const remaining = rounded % 60;
+  return hours ? `${hours}:${String(minutes).padStart(2, '0')}:${String(remaining).padStart(2, '0')}` : `${minutes}:${String(remaining).padStart(2, '0')}`;
 }
 
 function isPlayableRecording(url: string) {
