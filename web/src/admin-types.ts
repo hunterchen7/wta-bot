@@ -131,6 +131,18 @@ export type ReviewAiDimension = {
 };
 export type ReviewAiEvaluation = {
   rubricVersion: string;
+  roleAttribution?: {
+    resolution: 'confirmed' | 'partial' | 'unresolved';
+    interviewer: { participantId: number; name: string; evidence: ReviewEvidence[] };
+    interviewee: { participantId: number; name: string; evidence: ReviewEvidence[] };
+    turns: Array<{
+      startSeconds: number;
+      endSeconds: number;
+      role: 'interviewer' | 'interviewee' | 'unknown';
+      confidence: number;
+    }>;
+    rationale: string;
+  } | null;
   recap: string;
   sessionCompletion: {
     recommendation: 'completed' | 'incomplete' | 'unreviewable';
@@ -198,6 +210,24 @@ export type ReviewAnalysis = {
   evaluatedAt: string | null;
   captionsUrl: string | null;
   transcriptUrl: string | null;
+  transcript: {
+    version: string;
+    language: string;
+    durationSeconds: number;
+    transcriptConfidence: number;
+    speakerConfidence: number;
+    transcriptionModel: string;
+    diarizationModel: string;
+    segments: Array<{
+      start: number;
+      end: number;
+      speaker: string;
+      text: string;
+      confidence?: number | null;
+      role: 'interviewer' | 'interviewee' | 'unknown';
+      roleConfidence: number | null;
+    }>;
+  } | null;
   evaluation: ReviewAiEvaluation | null;
 };
 export type ReviewDetail = {

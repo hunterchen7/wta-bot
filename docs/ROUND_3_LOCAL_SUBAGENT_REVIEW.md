@@ -1,7 +1,7 @@
 # Round 3 Local Subagent Review Contract
 
 > **Input version:** `wta-local-review-v1`  
-> **Rubric version:** `round3-review-v2`  
+> **Rubric version:** `round3-review-v3`  
 > **Reviewer:** Codex built-in subagent using `gpt-5.6-sol` with reasoning effort `ultra`
 
 This is the authoritative procedure for a locally verified Round 3 recording review. It is separate from the automatic hosted draft evaluator. A local review is advisory until an organizer confirms it.
@@ -20,7 +20,7 @@ Every review receives the same fields. Missing fields remain explicit; they are 
 ```json
 {
   "inputVersion": "wta-local-review-v1",
-  "rubricVersion": "round3-review-v2",
+  "rubricVersion": "round3-review-v3",
   "session": {
     "sessionId": 0,
     "round": 3,
@@ -67,12 +67,12 @@ The transcript must be complete and timestamped. The reviewer must read all segm
 
 ## Required review sequence
 
-1. Establish speaker roles. Record uncertainty instead of guessing.
+1. Establish speaker roles before reviewing performance. Copy the assigned names and participant IDs from session metadata, then use conversational evidence to label every transcript segment `interviewer`, `interviewee`, or `unknown`. The recording uploader is context, not automatic speaker proof. Persist the full role mapping, its evidence, and confidence. Record uncertainty instead of guessing.
 2. Build a phase timeline for the full usable recording: setup, clarification, approach, implementation, testing, complexity, feedback, downtime, and wrap-up.
 3. Build the interviewer-intervention timeline and classify each material hint from level 0 through level 4.
 4. For every rubric dimension, identify the opportunity to demonstrate it, representative supporting evidence, material counterevidence, and limitations.
 5. Determine session completion, candidate evidence, session technical outcome, and interviewer quality independently.
-6. Identify contradictions among the transcript, submitted code, reports, and official packet.
+6. Read both submitted reports as role-attributed secondary evidence. Identify agreements and contradictions among the transcript, submitted code, reports, and official packet. Never transfer an answer from one report's author to the other role.
 7. Run the adversarial verification pass before publishing the result.
 
 ## Evidence contract
@@ -107,9 +107,9 @@ A candidate review requires manual review when evidence coverage is insufficient
 
 ## Integrity flags
 
-External AI use, solution disclosure, interviewer-led implementation, wrong-problem use, material factual errors, denial of an assessment opportunity, and harmful conduct must use structured, timestamped flags. The flag states whether it compromises candidate evidence.
+Unauthorized candidate AI use, solution disclosure, interviewer-led implementation, wrong-problem use, material factual errors, denial of an assessment opportunity, and harmful conduct must use structured, timestamped flags. The flag states whether it compromises candidate evidence.
 
-Using external AI to inspect or debug candidate work during the interview is not treated as an ordinary hint. It requires organizer review and normally compromises independent-readiness evidence unless the affected work can be cleanly separated.
+An interviewer may privately use external tools, including AI, to inspect or verify candidate code. The tool use itself is not misconduct and does not compromise candidate evidence. Review the help actually communicated to the candidate under the ordinary probing, hint-discipline, and independence criteria. Flag external AI only when the candidate uses it without authorization, or when the interviewer directly supplies an externally generated solution in a way already covered by solution-disclosure or implementation-led flags.
 
 ## Provenance and retention
 

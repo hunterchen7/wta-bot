@@ -1,7 +1,7 @@
 # Round 3 Recording Review Rubric
 
 > **Status:** Draft for organizer calibration  
-> **Rubric version:** `round3-review-v2`  
+> **Rubric version:** `round3-review-v3`  
 > **Applies to:** Human organizer reviews and AI-assisted reviews of Round 3 interview recordings
 
 ## Purpose
@@ -29,7 +29,11 @@ The reviewer should receive:
 - the interviewer and interviewee reports;
 - the scheduled duration and relevant session metadata.
 
-The AI must distinguish the speakers as `INTERVIEWER` and `INTERVIEWEE`. If role assignment is uncertain, it must report the uncertainty instead of guessing. The organizer must be able to swap the speaker labels.
+The AI must resolve the assigned people before it evaluates either role. Session metadata is authoritative for the names and assignments: the assigned interviewer is `INTERVIEWER`; the assigned interviewee is the `INTERVIEWEE` and technical candidate. The recording uploader identifies which participant submitted the recording, but it does not prove who spoke in every segment.
+
+The reviewer must map transcript turns to those named roles, label every transcript segment `INTERVIEWER`, `INTERVIEWEE`, or `UNKNOWN`, and persist that mapping with confidence and evidence. It must use `UNKNOWN` rather than silently guessing. If material turns cannot be resolved, it must lower speaker-attribution confidence and leave affected dimensions unobserved or request organizer confirmation. The organizer must be able to inspect the role-labeled transcript.
+
+Each submitted report must be attributed to its assignee and role. Reports are secondary evidence: they can corroborate timing, hints, solution milestones, and participant experience, and they can expose contradictions. They cannot override conflicting recording, transcript, submitted-code, or problem-packet evidence. An interviewer-report statement must never be attributed to the interviewee, or vice versa.
 
 ## Evidence rules
 
@@ -47,6 +51,8 @@ The AI must:
 - use the known problem packet when judging correctness and hint disclosure;
 - lower its confidence when audio, speaker attribution, screen visibility, or transcript quality is poor;
 - return `insufficient_evidence` instead of assigning a low score when the evidence is not reviewable.
+
+An interviewer may privately use external tools, including AI, to inspect or verify the interviewee's code. This is allowed and does not itself compromise candidate evidence. Evaluate only the help actually communicated to the interviewee under probing, hint discipline, and candidate independence. Treat external AI as an integrity issue only when the candidate uses it without authorization. If an interviewer relays an externally generated solution, classify the relayed help under the existing solution-disclosure or implementation-led rules instead of penalizing the private tool use twice.
 
 The AI must not score accent, dialect, speaking speed, vocal confidence, filler words, camera use, appearance, personality, or similarity to a preferred communication style. Communication is assessed only on whether the technical reasoning can be followed.
 
@@ -298,7 +304,14 @@ The evaluator should return validated JSON shaped approximately as follows:
 
 ```json
 {
-  "rubricVersion": "round3-review-v2",
+  "rubricVersion": "round3-review-v3",
+  "roleAttribution": {
+    "resolution": "confirmed | partial | unresolved",
+    "interviewer": { "participantId": 0, "name": "string", "evidence": [] },
+    "interviewee": { "participantId": 0, "name": "string", "evidence": [] },
+    "turns": [{ "startSeconds": 0, "endSeconds": 0, "role": "interviewer | interviewee | unknown", "confidence": 0.0 }],
+    "rationale": "string"
+  },
   "recap": "string",
   "sessionCompletion": {
     "recommendation": "completed | incomplete | unreviewable",

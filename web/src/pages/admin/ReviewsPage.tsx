@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { AlertTriangle, Bot, CheckCircle2, Clock3, ExternalLink, Flag, LoaderCircle, Maximize2, Pause, Play, RotateCcw, RotateCw, Save, Sparkles, Video, Volume2, VolumeX } from 'lucide-react';
-import type { ReviewAiDimension, ReviewAnalysis, ReviewDetail, ReviewEvidence, ReviewReport, ReviewRow, ReviewsData } from '../../admin-types';
+import type { ReviewAiDimension, ReviewAiEvaluation, ReviewAnalysis, ReviewDetail, ReviewEvidence, ReviewReport, ReviewRow, ReviewsData } from '../../admin-types';
 import { adminRequest } from '../../api';
 import { SelectControl } from '../../components/SelectControl';
 import { Badge, Button, Dialog, EmptyState, ErrorState, LoadingState, PageIntro, Panel, Tabs, formatDate } from '../../components/AdminUI';
@@ -499,6 +499,8 @@ function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek
       <p className="mt-2 text-sm leading-6 text-slate-200">{evaluation.recap}</p>
     </div>
 
+    <RoleAttributionCard evaluation={evaluation} />
+
     <div className="grid gap-3 md:grid-cols-3">
       <AiDecisionCard label="Completion" value={labelize(evaluation.sessionCompletion.recommendation)} detail="Independent of whether the problem was solved" tone={evaluation.sessionCompletion.recommendation === 'completed' ? 'emerald' : 'amber'} />
       <AiDecisionCard label="Candidate readiness" value={labelize(evaluation.candidate.readiness)} detail={evaluation.candidate.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.candidate.score)}/100 calculated score${evaluation.candidate.requiresManualReview && evaluation.candidate.scoreBand ? ` · ${labelize(evaluation.candidate.scoreBand)} band` : ''}`} tone="western" />
@@ -542,6 +544,8 @@ function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek
       </div>
     </section> : null}
 
+    {analysis.transcript ? <RoleLabeledTranscript analysis={analysis} onSeek={onSeek} /> : null}
+
     {evaluation.contradictions.length || evaluation.organizerChecks.length || evaluation.interviewer.criticalFlags.length ? <section className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-4">
       <h4 className="flex items-center gap-2 text-sm font-black text-amber-100"><AlertTriangle className="size-4" /> Organizer checks</h4>
       <ul className="mt-3 space-y-2 text-xs leading-5 text-amber-100/80">
@@ -560,6 +564,52 @@ function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek
       <span>AI output requires organizer confirmation</span>
     </div>
   </div>;
+}
+
+function RoleAttributionCard({ evaluation }: { evaluation: ReviewAiEvaluation }) {
+  const attribution = evaluation.roleAttribution;
+  if (!attribution) return <section className="rounded-xl border border-amber-300/20 bg-amber-300/5 p-4">
+    <h4 className="text-sm font-black text-amber-100">Participant roles not resolved</h4>
+    <p className="mt-1 text-xs leading-5 text-amber-100/75">This legacy review does not contain explicit speaker-to-role attribution. Do not rely on role-specific claims without checking the recording.</p>
+  </section>;
+  return <section className="rounded-xl border border-white/10 bg-white/5 p-4">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><h4 className="text-sm font-black">Who is who</h4><p className="mt-1 text-xs leading-5 text-slate-400">Resolved before candidate or interviewer scoring.</p></div>
+      <span className={`rounded-full px-2.5 py-1 text-[0.65rem] font-black uppercase tracking-[0.12em] ${attribution.resolution === 'confirmed' ? 'bg-emerald-400/15 text-emerald-200' : 'bg-amber-400/15 text-amber-200'}`}>{labelize(attribution.resolution)}</span>
+    </div>
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+      <div className="rounded-xl border border-sky-300/20 bg-sky-400/10 p-3"><div className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-sky-200">Interviewer</div><div className="mt-1 text-sm font-black text-slate-100">{attribution.interviewer.name}</div></div>
+      <div className="rounded-xl border border-western-300/20 bg-western-400/10 p-3"><div className="text-[0.62rem] font-black uppercase tracking-[0.14em] text-western-200">Interviewee · candidate</div><div className="mt-1 text-sm font-black text-slate-100">{attribution.interviewee.name}</div></div>
+    </div>
+    <p className="mt-3 text-xs leading-5 text-slate-400">{attribution.rationale}</p>
+  </section>;
+}
+
+function RoleLabeledTranscript({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek: (seconds: number) => void }) {
+  const transcript = analysis.transcript!;
+  return <section className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+    <Accordion type="single" collapsible>
+      <AccordionItem value="transcript" className="border-0 px-4">
+        <AccordionTrigger className="py-4 text-slate-100 hover:no-underline">
+          <span className="text-left"><span className="block text-sm font-black">Role-labeled transcript</span><span className="mt-0.5 block text-xs font-normal text-slate-400">{transcript.segments.length} timestamped segments · click a line to seek</span></span>
+        </AccordionTrigger>
+        <AccordionContent className="pb-4">
+          <div className="max-h-[32rem] space-y-1 overflow-y-auto rounded-xl border border-white/10 bg-slate-950/60 p-2">
+            {transcript.segments.map((segment, index) => {
+              const role = segment.role;
+              const roleLabel = role === 'interviewee' ? 'Interviewee' : role === 'interviewer' ? 'Interviewer' : 'Unknown';
+              const tone = role === 'interviewee' ? 'bg-western-400/15 text-western-200' : role === 'interviewer' ? 'bg-sky-400/15 text-sky-200' : 'bg-slate-700 text-slate-300';
+              return <button key={`${segment.start}-${index}`} type="button" onClick={() => onSeek(segment.start)} className="grid w-full cursor-pointer grid-cols-[5rem_6.75rem_minmax(0,1fr)] items-start gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-white/5">
+                <span className="pt-0.5 text-[0.68rem] font-bold tabular-nums text-slate-500">{formatVideoTime(segment.start)}</span>
+                <span className={`rounded-md px-2 py-1 text-center text-[0.62rem] font-black uppercase tracking-wide ${tone}`}>{roleLabel}</span>
+                <span className="text-xs leading-5 text-slate-300">{segment.text}</span>
+              </button>;
+            })}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  </section>;
 }
 
 function AiDecisionCard({ label, value, detail, tone }: { label: string; value: string; detail: string; tone: 'emerald' | 'amber' | 'western' | 'sky' }) {

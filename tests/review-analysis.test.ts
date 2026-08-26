@@ -2,7 +2,7 @@ import { env } from 'cloudflare:workers';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { createCohort } from '../src/engine/weeks';
 import { app } from '../src/index';
-import { aiReviewSchema, extractModelText, normalizeAiReview } from '../src/services/review-analysis';
+import { aiReviewSchema, extractModelText, normalizeAiReview, transcriptResultSchema } from '../src/services/review-analysis';
 
 let jobId = 0;
 const workerId = 'test-olares-worker';
@@ -146,7 +146,14 @@ const observed = (rating: 1 | 2 | 3 | 4, evidence: Array<{
 
 function reviewDraft() {
   return aiReviewSchema.parse({
-    rubricVersion: 'round3-review-v2',
+    rubricVersion: 'round3-review-v3',
+    roleAttribution: {
+      resolution: 'confirmed',
+      interviewer: { participantId: 9811, name: 'Analysis Interviewer', evidence: [moment('The interviewer asks the opening question.')] },
+      interviewee: { participantId: 9812, name: 'Analysis Interviewee', evidence: [moment('The interviewee explains the approach.')] },
+      turns: [{ startSeconds: 0, endSeconds: 4200, role: 'interviewee', confidence: 0.8 }],
+      rationale: 'Session assignments and the conversation establish the roles.',
+    },
     recap: 'A complete mock interview.',
     sessionCompletion: {
       recommendation: 'completed',
@@ -203,8 +210,8 @@ describe('AI review normalization', () => {
   it('separates a score band from a manual-review integrity override', () => {
     const draft = reviewDraft();
     draft.interviewer.criticalFlags = [{
-      code: 'external_ai_assistance',
-      summary: 'The interviewer used an external AI system to debug candidate code.',
+      code: 'implementation_led',
+      summary: 'The interviewer directly led the candidate implementation.',
       compromisesCandidateEvidence: true,
       evidence: [{ startSeconds: 4119, endSeconds: 4137, note: 'The interviewer disclosed the external AI use.', scope: 'interval' }],
     }];
@@ -212,7 +219,7 @@ describe('AI review normalization', () => {
     expect(review.candidate.score).toBe(65);
     expect(review.candidate.scoreBand).toBe('pass');
     expect(review.candidate.readiness).toBe('manual_review');
-    expect(review.candidate.manualReviewReasons).toContain('The interviewer used an external AI system to debug candidate code.');
+    expect(review.candidate.manualReviewReasons).toContain('The interviewer directly led the candidate implementation.');
     expect(review.interviewer.requiresOrganizerReview).toBe(true);
   });
 
@@ -233,5 +240,43 @@ describe('AI review normalization', () => {
   it('rejects inconsistent observed and unobserved dimension states', () => {
     const invalid = { ...reviewDraft().candidate.dimensions.reasoning, status: 'not_observed', rating: 4 };
     expect(() => aiReviewSchema.shape.candidate.shape.dimensions.shape.reasoning.parse(invalid)).toThrow();
+  });
+});
+
+describe('role-aware review evidence', () => {
+  it('preserves explicit transcript roles and defaults legacy segments to unknown', () => {
+    const transcript = transcriptResultSchema.parse({
+      version: 'wta-transcript-v1',
+      language: 'en',
+      durationSeconds: 10,
+      transcriptConfidence: 0.9,
+      speakerConfidence: 0.4,
+      transcriptionModel: 'test',
+      diarizationModel: 'test',
+      segments: [
+        { start: 0, end: 4, speaker: 'SPEAKER_00', role: 'interviewer', roleConfidence: 0.95, text: 'Explain your approach.' },
+        { start: 4, end: 10, speaker: 'SPEAKER_00', text: 'I would use breadth-first search.' },
+      ],
+      vtt: 'WEBVTT\n',
+    });
+    expect(transcript.segments[0]).toMatchObject({ role: 'interviewer', roleConfidence: 0.95 });
+    expect(transcript.segments[1]).toMatchObject({ role: 'unknown', roleConfidence: null });
+  });
+
+  it('does not accept the retired interviewer-tool-use integrity flag', () => {
+    const draft = reviewDraft();
+    const invalid = {
+      ...draft,
+      interviewer: {
+        ...draft.interviewer,
+        criticalFlags: [{
+          code: 'external_ai_assistance',
+          summary: 'The interviewer privately inspected code with a tool.',
+          compromisesCandidateEvidence: true,
+          evidence: [moment()],
+        }],
+      },
+    };
+    expect(() => aiReviewSchema.parse(invalid)).toThrow();
   });
 });
