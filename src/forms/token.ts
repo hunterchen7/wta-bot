@@ -60,3 +60,11 @@ export async function verifyFormToken(secret: string, token: string, now = new D
   const match = /^f:(\d+)$/.exec(result.subject);
   return match ? { instanceId: Number(match[1]) } : null;
 }
+
+/** Recording-import tokens cannot read or submit the report itself. */
+export async function verifyRecordingImportToken(secret: string, token: string, now = new Date()) {
+  const result = await verifyToken(secret, token, now);
+  if (!result) return null;
+  const match = /^ri:(\d+)$/.exec(result.subject);
+  return match ? { instanceId: Number(match[1]) } : null;
+}

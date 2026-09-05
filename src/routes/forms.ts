@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { onReportSubmitted } from '../engine/reports';
 import type { Env } from '../env';
 import { activeFields, fieldsFor, validate, type Field } from '../forms/schema';
-import { verifyFormToken, verifyToken } from '../forms/token';
+import { verifyFormToken, verifyRecordingImportToken, verifyToken } from '../forms/token';
 import { sessionFrom } from './web';
 import { isCurrentOrganizer } from '../organizers';
 import { fizzBuzzDemoPacket } from '../demo/fizzbuzz-packet';
@@ -29,6 +29,18 @@ async function loadInstance(env: Env, token: string): Promise<LoadedInstance | n
   if (!env.FORM_SIGNING_SECRET) return null;
   const verified = await verifyFormToken(env.FORM_SIGNING_SECRET, token);
   if (!verified) return null;
+  return loadInstanceById(env, verified.instanceId);
+}
+
+async function loadRecordingInstance(env: Env, token: string): Promise<LoadedInstance | null> {
+  if (!env.FORM_SIGNING_SECRET) return null;
+  const verified = await verifyFormToken(env.FORM_SIGNING_SECRET, token)
+    ?? await verifyRecordingImportToken(env.FORM_SIGNING_SECRET, token);
+  if (!verified) return null;
+  return loadInstanceById(env, verified.instanceId);
+}
+
+async function loadInstanceById(env: Env, instanceId: number): Promise<LoadedInstance | null> {
   return env.DB.prepare(
     `SELECT f.id, f.kind, f.session_id, f.assignee_id, f.deadline_at, f.submitted_at, f.payload,
             w.idx AS week_idx, s.scheduled_at, s.problem_id, s.interviewer_id, s.interviewee_id,
@@ -39,7 +51,7 @@ async function loadInstance(env: Env, token: string): Promise<LoadedInstance | n
      FROM form_instances f JOIN sessions s ON s.id = f.session_id JOIN weeks w ON w.id = s.week_id
      JOIN participants pi ON pi.id = s.interviewer_id JOIN participants pe ON pe.id = s.interviewee_id
      JOIN participants pa ON pa.id = f.assignee_id WHERE f.id = ?1`,
-  ).bind(verified.instanceId).first<LoadedInstance>();
+  ).bind(instanceId).first<LoadedInstance>();
 }
 
 async function dynamicFields(env: Env, instance: LoadedInstance): Promise<Field[] | null> {
@@ -147,7 +159,7 @@ const RECORDING_PART_BYTES = 16 * 1024 * 1024;
 
 forms.post('/api/forms/:token/recording/init', async (c) => {
   if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured', message: 'Direct recording uploads are not configured yet.' }, 503);
-  const instance = await loadInstance(c.env, c.req.param('token'));
+  const instance = await loadRecordingInstance(c.env, c.req.param('token'));
   if (!instance || instance.kind !== 'interviewee_report') return c.json({ error: 'invalid_link', message: 'This recording upload link is invalid or expired.' }, 404);
   const body = await c.req.json<{ filename?: string; size?: number; contentType?: string }>().catch(() => null);
   const size = Number(body?.size ?? 0);
@@ -167,7 +179,7 @@ forms.post('/api/forms/:token/recording/init', async (c) => {
 
 forms.put('/api/forms/:token/recording/:id/part/:part', async (c) => {
   if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
-  const instance = await loadInstance(c.env, c.req.param('token'));
+  const instance = await loadRecordingInstance(c.env, c.req.param('token'));
   const asset = instance ? await recordingAsset(c.env, Number(c.req.param('id')), instance.id) : null;
   const partNumber = Number(c.req.param('part'));
   const contentLength = Number(c.req.header('content-length') ?? 0);
@@ -180,7 +192,7 @@ forms.put('/api/forms/:token/recording/:id/part/:part', async (c) => {
 
 forms.post('/api/forms/:token/recording/:id/complete', async (c) => {
   if (!c.env.RECORDINGS) return c.json({ error: 'recordings_not_configured' }, 503);
-  const instance = await loadInstance(c.env, c.req.param('token'));
+  const instance = await loadRecordingInstance(c.env, c.req.param('token'));
   if (!instance) return c.json({ error: 'invalid_upload' }, 404);
   const asset = await recordingAsset(c.env, Number(c.req.param('id')), instance.id);
   const body = await c.req.json<{ parts?: Array<{ partNumber: number; etag: string }> }>().catch(() => null);
@@ -201,7 +213,7 @@ forms.post('/api/forms/:token/recording/:id/complete', async (c) => {
 
 forms.delete('/api/forms/:token/recording/:id', async (c) => {
   if (!c.env.RECORDINGS) return c.json({ ok: true });
-  const instance = await loadInstance(c.env, c.req.param('token'));
+  const instance = await loadRecordingInstance(c.env, c.req.param('token'));
   const asset = instance ? await recordingAsset(c.env, Number(c.req.param('id')), instance.id) : null;
   if (!asset || asset.status !== 'pending') return c.json({ ok: true });
   await c.env.RECORDINGS.resumeMultipartUpload(asset.object_key, asset.upload_id).abort().catch(() => {});

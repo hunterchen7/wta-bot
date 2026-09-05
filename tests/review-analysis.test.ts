@@ -5,6 +5,7 @@ import { app } from '../src/index';
 import { aiReviewSchema, extractModelText, normalizeAiReview, transcriptResultSchema } from '../src/services/review-analysis';
 
 let jobId = 0;
+let sessionId = 0;
 const workerId = 'test-olares-worker';
 const secret = 'test-analysis-worker-secret';
 
@@ -29,7 +30,7 @@ beforeAll(async () => {
     `INSERT INTO sessions (week_id, interviewer_id, interviewee_id, state, review_state)
      VALUES (?1, 9811, 9812, 'completed', 'pending')`,
   ).bind(weeks[2]!.id).run();
-  const sessionId = Number(session.meta.last_row_id);
+  sessionId = Number(session.meta.last_row_id);
   const form = await env.DB.prepare(
     `INSERT INTO form_instances (kind, session_id, assignee_id, token_hash, deadline_at)
      VALUES ('interviewee_report', ?1, 9812, ?2, ?3)`,
@@ -52,7 +53,32 @@ beforeAll(async () => {
 describe('private review analysis worker API', () => {
   it('requires the worker secret', async () => {
     expect((await app.request('/api/analysis/worker/claim', { method: 'POST' }, env)).status).toBe(401);
+    expect((await app.request('/api/analysis/worker/import/token', { method: 'POST' }, env)).status).toBe(401);
     expect((await app.request(`/api/analysis/worker/jobs/${jobId}/evaluate`, { method: 'POST' }, env)).status).toBe(401);
+  });
+
+  it('mints a short-lived recording upload URL for a round-three interviewee form', async () => {
+    const response = await workerRequest('/api/analysis/worker/import/token', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json<{ uploadBaseUrl: string; expiresAt: string }>();
+    expect(body.uploadBaseUrl).toMatch(/^http:\/\/localhost\/api\/forms\/ri:\d+\.\d+\.[A-Za-z0-9_-]+\/recording$/);
+    expect(new Date(body.expiresAt).getTime()).toBeGreaterThan(Date.now());
+
+    const form = await app.request(body.uploadBaseUrl.replace(/\/recording$/, ''), {}, env);
+    expect(form.status).toBe(404);
+
+    const upload = await app.request(`${body.uploadBaseUrl}/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename: 'import.mp4', size: 23, contentType: 'video/mp4' }),
+    }, env);
+    expect(upload.status).toBe(200);
+    const asset = await upload.json<{ id: number }>();
+    const abort = await app.request(`${body.uploadBaseUrl}/${asset.id}`, { method: 'DELETE' }, env);
+    expect(abort.status).toBe(200);
   });
 
   it('leases one job and streams only that recording', async () => {

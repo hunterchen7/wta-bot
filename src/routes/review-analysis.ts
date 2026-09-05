@@ -1,5 +1,7 @@
 import { Hono, type Context } from 'hono';
+import { z } from 'zod';
 import type { Env } from '../env';
+import { signToken } from '../forms/token';
 import { isCurrentOrganizer } from '../organizers';
 import {
   analysisMediaObject,
@@ -17,6 +19,33 @@ export const reviewAnalysisRoutes = new Hono<{ Bindings: Env }>();
 type AnalysisContext = Context<{ Bindings: Env }>;
 
 const MAX_TRANSCRIPT_REQUEST_BYTES = 8 * 1024 * 1024;
+const workerRecordingImportSchema = z.object({
+  sessionId: z.number().int().positive(),
+}).strict();
+
+reviewAnalysisRoutes.post('/api/analysis/worker/import/token', async (c) => {
+  if (!(await workerAuthorized(c.env, c.req.header('authorization')))) return c.json({ error: 'unauthorized' }, 401);
+  if (!c.env.FORM_SIGNING_SECRET) return c.json({ error: 'not_configured' }, 503);
+  const input = workerRecordingImportSchema.safeParse(await c.req.json().catch(() => null));
+  if (!input.success) return c.json({ error: 'invalid_request', issues: input.error.issues.slice(0, 8) }, 400);
+
+  const form = await c.env.DB.prepare(
+    `SELECT f.id
+     FROM form_instances f
+     JOIN sessions s ON s.id = f.session_id
+     JOIN weeks w ON w.id = s.week_id
+     WHERE f.session_id = ?1 AND f.kind = 'interviewee_report' AND w.idx = 3
+     ORDER BY f.id DESC LIMIT 1`,
+  ).bind(input.data.sessionId).first<{ id: number }>();
+  if (!form) return c.json({ error: 'not_found' }, 404);
+
+  const expiresAt = new Date(Date.now() + 60 * 60_000);
+  const token = await signToken(c.env.FORM_SIGNING_SECRET, `ri:${form.id}`, expiresAt);
+  return c.json({
+    uploadBaseUrl: `${new URL(c.req.url).origin}/api/forms/${token}/recording`,
+    expiresAt: expiresAt.toISOString(),
+  });
+});
 
 reviewAnalysisRoutes.post('/api/analysis/worker/claim', async (c) => {
   if (!(await workerAuthorized(c.env, c.req.header('authorization')))) return c.json({ error: 'unauthorized' }, 401);
