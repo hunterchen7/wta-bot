@@ -103,6 +103,7 @@ export const aiReviewSchema = z.object({
     requiresManualReview: z.boolean().optional(),
     manualReviewReasons: z.array(z.string().min(1).max(1000)).max(20).optional(),
     solutionOutcome: z.enum([
+      'not_observed',
       'no_viable_approach',
       'partial_insight',
       'correct_naive_described',

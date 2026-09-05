@@ -264,6 +264,7 @@ describe('AI review normalization', () => {
       independence: notObserved,
       coachability: notObserved,
     };
+    draft.candidate.solutionOutcome = 'not_observed';
     draft.interviewer.dimensions = {
       structure: notObserved,
       questionFidelity: notObserved,
