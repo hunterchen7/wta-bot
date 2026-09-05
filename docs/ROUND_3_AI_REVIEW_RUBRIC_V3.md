@@ -1,7 +1,7 @@
 # Round 3 Recording Review Rubric
 
-> **Status:** Shadow audit; organizer calibration required before activation
-> **Rubric version:** `round3-review-v4`
+> **Status:** Draft for organizer calibration
+> **Rubric version:** `round3-review-v3`
 > **Applies to:** Human organizer reviews and AI-assisted reviews of Round 3 interview recordings
 
 ## Purpose
@@ -80,111 +80,106 @@ The AI provides a recommendation and evidence. Only an organizer confirms the co
 
 Rate each dimension from 1 to 4. Use `not_observed` when the session did not provide enough evidence. Do not convert `not_observed` into a score of 1.
 
-### problemFraming — 5%
+### A. Problem framing and clarification — 10%
 
 | Rating | Anchor |
 | --- | --- |
-| 1 | Task model remains materially wrong. |
-| 2 | Basic goal understood, but material misconceptions or missed constraints substantially delay progress. |
-| 3 | Correctly models the goal, input rules, and relevant constraints. |
-| 4 | Uses a precise model, assumptions, and constraint-driven examples to guide decisions. |
+| 1 | Misunderstood the task or important constraints and did not recover. |
+| 2 | Understood the basic task but missed relevant constraints, examples, or edge conditions without prompting. |
+| 3 | Correctly framed the task and asked or answered useful clarifying questions. |
+| 4 | Established a precise model of the task, surfaced important assumptions, and used examples or constraints to guide the solution. |
 
-### reasoning — 15%
-
-| Rating | Anchor |
-| --- | --- |
-| 1 | No coherent explanation of an approach. |
-| 2 | Partial or plausible explanation; important transitions, invariants, or correctness claims remain unresolved when probed. |
-| 3 | Explains a correct approach and why its key transitions work, including an explanation developed after help. |
-| 4 | Justifies invariants and design choices, connects them to implementation, and adapts using counterevidence or meaningful alternatives. |
-
-### implementation — 25%
+### B. Approach and reasoning — 20%
 
 | Rating | Anchor |
 | --- | --- |
-| 1 | Little relevant code or no coherent algorithmic structure. |
-| 2 | Meaningful implementation with major correctness, termination, compilation, or completeness defects. |
-| 3 | Complete correct baseline that misses required efficiency, or a near-complete intended solution with genuinely localized defects. |
-| 4 | Coherent, runnable implementation correct for the assigned requirements and required resource constraints. Assistance does not change this rating. |
+| 1 | Did not produce a coherent approach or repeatedly relied on unsupported guesses. |
+| 2 | Produced partial ideas or a plausible naive approach but could not justify or develop it without substantial guidance. |
+| 3 | Developed a correct approach with understandable reasoning and recognized the important trade-offs. |
+| 4 | Reasoned systematically, justified invariants or design choices, compared alternatives, and adapted the approach when evidence changed. |
 
-### testing — 10%
-
-| Rating | Anchor |
-| --- | --- |
-| 1 | Despite a usable opportunity, no meaningful behavior check, or clear failures are ignored. |
-| 2 | Useful cases executed or traced, but validation remains unresolved or too limited to establish the result. |
-| 3 | Runs supplied tests, checks expected outputs, and resolves observed failures. No extra candidate-authored cases required. Equivalent substantive traces may address a documented harness limitation without claiming execution. |
-| 4 | Adds diagnostic validation beyond routine pass/fail checks: targeted cases, invariant-driven traces, or checks exposing or ruling out subtle defects, explaining their purpose. |
-
-### complexity — 5%
+### C. Implementation — 20%
 
 | Rating | Anchor |
 | --- | --- |
-| 1 | Materially wrong bound or cannot explain relevant cost when asked. |
-| 2 | Partially correct analysis with missing time/space component, weak justification, or unresolved cost assumption. |
-| 3 | Correct time and auxiliary-space bounds for the actual code with a sound explanation, including after prompting or correction. |
-| 4 | Derives tight bounds with precise accounting for relevant operations, amortization, recursion, heap work, or temporary allocations, connected to constraints or trade-offs. |
+| 1 | Produced little relevant code or code that did not reflect a viable approach. |
+| 2 | Implemented meaningful portions but left major correctness gaps or required substantial implementation guidance. |
+| 3 | Produced a mostly correct implementation with only localized mistakes or minor unfinished work. |
+| 4 | Produced a correct, coherent implementation and debugged issues methodically. |
 
-### communication — 5%
-
-| Rating | Anchor |
-| --- | --- |
-| 1 | Technical decisions cannot be followed because explanations are absent or incoherent. |
-| 2 | Intermittently followable with important unexplained decisions or changes. |
-| 3 | Explains approach, changes, and results clearly enough to follow. |
-| 4 | Structured technical explanation with explicit assumptions, trade-offs, and corrections. |
-
-### independence — 30%
+### D. Testing and complexity — 15%
 
 | Rating | Anchor |
 | --- | --- |
-| 1 | Interviewer supplies central design and/or substantial implementation sequence, leaving little candidate design ownership. |
-| 2 | Core milestones require disclosures, but candidate owns meaningful subsequent work. |
-| 3 | Candidate drives approach and implementation with clarification and limited directional help. |
-| 4 | No substantive solution help for milestones actually attempted; failure to finish, test, or analyze is assessed elsewhere. |
+| 1 | Did not test meaningfully and could not explain the relevant complexity. |
+| 2 | Checked basic examples or attempted complexity analysis, but missed important cases or made material errors. |
+| 3 | Tested representative and edge cases and gave substantially correct time and space complexity. |
+| 4 | Used tests to validate assumptions, found subtle failure modes, and precisely justified time and space complexity. |
 
-### coachability — 5%
+### E. Technical communication — 10%
 
 | Rating | Anchor |
 | --- | --- |
-| 1 | Does not engage with feedback or use it productively. |
-| 2 | Repeats a demonstrated misunderstanding or only partially incorporates feedback. |
-| 3 | Understands feedback and continues productively. |
-| 4 | Explains feedback implications, makes the appropriate correction, and validates recovery. |
+| 1 | The technical approach could not be followed because key reasoning remained unexplained. |
+| 2 | Communicated intermittently but left important decisions or changes unexplained. |
+| 3 | Communicated the approach, implementation, and corrections clearly enough to follow. |
+| 4 | Communicated a concise, structured chain of reasoning and made assumptions, trade-offs, and corrections explicit. |
 
-### Attribution and evidence rules
+### F. Independence — 15%
 
-Assistance affects the independence score only. A candidate can earn full implementation credit for a correct assisted artifact. Judge reasoning from explanations actually demonstrated after help; a low reasoning rating requires a specific unresolved explanation or incorrect claim, not failure to invent the method. Supplied-test success earns validation 3; candidate-authored diagnostic cases or meaningful traces can distinguish 4. Suggested tests do not reduce validation credit. Correct prompted or corrected complexity earns 3. Independent verifier tests establish the artifact result, not candidate testing behavior.
+| Rating | Anchor |
+| --- | --- |
+| 1 | The interviewer supplied the central approach or led the implementation step by step. |
+| 2 | Reached major milestones only after one or more core algorithmic or implementation disclosures. |
+| 3 | Drove the solution with only clarification or limited directional hints. |
+| 4 | Independently framed, developed, implemented, and evaluated the solution. |
 
-Do not reduce independence for not finishing, testing, or analyzing. Do not reduce coachability merely for repeated hints or confusing/incorrect interviewer advice. Leave dimensions unobserved when there was no fair opportunity. Confidence measures support for observations, not unaided mastery; it never multiplies a score.
+### G. Coachability and recovery — 10%
+
+| Rating | Anchor |
+| --- | --- |
+| 1 | Did not meaningfully engage with feedback or could not use it to make progress. |
+| 2 | Used feedback inconsistently or required the same issue to be explained repeatedly. |
+| 3 | Incorporated feedback, corrected course, and continued productively. |
+| 4 | Diagnosed the implication of feedback, explained the correction, and validated the revised approach. |
 
 ### Candidate score
 
-Application code computes all derived fields. Normalize each observed rating as `(rating - 1) / 3`. Compute technical T from framing/reasoning/implementation/testing/complexity with weights 5/15/25/10/5, independence I from its rating, and interaction B from communication/recovery with weights 5/5, each out of 100. Missing dimensions renormalize only within their block.
+Application code—not the evaluator—calculates the score and band. For observed dimensions:
 
-`preBoundScore = 0.60 × T + 0.30 × I + 0.10 × B`.
+```text
+observed weight = sum(weight)
+numerator = sum(weight × (rating - 1))
+raw score = 100 × numerator / (3 × observed weight)
+```
 
-Require at least 42/60 technical weight, observed reasoning/implementation/independence, one observed interaction dimension, and confirmed consistent artifact evidence before ranking. Otherwise the overall score is null and observable subtotals remain visible.
+If there are no observed dimensions, the score is `null`. Derive the recommendation from the unrounded raw score, then round only the displayed score. Model-authored scores and recommendation labels are ignored.
 
-| Confirmed artifact | Score bound |
+The score is supporting evidence, not the final decision.
+
+| Score | AI recommendation |
 | --- | --- |
-| Correct optimal implementation meeting packet requirements | Minimum 55 |
-| Functionally correct baseline exceeding required resource limits | Maximum 54 |
-| Known incomplete, incorrect, nonterminating, non-runnable, or observed absent submission | Maximum 49 |
-| Missing or contradictory artifact evidence | Pending verification, unranked |
-| Organizer-confirmed unusable recording | Administrative zero, no technical rank |
+| 80–100 | `strong_pass` — strong evidence for alumni-interview or referral readiness |
+| 65–79 | `pass` — sufficient evidence for advancement |
+| 50–64 | `borderline` — organizer judgment and additional evidence required |
+| 0–49 | `not_demonstrated` — readiness was not demonstrated in this session |
 
-Derive the band from the unrounded bounded score: 80 strong_pass, 65 pass, 50 borderline, otherwise not_demonstrated. Keep the score before the bound and its reason visible. A bound never repairs contradictory ratings: implementation 2 plus an optimal outcome must be reconciled, not automatically upgraded.
+The application retains the numeric band but requires manual review when independence is rated 1, a structured integrity flag says interviewer conduct materially compromised candidate evidence, less than 70% of the rubric weight was observed, or reasoning, implementation, or independence was not observed.
 
-### Technical result and assistance
+Passing does not itself create a referral. Organizers retain discretion based on the complete program record and available opportunities.
 
-`technicalResult` stores separate approach (`not_observed`, `none`, `partial`, `correct_baseline`, `correct_optimal`) and final artifact (`not_observed`, `no_submission`, `incomplete`, `non_runnable`, `incorrect`, `correct_baseline`, `correct_optimal`). `no_submission` requires evidence that no artifact was produced; unavailable evidence is `not_observed`. A baseline that crashes on valid inputs is incorrect, not merely inefficient.
+## Solution outcome
 
-Verification records status (`pending`, `confirmed`, `contradicted`), exact artifact SHA-256 (null only without an artifact), runtime/harness, checks, and cited evidence. Confirm correctness against the assigned packet and actual runtime. Do not silently repair candidate code or treat reviewer-imposed harness differences as candidate faults. An optimal artifact requires implementation 4 and an optimal approach; a correct baseline requires implementation 3. Missing candidate Big-O does not contradict a reviewer-verified optimal artifact.
+Record the highest milestone demonstrated, separately from the weighted candidate score:
 
-An `assistanceProfile` explains affected milestones using evidence. Independence 4/3/2/1 displays independent/lightly assisted/substantially assisted/interviewer-led. Keep a timestamped hint timeline with `duringAssessment`; record `assessmentEndedAtSeconds` so later editorial walkthroughs are not charged against the attempt.
+1. `no_viable_approach`
+2. `partial_insight`
+3. `correct_naive_described`
+4. `correct_naive_implemented_or_optimal_described`
+5. `optimal_mostly_implemented`
+6. `optimal_implemented_tested_and_analyzed`
 
-Require manual review for interviewer-led work, level 3–4 disclosures during the assessed attempt, compromising integrity flags, unresolved material role attribution, inconsistent artifact evidence, insufficient core evidence, or unusable evidence. Review routing does not reduce the numeric score. Appropriate requested central help can trigger review without being misconduct.
+This captures what was accomplished. Independence captures how much of it was accomplished without interviewer assistance.
 
 ## Decision 3: Interviewer quality
 
@@ -286,7 +281,7 @@ Do not judge hint quality by count alone. Consider timing, candidate progress, w
 - Solution outcome records the final technical milestone regardless of assistance.
 - Candidate independence records how much of that milestone was reached independently.
 - Interviewer hint discipline records whether the assistance was appropriate.
-- Evidence confidence describes how well observations are supported. Heavy assistance can be confidently observed; uncertainty about unaided mastery belongs in the assistance profile and organizer checks, not a score multiplier.
+- AI confidence is reduced when heavy interviewer guidance makes candidate mastery difficult to infer.
 
 ## AI recap requirements
 
@@ -307,9 +302,70 @@ The accordion is collapsed by default. Its closed header may show processing sta
 
 ## Structured evaluator output
 
-The authoritative validated schema is `aiReviewV4Schema` in `src/services/review-rubric-v4.ts`. It retains role attribution, completion, interviewer dimensions, evidence, timelines, key moments, contradictions, and confidence from v3. Candidate dimensions now separate `testing` and `complexity`; the candidate also supplies `technicalResult` and `assistanceProfile`. Every hint supplies `duringAssessment`, and the review supplies `assessmentEndedAtSeconds`. Application code derives score components, solution summary, band, assistance label, and review workflow.
+The evaluator should return validated JSON shaped approximately as follows:
 
-Historical v3 artifacts and the automatic v3 draft evaluator remain explicitly versioned under [the archived v3 rubric](./ROUND_3_AI_REVIEW_RUBRIC_V3.md) until their own evaluation runs migrate. Do not relabel old ratings. The current v4 local audit uses Astra Max with Fast mode off.
+```json
+{
+  "rubricVersion": "round3-review-v3",
+  "roleAttribution": {
+    "resolution": "confirmed | partial | unresolved",
+    "interviewer": { "participantId": 0, "name": "string", "evidence": [] },
+    "interviewee": { "participantId": 0, "name": "string", "evidence": [] },
+    "turns": [{ "startSeconds": 0, "endSeconds": 0, "role": "interviewer | interviewee | unknown", "confidence": 0.0 }],
+    "rationale": "string"
+  },
+  "recap": "string",
+  "sessionCompletion": {
+    "recommendation": "completed | incomplete | unreviewable",
+    "rationale": "string",
+    "evidence": [{ "startSeconds": 0, "endSeconds": 0, "note": "string", "scope": "session" }]
+  },
+  "candidate": {
+    "dimensions": {
+      "problemFraming": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "reasoning": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "implementation": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "testingAndComplexity": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "communication": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "independence": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "coachability": { "rating": 1, "confidence": 0.0, "evidence": [] }
+    },
+    "score": 0,
+    "scoreBand": "strong_pass | pass | borderline | not_demonstrated",
+    "readiness": "strong_pass | pass | borderline | not_demonstrated | manual_review",
+    "requiresManualReview": false,
+    "manualReviewReasons": [],
+    "solutionOutcome": "no_viable_approach",
+    "rationale": "string"
+  },
+  "interviewer": {
+    "dimensions": {
+      "structure": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "questionFidelity": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "probing": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "hintDiscipline": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "timeManagement": { "rating": 1, "confidence": 0.0, "evidence": [] },
+      "feedbackAndConduct": { "rating": 1, "confidence": 0.0, "evidence": [] }
+    },
+    "score": 0,
+    "recommendation": "strong | effective | coaching_recommended | organizer_follow_up",
+    "requiresOrganizerReview": false,
+    "criticalFlags": []
+  },
+  "phaseTimeline": [],
+  "hints": [],
+  "keyMoments": [],
+  "contradictions": [],
+  "confidence": {
+    "transcript": 0.0,
+    "speakerAttribution": 0.0,
+    "overall": 0.0
+  },
+  "organizerChecks": []
+}
+```
+
+In the production schema, a dimension rating must also permit `null` when its status is `not_observed`.
 
 ## Calibration before use
 

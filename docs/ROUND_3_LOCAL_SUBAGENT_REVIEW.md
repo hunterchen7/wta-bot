@@ -1,7 +1,7 @@
 # Round 3 Local Subagent Review Contract
 
-> **Input version:** `wta-local-review-v1`  
-> **Rubric version:** `round3-review-v3`  
+> **Input version:** `wta-local-review-v2`
+> **Rubric version:** `round3-review-v4`
 > **Reviewer:** Codex built-in subagent using `gpt-6-astra` with reasoning effort `max`
 >
 > **Service tier:** `default` (Fast mode off)
@@ -23,8 +23,8 @@ Every review receives the same fields. Missing fields remain explicit; they are 
 
 ```json
 {
-  "inputVersion": "wta-local-review-v1",
-  "rubricVersion": "round3-review-v3",
+  "inputVersion": "wta-local-review-v2",
+  "rubricVersion": "round3-review-v4",
   "session": {
     "sessionId": 0,
     "round": 3,
@@ -99,17 +99,21 @@ If an organizer has confirmed that a missing, silent, corrupt, or materially tru
 
 The reviewer supplies atomic ratings and evidence. Application code computes the score, score band, manual-review state, and organizer-review state. Reviewer-authored values for these derived fields are ignored.
 
-For observed dimensions:
+Use the block formula, artifact bounds, evidence requirements, and anchors in [ROUND_3_AI_REVIEW_RUBRIC.md](./ROUND_3_AI_REVIEW_RUBRIC.md) and the validated `aiReviewV4Schema` in `src/services/review-rubric-v4.ts`. Candidate testing and complexity are separate ratings. Assistance affects independence only; central disclosures still trigger manual review without changing the technical result.
 
-```text
-observed weight = sum(weight)
-numerator = sum(weight × (rating - 1))
-raw score = 100 × numerator / (3 × observed weight)
-```
+The application computes technical, independence, and interaction subtotals; the 60/30/10 composite; result floor/caps; score band; and review routing. Missing or inconsistent core evidence remains unranked. Administrative zero is separate from technical performance.
 
-If no dimension is observed, the score is `null`. The application derives the band from the unrounded raw score and rounds only the displayed score.
+## Immutable audit batches
 
-A candidate review requires manual review when evidence coverage is insufficient, a core dimension is missing, independence is rated 1, or a structured integrity flag says that interviewer conduct compromised candidate evidence. Numeric score and score band remain visible so the workflow override does not erase the underlying assessment.
+Each audit batch freezes its session/job membership and exact rubric, input, model, effort, and service tier. New primary, verification, and resolved results use unique run artifact paths. Never overwrite an old evaluation or role-labeled transcript. Keep the prior active cohort result set until the complete new batch has passed verification and organizer calibration; then activate it atomically through the cohort's active-batch pointer. Missing v4 results must not silently fall back to v3 in a v4 leaderboard.
+
+Storage uses `review_audit_batches` and `review_evaluation_runs`, added by migration `0036_versioned_review_audits.sql`. The existing `review_analysis_jobs` table continues to own recording and transcription work. A run references its original job and an SHA-256 digest of the frozen input bundle; its provenance records the private input location and hashes of the rubric and schema.
+
+Run states are `queued`, `reviewing`, `verifying`, `ready`, and `failed`. Only mark a run `ready` after the separate verifier has finished and material disagreements have been resolved. Store the primary output, verification notes, resolved evaluation, and a separate role-labeled transcript before recording their object keys. Preserve both passes' actual model, effort, tier, timestamps, and input/output hashes in `provenance_json`. Artifact paths should contain the batch and run IDs. Completed rows cannot be changed or deleted; retries create a higher attempt number.
+
+A batch can become `verified` only when the latest attempt for every frozen job is `ready`. Verification is a workflow milestone, not human approval of a candidate's performance: manual-review flags remain on the result. After organizer calibration, `activateReviewAuditBatch` selects the whole batch transactionally. Activating a previous verified batch rolls back that selection. The review reader uses the selected batch's rubric-specific normalizer and artifacts. With no active batch, it continues to show the original job evaluations and preserves their stored rubric versions.
+
+Keep private audit packets out of Git. A local checkpoint can live under the ignored `.wrangler/audits/<batch-id>/` directory. Preserve the input manifest and frozen rubric with the results so work can resume after a session ends. A local checkpoint is not a published or activated evaluation.
 
 ## Integrity flags
 
