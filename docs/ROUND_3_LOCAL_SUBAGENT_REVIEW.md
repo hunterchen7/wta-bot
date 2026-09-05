@@ -89,6 +89,8 @@ Completion and time management are longitudinal judgments. They must cite the op
 
 An observed dimension requires an integer rating from 1 through 4 and at least one valid evidence item. A `not_observed` dimension requires `rating: null`. Absence of an opportunity is not evidence for rating 1.
 
+If an organizer has confirmed that a missing, silent, corrupt, or materially truncated recording is unusable, return `sessionCompletion.recommendation: "unreviewable"`, leave unsupported dimensions `not_observed`, and set `evidenceDisposition` to `{"status":"unusable","administrativeScore":0,"reason":"concrete defect"}`. The resulting zero is administrative and must not be described as observed candidate or interviewer performance.
+
 ## Deterministic calculations
 
 The reviewer supplies atomic ratings and evidence. Application code computes the score, score band, manual-review state, and organizer-review state. Reviewer-authored values for these derived fields are ignored.

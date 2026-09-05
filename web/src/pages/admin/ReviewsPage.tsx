@@ -490,7 +490,14 @@ function AnalysisMessage({ icon, title, description }: { icon: React.ReactNode; 
 
 function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek: (seconds: number) => void }) {
   const evaluation = analysis.evaluation!;
+  const unusableRecording = evaluation.evidenceDisposition?.status === 'unusable';
   return <div className="space-y-4 text-slate-100">
+    {unusableRecording ? <div className="rounded-xl border border-rose-300/25 bg-rose-400/10 p-4">
+      <div className="flex items-start gap-3">
+        <AlertTriangle className="mt-0.5 size-5 shrink-0 text-rose-200" />
+        <div><div className="text-sm font-black text-rose-100">Administrative score: 0</div><p className="mt-1 text-xs leading-5 text-rose-100/75">{evaluation.evidenceDisposition!.reason} This is an evidence-quality outcome, not an assessment of observed interview performance.</p></div>
+      </div>
+    </div> : null}
     <div className="rounded-xl border border-white/10 bg-white/5 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-[0.65rem] font-black uppercase tracking-[0.16em] text-western-200">Advisory recap</span>
@@ -503,7 +510,7 @@ function AiReviewResult({ analysis, onSeek }: { analysis: ReviewAnalysis; onSeek
 
     <div className="grid gap-3 md:grid-cols-3">
       <AiDecisionCard label="Completion" value={labelize(evaluation.sessionCompletion.recommendation)} detail="Independent of whether the problem was solved" tone={evaluation.sessionCompletion.recommendation === 'completed' ? 'emerald' : 'amber'} />
-      <AiDecisionCard label="Candidate readiness" value={labelize(evaluation.candidate.readiness)} detail={evaluation.candidate.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.candidate.score)}/100 calculated score${evaluation.candidate.requiresManualReview && evaluation.candidate.scoreBand ? ` · ${labelize(evaluation.candidate.scoreBand)} band` : ''}`} tone="western" />
+      <AiDecisionCard label="Candidate readiness" value={unusableRecording ? 'Not assessed' : labelize(evaluation.candidate.readiness)} detail={unusableRecording ? '0/100 administrative score · performance not observed' : evaluation.candidate.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.candidate.score)}/100 calculated score${evaluation.candidate.requiresManualReview && evaluation.candidate.scoreBand ? ` · ${labelize(evaluation.candidate.scoreBand)} band` : ''}`} tone="western" />
       <AiDecisionCard label="Interviewer quality" value={labelize(evaluation.interviewer.recommendation)} detail={evaluation.interviewer.score == null ? 'Insufficient scored evidence' : `${Math.round(evaluation.interviewer.score)}/100 calculated score${evaluation.interviewer.requiresOrganizerReview ? ' · Organizer review required' : ''}`} tone="sky" />
     </div>
 

@@ -69,6 +69,11 @@ const roleTurnSchema = z.object({
 
 export const aiReviewSchema = z.object({
   rubricVersion: z.enum(['round3-review-v1', 'round3-review-v2', REVIEW_RUBRIC_VERSION]),
+  evidenceDisposition: z.object({
+    status: z.enum(['usable', 'unusable']),
+    administrativeScore: z.literal(0).nullable(),
+    reason: z.string().min(1).max(1000),
+  }).optional(),
   roleAttribution: z.object({
     resolution: z.enum(['confirmed', 'partial', 'unresolved']),
     interviewer: attributedParticipantSchema,
@@ -230,6 +235,8 @@ export function normalizeAiReview(review: AiReview): AiReview {
   const normalized = structuredClone(review);
   normalized.rubricVersion = REVIEW_RUBRIC_VERSION;
 
+  const unusableEvidence = normalized.evidenceDisposition?.status === 'unusable';
+
   const timeEvidence = normalized.interviewer.dimensions.timeManagement.evidence;
   const timelineDuration = normalized.phaseTimeline.at(-1)?.endSeconds ?? 0;
   const hasLongitudinalTimeEvidence = timeEvidence.some((evidence) =>
@@ -264,12 +271,16 @@ export function normalizeAiReview(review: AiReview): AiReview {
     ...(normalized.candidate.dimensions.independence.rating === 1 ? ['Candidate independence was rated 1.'] : []),
     ...compromisedFlagSummaries,
   ];
-  normalized.candidate.score = candidate.displayed;
-  normalized.candidate.scoreBand = candidate.raw === null ? null : candidateBand(candidate.raw);
-  normalized.candidate.requiresManualReview = candidate.raw === null || candidateReasons.length > 0;
-  normalized.candidate.manualReviewReasons = candidate.raw === null
-    ? ['No candidate dimensions had observable evidence.', ...candidateReasons]
-    : candidateReasons;
+  normalized.candidate.score = unusableEvidence ? 0 : candidate.displayed;
+  normalized.candidate.scoreBand = unusableEvidence
+    ? 'not_demonstrated'
+    : candidate.raw === null ? null : candidateBand(candidate.raw);
+  normalized.candidate.requiresManualReview = unusableEvidence || candidate.raw === null || candidateReasons.length > 0;
+  normalized.candidate.manualReviewReasons = unusableEvidence
+    ? [`Administrative zero: ${normalized.evidenceDisposition!.reason}`]
+    : candidate.raw === null
+      ? ['No candidate dimensions had observable evidence.', ...candidateReasons]
+      : candidateReasons;
   normalized.candidate.readiness = normalized.candidate.requiresManualReview
     ? 'manual_review'
     : normalized.candidate.scoreBand!;

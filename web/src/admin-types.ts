@@ -131,6 +131,11 @@ export type ReviewAiDimension = {
 };
 export type ReviewAiEvaluation = {
   rubricVersion: string;
+  evidenceDisposition?: {
+    status: 'usable' | 'unusable';
+    administrativeScore: 0 | null;
+    reason: string;
+  };
   roleAttribution?: {
     resolution: 'confirmed' | 'partial' | 'unresolved';
     interviewer: { participantId: number; name: string; evidence: ReviewEvidence[] };

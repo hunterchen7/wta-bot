@@ -72,6 +72,8 @@ Use when there was no substantive interview, including an effective no-show, a s
 
 Use when missing or unusable evidence prevents the reviewer from deciding. Examples include a missing recording, unintelligible audio, an apparently truncated upload, or a transcript and recording that cannot be reconciled.
 
+When an organizer confirms that the submitted recording is unusable, the system may record an **administrative score of 0**. This is an evidence-quality outcome, not a claim that the candidate demonstrated rating-1 performance. Keep every unsupported candidate and interviewer dimension `not_observed`, state the concrete recording defect, and require manual review. A replacement recording can supersede the administrative zero.
+
 The AI provides a recommendation and evidence. Only an organizer confirms the completion decision.
 
 ## Decision 2: Candidate readiness

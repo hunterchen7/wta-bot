@@ -241,6 +241,47 @@ describe('AI review normalization', () => {
     const invalid = { ...reviewDraft().candidate.dimensions.reasoning, status: 'not_observed', rating: 4 };
     expect(() => aiReviewSchema.shape.candidate.shape.dimensions.shape.reasoning.parse(invalid)).toThrow();
   });
+
+  it('represents an unusable recording as an administrative zero without fabricating ratings', () => {
+    const draft = reviewDraft();
+    const notObserved = { status: 'not_observed' as const, rating: null, confidence: 0, evidence: [] };
+    draft.evidenceDisposition = {
+      status: 'unusable',
+      administrativeScore: 0,
+      reason: 'The submitted recording contains no audible speech.',
+    };
+    draft.sessionCompletion = {
+      recommendation: 'unreviewable',
+      rationale: 'The recording cannot support a performance assessment.',
+      evidence: [{ startSeconds: 0, endSeconds: 4200, note: 'The recording contains no audible speech.', scope: 'session' }],
+    };
+    draft.candidate.dimensions = {
+      problemFraming: notObserved,
+      reasoning: notObserved,
+      implementation: notObserved,
+      testingAndComplexity: notObserved,
+      communication: notObserved,
+      independence: notObserved,
+      coachability: notObserved,
+    };
+    draft.interviewer.dimensions = {
+      structure: notObserved,
+      questionFidelity: notObserved,
+      probing: notObserved,
+      hintDiscipline: notObserved,
+      timeManagement: notObserved,
+      feedbackAndConduct: notObserved,
+    };
+
+    const review = normalizeAiReview(aiReviewSchema.parse(draft));
+    expect(review.candidate.score).toBe(0);
+    expect(review.candidate.readiness).toBe('manual_review');
+    expect(review.candidate.manualReviewReasons).toEqual([
+      'Administrative zero: The submitted recording contains no audible speech.',
+    ]);
+    expect(review.interviewer.score).toBeNull();
+    expect(review.candidate.dimensions.reasoning).toMatchObject({ status: 'not_observed', rating: null });
+  });
 });
 
 describe('role-aware review evidence', () => {
