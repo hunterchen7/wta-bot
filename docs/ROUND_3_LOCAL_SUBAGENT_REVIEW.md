@@ -2,15 +2,19 @@
 
 > **Input version:** `wta-local-review-v1`  
 > **Rubric version:** `round3-review-v3`  
-> **Reviewer:** Codex built-in subagent using `gpt-5.6-sol` with reasoning effort `ultra`
+> **Reviewer:** Codex built-in subagent using `gpt-6-astra` with reasoning effort `max`
+>
+> **Service tier:** `default` (Fast mode off)
 
 This is the authoritative procedure for a locally verified Round 3 recording review. It is separate from the automatic hosted draft evaluator. A local review is advisory until an organizer confirms it.
 
 ## Reviewer configuration
 
 - Use the built-in Codex subagent tool. Do not send the recording, transcript, reports, or participant data to web search or an unrelated external service.
-- Run the primary review with `gpt-5.6-sol` and reasoning effort `ultra`.
-- Run a second adversarial pass that tries to disprove the primary review. It must check timestamps, speaker roles, arithmetic, rubric anchors, contradictory evidence, and whether assistance compromised the assessment.
+- Run the primary review with `gpt-6-astra` and reasoning effort `max`.
+- Run a separate adversarial verification subagent with the same `gpt-6-astra` model and `max` reasoning effort. It must try to disprove the primary review by checking timestamps, speaker roles, arithmetic, rubric anchors, contradictory evidence, and whether assistance compromised the assessment.
+- Keep Fast mode off for both passes: use service tier `default`, with no `fast` or `priority` override. If the subagent launcher inherits the tier, verify the effective inherited setting before grading.
+- This model selection applies to new local review runs. Preserve the original model, reasoning effort, and rubric version on existing review artifacts.
 - Resolve disagreements explicitly. Do not silently average two judgments.
 
 ## Required input bundle
@@ -115,4 +119,4 @@ An interviewer may privately use external tools, including AI, to inspect or ver
 
 ## Provenance and retention
 
-Store the exact rubric version, input version, reviewer model, reasoning effort, evaluation timestamp, primary result, and verification notes. The dashboard must identify a locally verified review distinctly from an automatic draft. Do not message participants or change completion, eligibility, or referral decisions from the subagent result alone.
+Store the exact rubric version, input version, reviewer model, reasoning effort, effective service tier, evaluation timestamp, primary result, and verification notes for both passes. The dashboard must identify a locally verified review distinctly from an automatic draft. Do not message participants or change completion, eligibility, or referral decisions from the subagent result alone.
