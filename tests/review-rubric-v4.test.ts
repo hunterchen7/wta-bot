@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { aiReviewSchema, normalizeAiReview } from '../src/services/review-rubric-v3';
 import { aiReviewV4Schema, normalizeAiReviewV4 } from '../src/services/review-rubric-v4';
+import { REVIEW_OBSERVATION_VERSION, reviewV3ObservationsSchema, reviewV4ObservationsSchema } from '../src/services/review-observations';
+import { scoreReviewV3Observations, scoreReviewV4Observations } from '../src/services/review-scoring';
+import { buildEvaluationPrompt, evaluatorSystemPrompt } from '../src/services/review-analysis';
+import { z } from 'zod';
 const e = [{ startSeconds: 0, endSeconds: 600, scope: 'session' as const, note: 'Full recorded assessment and submitted artifact.' }];
 const d = (rating: number) => ({ rating, status: 'observed', confidence: .9, evidence: e });
 function draft() {
@@ -12,6 +16,54 @@ function draft() {
  interviewer:{dimensions:Object.fromEntries(['structure','questionFidelity','probing','hintDiscipline','timeManagement','feedbackAndConduct'].map(k=>[k,d(3)])),score:0,recommendation:'strong',criticalFlags:[]},
  hints:[],phaseTimeline:[{phase:'implementation',startSeconds:0,endSeconds:600,summary:'Complete interview',pacingControl:'shared'}],keyMoments:[{startSeconds:0,endSeconds:600,title:'Interview',note:'Complete evidence.'}],contradictions:[],confidence:{transcript:.9,speakerAttribution:.9,overall:.9},organizerChecks:[]});
 }
+function observations() {
+ const r=draft();
+ return {
+  ...r, observationVersion:REVIEW_OBSERVATION_VERSION,
+  candidate:{dimensions:r.candidate.dimensions,technicalResult:r.candidate.technicalResult,assistanceProfile:r.candidate.assistanceProfile,rationale:r.candidate.rationale},
+  interviewer:{dimensions:r.interviewer.dimensions,criticalFlags:r.interviewer.criticalFlags},
+ };
+}
+describe('observation-only grading contract',()=>{
+ it('accepts individual ratings without aggregates and calculates the existing result on the server',()=>{
+  const raw=observations(), before=structuredClone(raw);
+  expect(reviewV4ObservationsSchema.safeParse(raw).success).toBe(true);
+  expect(scoreReviewV4Observations(raw)).toEqual(normalizeAiReviewV4(draft()));
+  expect(raw).toEqual(before);
+ });
+ it('rejects grader-authored candidate and interviewer decisions',()=>{
+  const raw=observations();
+  for(const field of ['score','technicalScore','preBoundScore','rawScore','readiness','scoreBand','requiresManualReview','manualReviewReasons','assistance','scoreAdjustment']) {
+   expect(reviewV4ObservationsSchema.safeParse({...raw,candidate:{...raw.candidate,[field]:0}}).success).toBe(false);
+  }
+  for(const field of ['score','recommendation','requiresOrganizerReview']) {
+   expect(reviewV4ObservationsSchema.safeParse({...raw,interviewer:{...raw.interviewer,[field]:0}}).success).toBe(false);
+  }
+ });
+ it('keeps administrative scoring server-side and validates evidence before scoring',()=>{
+  const raw=observations();
+  const unusable={...raw,evidenceDisposition:{status:'unusable',reason:'Organizer-confirmed silent recording.'}};
+  expect(scoreReviewV4Observations(unusable).candidate.score).toBe(0);
+  expect(reviewV4ObservationsSchema.safeParse({...unusable,evidenceDisposition:{...unusable.evidenceDisposition,administrativeScore:0}}).success).toBe(false);
+  raw.candidate.dimensions.reasoning.evidence=[];
+  expect(()=>scoreReviewV4Observations(raw)).toThrow();
+ });
+ it('supports hosted v3 observations without requesting overall verdicts',()=>{
+  const raw=observations();
+  const v3={...raw,rubricVersion:'round3-review-v3',candidate:{dimensions:{problemFraming:d(2),reasoning:d(3),implementation:d(4),testingAndComplexity:d(3),communication:d(3),independence:d(2),coachability:d(3)},solutionOutcome:'optimal_implemented_tested_and_analyzed',rationale:'Observed evidence.'}};
+  const {assessmentEndedAtSeconds:_,...input}=v3;
+  expect(reviewV3ObservationsSchema.safeParse(input).success).toBe(true);
+  expect(scoreReviewV3Observations(input).candidate.score).toBe(65);
+  const prompt=evaluatorSystemPrompt+buildEvaluationPrompt({session:{},problem:{},reports:[]},'{}');
+  expect(prompt).not.toMatch(/\d+\s*%|strong_pass|65-79|scoreBand|candidate weight/i);
+ });
+ it('exposes no aggregate or policy fields in either JSON schema',()=>{
+  for(const schema of [reviewV3ObservationsSchema,reviewV4ObservationsSchema]) {
+   const json=JSON.stringify(z.toJSONSchema(schema));
+   expect(json).not.toMatch(/"(?:score|technicalScore|readiness|scoreBand|requiresManualReview|requiresOrganizerReview|administrativeScore|preBoundScore|rawScore|scoreAdjustment)"|strong_pass|floor_55|ceiling_49/);
+  }
+ });
+});
 describe('v4 calibration',()=>{
  it('uses the exact score at band boundaries',()=>{
   const r=draft();

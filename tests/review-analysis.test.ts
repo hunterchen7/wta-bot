@@ -1,8 +1,9 @@
 import { env } from 'cloudflare:workers';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createCohort } from '../src/engine/weeks';
 import { app } from '../src/index';
-import { aiReviewSchema, extractModelText, normalizeAiReview, transcriptResultSchema } from '../src/services/review-analysis';
+import { aiReviewSchema, extractModelText, normalizeAiReview, runPendingReviewEvaluation, transcriptResultSchema } from '../src/services/review-analysis';
+import { REVIEW_OBSERVATION_VERSION, reviewV3ObservationsSchema } from '../src/services/review-observations';
 
 let jobId = 0;
 let sessionId = 0;
@@ -224,6 +225,40 @@ function reviewDraft() {
 }
 
 describe('AI review normalization', () => {
+  it('grades raw source without old role inferences and persists observations separately from calculated fields', async () => {
+    const draft = reviewDraft();
+    draft.phaseTimeline = [{ phase: 'implementation', startSeconds: 0, endSeconds: 4200, summary: 'Full recorded assessment.', pacingControl: 'shared' }];
+    const observations = reviewV3ObservationsSchema.parse({
+      ...draft,
+      observationVersion: REVIEW_OBSERVATION_VERSION,
+      candidate: { dimensions: draft.candidate.dimensions, solutionOutcome: draft.candidate.solutionOutcome, rationale: draft.candidate.rationale },
+      interviewer: { dimensions: draft.interviewer.dimensions, criticalFlags: [] },
+    });
+    const key = `test-observations/${sessionId}/transcript.json`;
+    await env.RECORDINGS!.put(key, JSON.stringify({
+      version: 'wta-transcript-v1', language: 'en', durationSeconds: 4200,
+      transcriptConfidence: .99, speakerConfidence: .98,
+      transcriptionModel: 'test-asr', diarizationModel: 'test-diarization',
+      segments: [{ start: 0, end: 4200, text: 'Complete source transcript.', speaker: 'SPEAKER_00', role: 'interviewer', roleConfidence: .99 }],
+    }));
+    await env.DB.prepare("UPDATE review_analysis_jobs SET status = 'evaluating', transcript_object_key = ?2, lease_expires_at = NULL WHERE id = ?1").bind(jobId, key).run();
+    const run = vi.fn().mockResolvedValue({ response: JSON.stringify(observations) });
+    // The evaluator uses only Ai.run; the real remote binding is excluded in tests.
+    const result = await runPendingReviewEvaluation({ ...env, AI: { run } as unknown as Ai }, jobId);
+    expect(result).toBe('ready');
+    const request = run.mock.calls[0]![1] as { messages: Array<{ content: string }> };
+    const source = JSON.parse(request.messages[1]!.content.split('Timestamped transcript JSON:\n')[1]!);
+    expect(source.segments[0]).toMatchObject({ speaker: 'SPEAKER_00', text: 'Complete source transcript.' });
+    expect(source.segments[0]).not.toHaveProperty('role');
+    expect(source.segments[0]).not.toHaveProperty('roleConfidence');
+    const stored = await env.RECORDINGS!.get(`analysis/sessions/${sessionId}/jobs/${jobId}/evaluation.json`);
+    const evaluation = await stored!.json<{ evaluatorObservations: unknown; evaluatorPromptVersion: string; candidate: { score: number }; confidence: { speakerAttribution: number } }>();
+    expect(evaluation.evaluatorObservations).toEqual(observations);
+    expect(evaluation.evaluatorPromptVersion).toBe('round3-review-v3-observations-v1');
+    expect(evaluation.candidate.score).toBe(65);
+    expect(evaluation.confidence.speakerAttribution).toBe(.7);
+  });
+
   it('recomputes scores and bands instead of trusting model-authored values', () => {
     const review = normalizeAiReview(reviewDraft());
     expect(review.candidate.score).toBe(65);
