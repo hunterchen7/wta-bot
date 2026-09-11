@@ -74,6 +74,8 @@ Use when missing or unusable evidence prevents the reviewer from deciding. Examp
 
 When an organizer confirms that the submitted recording is unusable, the system may record an **administrative score of 0**. This is an evidence-quality outcome, not a claim that the candidate demonstrated rating-1 performance. Keep every unsupported candidate and interviewer dimension `not_observed`, set the solution outcome to `not_observed`, state the concrete recording defect, and require manual review. A replacement recording can supersede the administrative zero.
 
+A confirmed dummy upload, such as an unrelated animation or tutorial clip submitted in place of the interview, **receives an administrative 0 automatically** under the organizer's policy. Preserve the recording identity, source hash, inspection evidence, and decision. Do not spend grading passes on the dummy clip or invent performance ratings. A short duration alone does not establish a dummy upload; inaccessible Drive files and unresolved download failures remain evidence-access issues until their contents can be checked.
+
 The AI provides a recommendation and evidence. Only an organizer confirms the completion decision.
 
 ## Decision 2: Candidate readiness

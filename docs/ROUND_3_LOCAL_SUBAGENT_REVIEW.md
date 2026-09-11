@@ -93,7 +93,9 @@ Completion and time management are longitudinal judgments. They must cite the op
 
 An observed dimension requires an integer rating from 1 through 4 and at least one valid evidence item. A `not_observed` dimension requires `rating: null`. Absence of an opportunity is not evidence for rating 1.
 
-If an organizer has confirmed that a missing, silent, corrupt, or materially truncated recording is unusable, return `sessionCompletion.recommendation: "unreviewable"`, leave unsupported dimensions and the solution outcome `not_observed`, and set `evidenceDisposition` to `{"status":"unusable","administrativeScore":0,"reason":"concrete defect"}`. The resulting zero is administrative and must not be described as observed candidate or interviewer performance.
+If an organizer has confirmed that a missing, silent, corrupt, or materially truncated recording is unusable, return `sessionCompletion.recommendation: "unreviewable"`, leave unsupported dimensions and the solution outcome `not_observed`, and set the observation-only `evidenceDisposition` to `{"status":"unusable","reason":"concrete defect"}`. The server supplies the administrative zero; the evaluator supplies no score. The resulting zero must not be described as observed candidate or interviewer performance.
+
+Confirmed dummy uploads receive an automatic administrative zero under the organizer's policy. The coordinator records the source identity/hash, inspection evidence, and administrative decision without launching performance graders for unrelated clips. Preserve unsupported performance ratings as unobserved. Do not apply this rule solely because a file is short or because Drive denies download access.
 
 ## Blind grading and server-side calculations
 
