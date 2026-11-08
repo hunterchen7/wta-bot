@@ -3,7 +3,7 @@
 // and the real engine, with Discord fetches stubbed.
 
 import { env } from 'cloudflare:workers';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { closeAndMatch, formDropScan, openOptin, preInterviewReminderScan } from '../src/engine/cycle';
 import { executeOutbox } from '../src/engine/executor';
 import { drainOutbox } from '../src/engine/outbox';
@@ -65,7 +65,10 @@ describe('full weekly cycle', () => {
     expect(participant?.pairing_excluded).toBe(1);
   });
 
-  it('runs enroll → cohort → opt-in → match → schedule → no-show → repair', async () => {
+  it('runs enroll → cohort → opt-in → match → schedule → no-show → repair', async ({ onTestFinished }) => {
+    vi.useFakeTimers({ now: new Date('2026-09-11T12:00:00Z'), toFake: ['Date'] });
+    onTestFinished(() => { vi.useRealTimers(); });
+
     await env.DB.prepare(
       "INSERT INTO settings (key, value) VALUES ('packet_mode', 'on') ON CONFLICT(key) DO UPDATE SET value = 'on'",
     ).run();
