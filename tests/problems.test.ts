@@ -1,5 +1,5 @@
 import { env } from 'cloudflare:workers';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { generateWeekSet, packetScan, pickProblem, reserveProblem } from '../src/engine/problems';
 import { createCohort } from '../src/engine/weeks';
 import { app } from '../src/index';
@@ -326,7 +326,10 @@ describe('problem bank', () => {
     ).first()).toEqual(before);
   });
 
-  it('keeps the public question-bank API private by default and publishes it only when enabled', async () => {
+  it('keeps the public question-bank API private by default and publishes it only when enabled', async ({ onTestFinished }) => {
+    vi.useFakeTimers({ now: new Date('2026-09-14T12:00:00Z'), toFake: ['Date'] });
+    onTestFinished(() => { vi.useRealTimers(); });
+
     const privateRes = await app.request('/api/public/bank', {}, env);
     expect(privateRes.status).toBe(200);
     expect(await privateRes.json<any>()).toEqual({ public: false, cohort: null, round: null, problems: [] });
